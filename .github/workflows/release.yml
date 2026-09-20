@@ -52,10 +52,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '22'
 
@@ -122,13 +122,13 @@ jobs:
       npm_tag: ${{ steps.detect_prerelease.outputs.npm_tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # Full history + tags so git-cliff can build the changelog for the tag range.
           fetch-depth: 0
 
       - name: Install git-cliff
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2
         with:
           tool: git-cliff
 
@@ -182,18 +182,18 @@ jobs:
 
       - name: Checkout
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Login to Docker Hub
         if: env.BUILD_ENABLED == 'true'
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Setup Docker Buildx
         if: env.BUILD_ENABLED == 'true'
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build binary
         if: env.BUILD_ENABLED == 'true'
@@ -218,7 +218,7 @@ jobs:
 
       - name: Upload NAPI binding
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: node-binding-linux-${{ matrix.libc }}-aarch64
           path: output/node/libversatiles_node.so
@@ -243,18 +243,18 @@ jobs:
 
       - name: Checkout
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Login to Docker Hub
         if: env.BUILD_ENABLED == 'true'
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Setup Docker Buildx
         if: env.BUILD_ENABLED == 'true'
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build binary
         if: env.BUILD_ENABLED == 'true'
@@ -279,7 +279,7 @@ jobs:
 
       - name: Upload NAPI binding
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: node-binding-linux-${{ matrix.libc }}-x86_64
           path: output/node/libversatiles_node.so
@@ -309,11 +309,11 @@ jobs:
 
       - name: Checkout
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Rust
         if: env.BUILD_ENABLED == 'true'
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: ${{ matrix.arch }}-apple-darwin
 
@@ -351,7 +351,7 @@ jobs:
 
       - name: Upload NAPI binding
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: node-binding-macos-${{ matrix.arch }}
           path: target/${{ matrix.arch }}-apple-darwin/release/node/libversatiles_node.dylib
@@ -386,11 +386,11 @@ jobs:
 
       - name: Checkout
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Rust
         if: env.BUILD_ENABLED == 'true'
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: ${{ matrix.arch }}-pc-windows-msvc
 
@@ -430,7 +430,7 @@ jobs:
 
       - name: Upload NAPI binding
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: node-binding-windows-${{ matrix.arch }}
           path: target\${{ matrix.arch }}-pc-windows-msvc\release\node\versatiles_node.dll
@@ -449,10 +449,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '22'
 
@@ -461,7 +461,7 @@ jobs:
         run: npm install
 
       - name: Download NAPI bindings
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: node-binding-*
           path: artifacts/
@@ -529,7 +529,7 @@ jobs:
           ls -lah npm/*/*.tgz
 
       - name: Upload npm packages
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: npm-packages
           path: versatiles_node/npm/*/*.tgz
@@ -552,11 +552,11 @@ jobs:
 
       - name: Checkout
         if: env.PUBLISH_ENABLED == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node.js
         if: env.PUBLISH_ENABLED == 'true'
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
@@ -582,7 +582,7 @@ jobs:
 
       - name: Download npm packages
         if: env.PUBLISH_ENABLED == 'true'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: npm-packages
           path: versatiles_node/npm-downloaded
@@ -629,7 +629,7 @@ jobs:
 
       - name: Download NAPI bindings for main package
         if: env.PUBLISH_ENABLED == 'true'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: node-binding-*
           path: node-bindings/
@@ -791,13 +791,13 @@ jobs:
 
       - name: Checkout
         if: env.PUBLISH_ENABLED == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.prepare.outputs.tag }}
 
       - name: Setup Rust
         if: env.PUBLISH_ENABLED == 'true'
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
 
       - name: Publish crates to crates.io
         if: env.PUBLISH_ENABLED == 'true'
@@ -894,7 +894,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Configure environment
         run: |

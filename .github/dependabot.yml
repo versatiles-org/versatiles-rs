@@ -11,11 +11,6 @@ updates:
     directory: /
     schedule: { interval: weekly }
     open-pull-requests-limit: 0
-    # `dtolnay/rust-toolchain@<version>` pins the MSRV, not a dependency
-    # version: Dependabot compares the tag numerically and "bumps" 1.94 to a
-    # nonexistent 1.100. Keep it in sync with `rust-version` in Cargo.toml.
-    ignore:
-      - dependency-name: dtolnay/rust-toolchain
     groups: { security: { applies-to: security-updates, patterns: ['*'] } }
 
   - package-ecosystem: docker
@@ -32,14 +27,17 @@ updates:
       cargo: { patterns: ['*'] }
       security: { applies-to: security-updates, patterns: ['*'] }
 
+  # Every action is pinned to a commit SHA with its tag in a trailing comment,
+  # which is the form Dependabot updates — it rewrites hash and comment
+  # together. `dtolnay/rust-toolchain` used to be excluded here because pinning
+  # it to an MSRV tag made Dependabot compare versions numerically and "bump"
+  # 1.94 to a nonexistent 1.100. Nothing pins a version tag any more: all 15
+  # usages are `@stable`, and the MSRV job installs the toolchain named by
+  # `rust-version` in Cargo.toml (see "Linux: MSRV" in ci.yml). Excluding it now
+  # would only freeze that pin, since a SHA never updates on its own.
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
-    # `dtolnay/rust-toolchain@<version>` pins the MSRV, not a dependency
-    # version: Dependabot compares the tag numerically and "bumps" 1.94 to a
-    # nonexistent 1.100. Keep it in sync with `rust-version` in Cargo.toml.
-    ignore:
-      - dependency-name: dtolnay/rust-toolchain
     groups:
       github-action: { patterns: ['*'] }
       security: { applies-to: security-updates, patterns: ['*'] }
