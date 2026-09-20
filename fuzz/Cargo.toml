@@ -1,0 +1,58 @@
+[package]
+name = "versatiles-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+# Its own workspace: the fuzz targets build against libFuzzer on nightly with
+# sanitizer flags the main workspace neither needs nor should inherit.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+tokio = { version = "1", features = ["rt", "rt-multi-thread"] }
+
+versatiles_container = { path = "../versatiles_container" }
+versatiles_core = { path = "../versatiles_core" }
+versatiles_geometry = { path = "../versatiles_geometry" }
+versatiles_pipeline = { path = "../versatiles_pipeline" }
+
+# Fuzzing a parser is about what it does with bad input, and both of those are
+# hidden by an unoptimised build: `debug-assertions` turns an overflow into a
+# panic the fuzzer reports as a crash, which is what we want, but the run is
+# also slow enough to explore very little. Optimise and keep the assertions.
+[profile.release]
+debug = true
+debug-assertions = true
+overflow-checks = true
+
+[[bin]]
+name = "versatiles_container"
+path = "fuzz_targets/versatiles_container.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pmtiles_container"
+path = "fuzz_targets/pmtiles_container.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vector_tile"
+path = "fuzz_targets/vector_tile.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vpl"
+path = "fuzz_targets/vpl.rs"
+test = false
+doc = false
+bench = false
