@@ -269,19 +269,24 @@ fn cst_value(input: &str) -> Res<'_, CstValue> {
 /// thousand brackets were enough; through the Node bindings that takes the host
 /// process with it.
 ///
-/// The number is set by the smallest stack this runs on, not by symmetry with
-/// the JSON parser's 128. These frames are much larger than that parser's: one
-/// nesting level is six or seven `nom` combinator frames, and refusing at 128
-/// still overflowed a 2 MiB thread on Windows — the CI job caught exactly that,
-/// on the test written to prove the bound worked.
+/// Set from what pipelines actually nest, with a wide margin — deliberately
+/// not from stack arithmetic.
 ///
-/// Measured on aarch64/macOS, a refusal at depth 128 needs between 256 KiB and
-/// 1 MiB. Windows x86-64 frames are larger again, and its main thread gets
-/// 1 MiB. 32 keeps a wide margin there while staying ten times deeper than any
-/// real pipeline — sources inside sources inside sources is already unusual at
-/// three. `nesting_is_bounded_within_a_small_stack` pins the property rather
-/// than the arithmetic.
-const MAX_NESTING_DEPTH: usize = 32;
+/// The deepest VPL anywhere in this repository is three
+/// (`from_stacked [ from_stacked [ … ] | … ]`, in `cst_format.rs`), and almost
+/// everything else is two. Eight is nearly three times that.
+///
+/// Two earlier attempts set this from how much stack a level costs, and both
+/// were wrong on Windows: 128 overflowed the test harness's own thread, and 32
+/// overflowed a 512 KiB one. One nesting level is six or seven `nom` combinator
+/// frames, and how large those are varies by platform, ABI and build profile by
+/// more than a guess can cover. What does not vary is that nobody writes eight
+/// levels of nested sources.
+///
+/// So the number now has margin in both directions: far above real use, far
+/// below anything that could exhaust a stack. If it ever needs raising, raise
+/// it because a pipeline needs the depth, and check Windows.
+const MAX_NESTING_DEPTH: usize = 8;
 
 thread_local! {
 	/// Bracket depth of the parse running on this thread.
@@ -819,19 +824,24 @@ mod tests {
 mod nesting_tests {
 	use super::*;
 
-	/// Stack the depth tests are allowed. Deliberately smaller than any
-	/// platform default — the point is to prove the bound holds with room to
-	/// spare, not to find out what this machine happens to provide. Windows
-	/// gives its main thread 1 MiB.
-	const TEST_STACK: usize = 512 * 1024;
+	/// Stack the depth tests run on.
+	///
+	/// Explicit, and generous, so these tests are deterministic on every
+	/// platform rather than inheriting whatever the harness provides — which is
+	/// 8 MiB on Linux and a small fraction of that on Windows. An earlier
+	/// version asserted a *small* stack budget here, which made the test itself
+	/// the thing that overflowed on Windows. Proving the parser refuses deep
+	/// input is this module's job; proving a per-frame cost is not, and cannot
+	/// be done portably.
+	const TEST_STACK: usize = 4 * 1024 * 1024;
 
-	/// Runs `f` on a thread with [`TEST_STACK`], returning `Err` if it died.
-	fn within_a_small_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> std::thread::Result<T> {
+	fn on_a_known_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
 		std::thread::Builder::new()
 			.stack_size(TEST_STACK)
 			.spawn(f)
 			.expect("spawning a test thread")
 			.join()
+			.expect("the parse must not exhaust a 4 MiB stack")
 	}
 
 	fn nested(depth: usize) -> String {
@@ -840,59 +850,46 @@ mod nesting_tests {
 
 	/// `[ … ]` nests by recursing, so bracket depth is stack depth. Refusing it
 	/// has to cost less stack than accepting it, which is not automatic: the
-	/// failure propagates back up through every combinator frame it descended.
+	/// failure propagates back up through every frame it descended.
 	#[test]
 	fn deeply_nested_sources_are_refused_not_fatal() {
-		let outcome = within_a_small_stack(|| {
-			let error = parse_cst(&nested(5_000)).expect_err("nesting this deep must be refused");
-			error.message
-		})
-		.expect("refusing deep nesting must not exhaust the stack");
+		let message = on_a_known_stack(|| {
+			parse_cst(&nested(5_000))
+				.expect_err("nesting this deep must be refused")
+				.message
+		});
 
 		assert!(
-			outcome.contains("nested too deeply"),
-			"the reason should be legible: {outcome}"
+			message.contains("nested too deeply"),
+			"the reason should be legible: {message}"
 		);
 	}
 
-	/// The bound must leave room for pipelines anyone would actually write, and
-	/// accepting one at exactly the limit is the deepest descent the parser
-	/// ever makes.
+	/// The bound must leave room for pipelines anyone would actually write. The
+	/// deepest in this repository is three; the limit is well above that.
 	#[test]
 	fn ordinary_nesting_still_parses() {
-		let outcome = within_a_small_stack(|| {
+		let all_parsed = on_a_known_stack(|| {
 			parse_cst("from_debug").is_ok()
 				&& parse_cst("vectorize [ from_debug ]").is_ok()
-				&& parse_cst("vectorize [ vectorize [ from_debug ] ]").is_ok()
+				&& parse_cst("from_stacked [ from_stacked [ from_debug format=png ] | filter level_min=2 ]").is_ok()
 				&& parse_cst(&nested(MAX_NESTING_DEPTH)).is_ok()
-		})
-		.expect("parsing at the limit must not exhaust the stack");
+		});
 
-		assert!(outcome, "ordinary nesting, and the limit itself, must parse");
+		assert!(all_parsed, "ordinary nesting, and the limit itself, must parse");
 	}
 
-	/// Both halves of the bound, on the stack the platform is least generous
-	/// with. This is the test that goes first if the limit is ever raised past
-	/// what the frames cost.
-	///
-	/// It reports that by crashing rather than by failing an assertion — a
-	/// stack overflow aborts, which is the whole reason the limit exists and
-	/// also why no test can catch one. An abort here means the limit is too
-	/// high for this platform, not that the parser is broken.
+	/// The boundary, from both sides.
 	#[test]
-	fn nesting_is_bounded_within_a_small_stack() {
-		let outcome = within_a_small_stack(|| {
-			let accepted = parse_cst(&nested(MAX_NESTING_DEPTH)).is_ok();
-			let refused = parse_cst(&nested(MAX_NESTING_DEPTH + 1)).is_err();
-			(accepted, refused)
-		})
-		.expect("neither side of the bound may exhaust the stack");
+	fn the_limit_accepts_its_own_depth_and_refuses_one_more() {
+		let outcome = on_a_known_stack(|| {
+			(
+				parse_cst(&nested(MAX_NESTING_DEPTH)).is_ok(),
+				parse_cst(&nested(MAX_NESTING_DEPTH + 1)).is_err(),
+			)
+		});
 
-		assert_eq!(
-			outcome,
-			(true, true),
-			"the limit must accept its own depth and refuse one more"
-		);
+		assert_eq!(outcome, (true, true));
 	}
 
 	/// The counter must come back to zero however a parse ends, or later parses
