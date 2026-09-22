@@ -3197,7 +3197,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_container"
-version = "4.14.0"
+version = "4.15.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -3229,7 +3229,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_core"
-version = "4.14.0"
+version = "4.15.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3254,7 +3254,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_derive"
-version = "4.14.0"
+version = "4.15.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3263,7 +3263,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_geometry"
-version = "4.14.0"
+version = "4.15.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -3283,7 +3283,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_image"
-version = "4.14.0"
+version = "4.15.0"
 dependencies = [
  "anyhow",
  "fast_image_resize",
@@ -3296,7 +3296,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_pipeline"
-version = "4.14.0"
+version = "4.15.0"
 dependencies = [
  "ab_glyph",
  "anyhow",

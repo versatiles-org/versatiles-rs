@@ -15,6 +15,18 @@ cargo install cargo-fuzz          # once
 cargo +nightly fuzz run vector_tile
 ```
 
+If `cargo-fuzz` came from a prebuilt binary rather than `cargo install` — which
+is what most CI setups do — pass the target explicitly:
+
+```sh
+cargo +nightly fuzz run vector_tile --target "$(rustc -vV | sed -n 's|^host: ||p')"
+```
+
+It defaults `--target` to the triple it was _itself_ built for, and the prebuilt
+Linux binary is statically linked against musl. Without the flag it builds for
+`x86_64-unknown-linux-musl`, which is usually not installed and which implies
+`crt-static`, and the sanitizer refuses that combination.
+
 Nightly is required: libFuzzer needs `-Z sanitizer`, which stable does not
 expose. This is the one place in the repository that is not built on the pinned
 stable toolchain.

@@ -810,12 +810,28 @@ jobs:
       # `-rss_limit_mb` matters: without it an unbounded allocation is only
       # reported once the runner is already in trouble, and the run dies
       # without saying what got it there.
+      #
+      # `--target` is not optional here. `cargo fuzz` defaults it to the triple
+      # *it was itself built for*, and the prebuilt Linux binary is statically
+      # linked against musl — so without this it tries to build the targets for
+      # `x86_64-unknown-linux-musl`, which is not installed, and which implies
+      # `crt-static`, which the sanitizer refuses:
+      #
+      #   error: sanitizer is incompatible with statically linked libc
+      #   error[E0463]: can't find crate for `core`
+      #
+      # Taking the triple from `rustc` asks the toolchain that will do the
+      # compiling rather than the tool that drives it, so this keeps working if
+      # the runner's architecture changes.
       - name: Run fuzz targets
         run: |
           set -euo pipefail
+          host=$(rustc +nightly -vV | sed -n 's|^host: ||p')
+          echo "fuzzing for $host"
+          mkdir -p fuzz/corpus
           for target in vector_tile vpl pmtiles_container versatiles_container; do
             echo "::group::$target"
-            cargo +nightly fuzz run "$target" -- \
+            cargo +nightly fuzz run "$target" --target "$host" -- \
               -max_total_time=300 \
               -rss_limit_mb=2048
             echo "::endgroup::"
