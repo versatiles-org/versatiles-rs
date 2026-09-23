@@ -4,7 +4,7 @@
 //! tables with TMS coordinate flipping (`tile_row = 2^z - 1 - y`).
 //! Thread-safe via an internal `Mutex` around the tile insert buffer.
 
-use std::{fs::remove_file, path::Path, sync::Mutex};
+use std::{path::Path, sync::Mutex};
 
 use anyhow::{Result, bail};
 use async_trait::async_trait;
@@ -69,9 +69,11 @@ impl MBTilesTileSink {
 			bail!("MBTiles stores {tile_format} tiles {required}, but this sink was given {tile_compression}");
 		}
 
-		if path.exists() {
-			remove_file(path)?;
-		}
+		// `open_tile_sink` hands every sink a staging path that does not exist and
+		// publishes the result itself, so there is nothing here to clear — and
+		// nothing here that may be cleared. This used to `remove_file` the real
+		// destination before opening the database, which meant any later failure
+		// cost the user the output they already had.
 
 		let manager = SqliteConnectionManager::file(path);
 		let pool = Pool::builder().max_size(10).build(manager)?;

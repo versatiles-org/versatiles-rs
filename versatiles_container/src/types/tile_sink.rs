@@ -1,10 +1,12 @@
 use std::{collections::HashSet, path::Path, sync::Mutex};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON};
 
-use crate::{DirectoryTileSink, MBTilesTileSink, TarTileSink, TilesRuntime, VersaTilesSink};
+use crate::{
+	DirectoryTileSink, MBTilesTileSink, TarTileSink, TilesRuntime, VersaTilesSink, types::staged_output::StagedOutput,
+};
 
 /// Push-model interface for writing individual tiles to a container in any order.
 ///
@@ -132,6 +134,87 @@ fn ends_with_separator(path: &Path) -> bool {
 		.is_some_and(|byte| *byte == b'/' || (cfg!(windows) && *byte == b'\\'))
 }
 
+/// Which container a destination names, decided before anything is created.
+///
+/// Separated from construction so a bad extension fails without a staging
+/// location having been made for it.
+enum SinkKind {
+	Tar,
+	MBTiles,
+	VersaTiles,
+	Directory,
+}
+
+/// Where a sink's finished output goes.
+enum SinkPublish {
+	Local(StagedOutput),
+	#[cfg(feature = "sftp")]
+	Remote {
+		url: reqwest::Url,
+		identity: Option<std::path::PathBuf>,
+		staging: String,
+		destination: String,
+	},
+}
+
+/// Wraps a sink so its output is built beside the destination and moved into
+/// place only once it is finished.
+///
+/// Sinks open their output and write to it over the lifetime of a run, so they
+/// cannot be handed a finished file the way a [`TilesWriter`](crate::TilesWriter)
+/// can. The staging location travels with the sink instead and is published by
+/// `finish` — which is the one moment the whole container is known to be
+/// complete.
+///
+/// Without this, `versatiles mosaic assemble` wrote straight to the
+/// destination: a failure left a partial container under the name the user
+/// asked for, and for MBTiles it had already deleted the previous one.
+struct StagedSink {
+	inner: Box<dyn TileSink>,
+	publish: SinkPublish,
+}
+
+#[async_trait]
+impl TileSink for StagedSink {
+	async fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
+		self.inner.write_tile(coord, blob).await
+	}
+
+	async fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &TilesRuntime) -> Result<()> {
+		let Self { inner, publish } = *self;
+
+		// On an error here `publish` drops, and a local staging location is
+		// removed with it. Nothing has touched the destination.
+		inner.finish(tilejson, runtime).await?;
+
+		match publish {
+			SinkPublish::Local(staged) => {
+				if runtime.had_errors() {
+					let kept = staged.publish_as_incomplete()?;
+					bail!(
+						"assembly completed with {} read error(s); the destination was left untouched \
+						 and the incomplete output kept at {kept:?}",
+						runtime.error_count()
+					);
+				}
+				staged.publish()
+			}
+			#[cfg(feature = "sftp")]
+			SinkPublish::Remote {
+				url,
+				identity,
+				staging,
+				destination,
+			} => {
+				use versatiles_core::io::sftp_utils;
+				let session = sftp_utils::open_session(&url, identity.as_deref()).await?;
+				let sftp = sftp_utils::open_sftp(&session).await?;
+				sftp_utils::publish_remote(&sftp, &staging, &destination).await
+			}
+		}
+	}
+}
+
 /// Open a tile sink based on the destination's file extension.
 ///
 /// The destination can be a local path or an `sftp://` URL.
@@ -156,8 +239,40 @@ pub async fn open_tile_sink(
 	compression: TileCompression,
 	runtime: &TilesRuntime,
 ) -> Result<Box<dyn TileSink>> {
-	// Extract extension from destination (handles both local paths and sftp:// URLs)
-	let extension = if destination.starts_with("sftp://") {
+	let kind = classify_destination(destination)?;
+
+	// Staged before anything is opened, and always derived from the *destination*
+	// — the format was already decided above, so the staging name's `.tmp`
+	// extension never reaches the dispatch.
+	let (publish, staging) = stage_destination(destination, runtime)?;
+
+	if matches!(kind, SinkKind::Directory) && !destination.starts_with("sftp://") {
+		// The sinks create each tile's parent on the way; this turns an
+		// unwritable destination into an error naming it, and makes an empty
+		// assembly still produce a directory.
+		std::fs::create_dir_all(&staging).with_context(|| format!("Failed to create output directory {staging:?}"))?;
+	}
+
+	let sink = match kind {
+		SinkKind::Tar => TarTileSink::open(&staging, format, compression, runtime).await?,
+		SinkKind::MBTiles => MBTilesTileSink::open(&staging, format, compression, runtime)?,
+		SinkKind::VersaTiles => VersaTilesSink::open(&staging, format, compression, runtime)?,
+		SinkKind::Directory => DirectoryTileSink::open(&staging, format, compression, runtime).await?,
+	};
+
+	Ok(Box::new(StagedSink {
+		inner: deduplicating_tile_sink(sink),
+		publish,
+	}))
+}
+
+/// Which container `destination` names, or why none of them fits.
+///
+/// Runs before anything is created, so a destination that cannot be written
+/// fails without leaving a staging location behind.
+fn classify_destination(destination: &str) -> Result<SinkKind> {
+	let is_remote = destination.starts_with("sftp://");
+	let extension = if is_remote {
 		extract_extension_from_url(destination)
 	} else {
 		Path::new(destination)
@@ -166,14 +281,13 @@ pub async fn open_tile_sink(
 			.map(str::to_ascii_lowercase)
 	};
 
-	let sink = match extension.as_deref() {
-		Some("tar") => TarTileSink::open(destination, format, compression, runtime).await?,
-		Some("mbtiles") => MBTilesTileSink::open(destination, format, compression, runtime)?,
-		Some("versatiles") => VersaTilesSink::open(destination, format, compression, runtime)?,
+	Ok(match extension.as_deref() {
+		Some("tar") => SinkKind::Tar,
+		Some("mbtiles") => SinkKind::MBTiles,
+		Some("versatiles") => SinkKind::VersaTiles,
 		_ => {
-			let is_dir = destination.starts_with("sftp://") || destination_is_directory(Path::new(destination));
-			if is_dir {
-				DirectoryTileSink::open(destination, format, compression, runtime).await?
+			if is_remote || destination_is_directory(Path::new(destination)) {
+				SinkKind::Directory
 			} else if let Some(extension) = extension.as_deref() {
 				// PMTiles is the one format this workspace can write but not write
 				// *incrementally*. A sink accepts tiles in whatever order the threads
@@ -196,8 +310,40 @@ pub async fn open_tile_sink(
 				)
 			}
 		}
-	};
-	Ok(deduplicating_tile_sink(sink))
+	})
+}
+
+/// Picks where the sink actually writes, and how that gets published.
+fn stage_destination(destination: &str, runtime: &TilesRuntime) -> Result<(SinkPublish, String)> {
+	#[cfg(feature = "sftp")]
+	if destination.starts_with("sftp://") {
+		use versatiles_core::io::sftp_utils;
+
+		let url = reqwest::Url::parse(destination).map_err(|e| anyhow::anyhow!("invalid SFTP URL: {e}"))?;
+		let remote_path = sftp_utils::remote_path(&url);
+		let staging_path = sftp_utils::staging_remote_path(&remote_path);
+
+		let mut staging_url = url.clone();
+		staging_url.set_path(&staging_path);
+
+		return Ok((
+			SinkPublish::Remote {
+				url,
+				identity: runtime.ssh_identity().map(Path::to_path_buf),
+				staging: staging_path,
+				destination: remote_path,
+			},
+			staging_url.to_string(),
+		));
+	}
+
+	let staged = StagedOutput::create(Path::new(destination), runtime.force())?;
+	let staging = staged
+		.path()
+		.to_str()
+		.ok_or_else(|| anyhow::anyhow!("{destination:?} is not valid UTF-8"))?
+		.to_string();
+	Ok((SinkPublish::Local(staged), staging))
 }
 
 /// Extract the file extension from an SFTP URL.
@@ -212,6 +358,135 @@ mod tests {
 	use std::sync::atomic::{AtomicUsize, Ordering};
 
 	use super::*;
+
+	/// The data-loss path this wrapper exists for: `mosaic assemble` into an
+	/// existing `.mbtiles` used to delete it before writing a byte.
+	#[tokio::test]
+	async fn an_abandoned_sink_leaves_the_previous_output_untouched() -> Result<()> {
+		let dir = assert_fs::TempDir::new()?;
+		let destination = dir.path().join("out.mbtiles");
+		std::fs::write(&destination, b"the previous assembly")?;
+		let runtime = TilesRuntime::new_silent();
+
+		{
+			let sink = open_tile_sink(
+				destination.to_str().unwrap(),
+				TileFormat::PNG,
+				TileCompression::Uncompressed,
+				&runtime,
+			)
+			.await?;
+			sink
+				.write_tile(&TileCoord::new(3, 1, 2)?, &Blob::from(vec![0u8; 16]))
+				.await?;
+			// Dropped without `finish`, which is what a failed run does.
+		}
+
+		assert_eq!(
+			std::fs::read(&destination)?,
+			b"the previous assembly",
+			"an abandoned assembly must not cost the user their existing output"
+		);
+		assert_eq!(
+			std::fs::read_dir(dir.path())?.count(),
+			1,
+			"no staging database may be left beside it"
+		);
+		Ok(())
+	}
+
+	/// And a finished one publishes, leaving nothing behind.
+	#[tokio::test]
+	async fn a_finished_sink_publishes_and_cleans_up() -> Result<()> {
+		let dir = assert_fs::TempDir::new()?;
+		let destination = dir.path().join("out.mbtiles");
+		std::fs::write(&destination, b"the previous assembly")?;
+		let runtime = TilesRuntime::new_silent();
+
+		let sink = open_tile_sink(
+			destination.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)
+		.await?;
+		sink
+			.write_tile(&TileCoord::new(3, 1, 2)?, &Blob::from(vec![0u8; 16]))
+			.await?;
+
+		let mut tilejson = TileJSON::default();
+		tilejson.set_string("tilejson", "3.0.0")?;
+		tilejson.set_zoom_min(3);
+		tilejson.set_zoom_max(3);
+		sink.finish(&tilejson, &runtime).await?;
+
+		assert_ne!(
+			std::fs::read(&destination)?,
+			b"the previous assembly",
+			"it was replaced"
+		);
+		assert_eq!(std::fs::read_dir(dir.path())?.count(), 1, "no staging left");
+		crate::MBTilesReader::open(&destination, TilesRuntime::new_silent())?;
+		Ok(())
+	}
+
+	/// The merge bug, in the sink family. A re-assembly must not leave tiles from
+	/// the previous run mixed in with the new ones.
+	#[tokio::test]
+	async fn a_directory_sink_replaces_rather_than_merges() -> Result<()> {
+		let dir = assert_fs::TempDir::new()?;
+		let destination = dir.path().join("tiles");
+		std::fs::create_dir_all(destination.join("9/1"))?;
+		std::fs::write(destination.join("9/1/1.png"), b"a tile from a bigger pyramid")?;
+
+		let runtime = TilesRuntime::new_silent();
+		runtime.set_force(true);
+
+		let sink = open_tile_sink(
+			destination.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)
+		.await?;
+		sink
+			.write_tile(&TileCoord::new(3, 1, 2)?, &Blob::from(vec![0u8; 16]))
+			.await?;
+		sink.finish(&TileJSON::default(), &runtime).await?;
+
+		assert!(
+			!destination.join("9").exists(),
+			"a zoom level from the previous assembly survived into the new output"
+		);
+		Ok(())
+	}
+
+	/// The `--force` guard reaches sinks too.
+	#[tokio::test]
+	async fn a_non_empty_directory_sink_is_refused_without_force() -> Result<()> {
+		let dir = assert_fs::TempDir::new()?;
+		let destination = dir.path().join("not-ours");
+		std::fs::create_dir_all(&destination)?;
+		std::fs::write(destination.join("thesis.txt"), b"three years of work")?;
+
+		let runtime = TilesRuntime::new_silent();
+		// `Box<dyn TileSink>` is not `Debug`, so `unwrap_err` is unavailable.
+		let error = match open_tile_sink(
+			destination.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)
+		.await
+		{
+			Ok(_) => panic!("a non-empty directory must be refused without --force"),
+			Err(e) => e.to_string(),
+		};
+
+		assert!(error.contains("--force"), "got: {error}");
+		assert!(destination.join("thesis.txt").exists());
+		Ok(())
+	}
 
 	/// PMTiles cannot be a sink, and the error has to say why rather than calling
 	/// the format unsupported — `versatiles convert` writes it perfectly well.
