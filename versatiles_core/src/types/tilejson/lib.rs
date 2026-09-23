@@ -351,6 +351,18 @@ impl TileJSON {
 	/// `attribution` in particular would silently drop required source credits.
 	const COMBINE_SEPARATORS: &'static [(&'static str, &'static str)] = &[("attribution", " · "), ("description", "\n")];
 
+	/// Value keys that are **dropped** when merging, because they describe where
+	/// one particular source's tiles live and a merged tileset is not served
+	/// from there.
+	///
+	/// Keeping them is worse than losing them: `tiles` is the URL template a
+	/// client fetches from, so inheriting the first source's would point every
+	/// request at one of the inputs rather than at the merged result. `data` and
+	/// `grids` are the same shape of claim. Whatever sets these for the combined
+	/// tileset — a server, or a `meta_update` — knows the answer; merging does
+	/// not.
+	const SOURCE_SPECIFIC_KEYS: &'static [&'static str] = &["tiles", "data", "grids"];
+
 	/// Merges several `TileJSON`s into one, in iteration order.
 	///
 	/// This is the primitive that [`merge`](Self::merge) delegates to; prefer it
@@ -430,14 +442,28 @@ impl TileJSON {
 		Ok(())
 	}
 
-	/// Merges `other` into this `TileJSON` with specific rules:
-	/// 1. **Bounds**: extends or sets `self.bounds` if `other.bounds` is present.
-	/// 2. **Center**: overwrites `self.center` if `other.center` is `Some`.
-	/// 3. **minzoom** / **maxzoom**: uses the min or max across the two.
-	/// 4. **`attribution` / `description`**: combined (unioned, de-duplicated) so
-	///    no source's credit or description is lost.
-	/// 5. **Other values**: overwrites conflicts from `other.values`.
-	/// 6. **Vector layers**: merges layers from `other`, overwriting existing layer IDs if needed.
+	/// Merges `other` into this `TileJSON` as a **peer**.
+	///
+	/// Neither side is authoritative, so nothing later overrules anything
+	/// earlier. Use [`overlay`](Self::overlay) for the other direction, where a
+	/// caller is deliberately replacing values.
+	///
+	/// 1. **`bounds`**: extended to cover both.
+	/// 2. **`center`**: the first one set is kept.
+	/// 3. **`minzoom` / `maxzoom`**: widened to the range covering both.
+	/// 4. **`attribution` / `description`**: combined, de-duplicated, so no
+	///    source's credit or text is lost.
+	/// 5. **`tiles` / `data` / `grids`**: dropped — see
+	///    [`SOURCE_SPECIFIC_KEYS`](Self::SOURCE_SPECIFIC_KEYS).
+	/// 6. **Every other value**: the first source to set it wins; sources that
+	///    do not set it at all still contribute it.
+	/// 7. **Vector layers**: unioned, layers with the same id merged.
+	///
+	/// Rule 6 is the one worth stating out loud. It used to be "last wins",
+	/// which meant merging a small overlay into a base tileset replaced the
+	/// base's `name`, `version` and `type` with the overlay's — a shipped
+	/// tileset described itself as `Versatiles Landcover / overlay` because
+	/// that was the second source in its pipeline (#276).
 	///
 	/// To merge more than two, use [`merge_all`](Self::merge_all).
 	///
@@ -452,8 +478,13 @@ impl TileJSON {
 			};
 		}
 
-		// 2. Overwrite center
-		if other.center.is_some() {
+		// 2. Center: the first source that has one keeps it.
+		//
+		// A center is a statement about which map this is — where a client
+		// should open. Letting the last source win meant a small overlay merged
+		// onto a base tileset moved the whole map to wherever that overlay
+		// happened to sit (#276).
+		if self.center.is_none() {
 			self.center = other.center;
 		}
 
@@ -467,11 +498,20 @@ impl TileJSON {
 			self.set_zoom_max(new_max);
 		}
 
-		// 4./5. Merge remaining values: combine the union-keys, overwrite the rest.
+		// 4./5. Merge remaining values: combine the union-keys, keep the first
+		// of everything else, drop the ones that describe a single source.
+		let present: std::collections::BTreeSet<String> = self.values.iter_json_values().map(|(k, _)| k).collect();
+
 		for (k, v) in other.values.iter_json_values() {
+			// Already folded in above, as a range rather than a value.
 			if k == "minzoom" || k == "maxzoom" {
 				continue;
 			}
+
+			if Self::SOURCE_SPECIFIC_KEYS.contains(&k.as_str()) {
+				continue;
+			}
+
 			if let Some((_, separator)) = Self::COMBINE_SEPARATORS.iter().find(|(key, _)| *key == k) {
 				if let Some(combined) = combine_values(
 					self.values.string(&k).as_deref(),
@@ -482,7 +522,33 @@ impl TileJSON {
 				}
 				continue;
 			}
-			self.values.insert(&k, &v)?;
+
+			// First one wins. These identify the tileset — `name`, `version`,
+			// `type`, and anything else a source chose to carry — and the
+			// sources being merged are peers, so a later one has no claim to
+			// rename what an earlier one already named. A key nobody has set
+			// yet is still filled in from here.
+			if !present.contains(&k) {
+				self.values.insert(&k, &v)?;
+			}
+		}
+
+		// Drop the source-specific keys, including any this side already had:
+		// the result describes neither source's tile URLs.
+		let mut dropped: Vec<&str> = Vec::new();
+		for key in Self::SOURCE_SPECIFIC_KEYS {
+			let was_here = self.values.remove(key);
+			let was_there = other.values.str(key).is_some();
+			if was_here || was_there {
+				dropped.push(key);
+			}
+		}
+		if !dropped.is_empty() {
+			log::warn!(
+				"merging tilesets dropped {}: these name where one source's tiles are served from, \
+				 which cannot describe the merged result — set them with `meta_update` if a client needs them",
+				dropped.join(", ")
+			);
 		}
 
 		// 6. Merge vector_layers
@@ -927,6 +993,35 @@ mod tests {
 		Ok(())
 	}
 
+	/// The shape from #276: `osm-landcover.versatiles` is built by merging a
+	/// small landcover overlay into the OSM base, and the served
+	/// `tiles.json` described itself as the overlay — name, type, version and
+	/// center all taken from the second source.
+	#[test]
+	fn a_merged_overlay_does_not_rename_the_base_tileset() -> Result<()> {
+		let osm = TileJSON::try_from(
+			r#"{"tilejson":"3.0.0","name":"Shortbread / VersaTiles OSM","type":"baselayer",
+			   "version":"1.1","description":"OpenStreetMap base","attribution":"OSM"}"#,
+		)?;
+		let landcover = TileJSON::try_from(
+			r#"{"tilejson":"3.0.0","name":"Versatiles Landcover","type":"overlay","version":"2",
+			   "description":"Landcover","attribution":"Landcover ODbL",
+			   "center":[-86.660156,54.46991,10]}"#,
+		)?;
+
+		let merged = TileJSON::merge_all([&osm, &landcover])?;
+
+		assert_eq!(merged.string("name"), Some("Shortbread / VersaTiles OSM".to_string()));
+		assert_eq!(merged.string("type"), Some("baselayer".to_string()));
+		assert_eq!(merged.string("version"), Some("1.1".to_string()));
+		// The base carries no center, so the overlay's fills the gap — first-wins
+		// means the first source that *has* the key, not the first source.
+		assert_eq!(merged.center, Some(GeoCenter(-86.660156, 54.46991, 10)));
+		// Both credits survive, which is the one thing a peer may never drop.
+		assert_eq!(merged.string("attribution"), Some("OSM · Landcover ODbL".to_string()));
+		Ok(())
+	}
+
 	#[test]
 	fn should_set_min_and_max_zoom_correctly() {
 		let mut tj = TileJSON::default();
@@ -942,6 +1037,104 @@ mod tests {
 		// Higher maxzoom should not increase the value
 		tj2.set_zoom_max(20);
 		assert_eq!(tj2.zoom_max(), Some(20));
+	}
+
+	/// Every key `check_basics` validates, and what merging two peers does with
+	/// it. The table is the specification: a key added to the TileJSON
+	/// validation without a rule here has no defined merge behaviour, and this
+	/// is where that shows up.
+	///
+	/// See `overlay_matrix_covers_every_key` for the other direction.
+	#[test]
+	fn merge_matrix_covers_every_key() -> Result<()> {
+		// (key, first source's value, second source's value, expected)
+		let cases: &[(&str, &str, &str, Option<&str>)] = &[
+			// Identity: the first source to set it wins.
+			("name", r#""Base""#, r#""Overlay""#, Some(r#""Base""#)),
+			("version", r#""1.1""#, r#""2""#, Some(r#""1.1""#)),
+			("type", r#""baselayer""#, r#""overlay""#, Some(r#""baselayer""#)),
+			("legend", r#""a""#, r#""b""#, Some(r#""a""#)),
+			("template", r#""a""#, r#""b""#, Some(r#""a""#)),
+			("scheme", r#""xyz""#, r#""tms""#, Some(r#""xyz""#)),
+			("fillzoom", "6", "9", Some("6")),
+			("tilejson", r#""3.0.0""#, r#""3.0.0""#, Some(r#""3.0.0""#)),
+			// Combined: no peer's credit or text may be lost.
+			("attribution", r#""OSM""#, r#""Other""#, Some(r#""OSM · Other""#)),
+			(
+				"description",
+				r#""Base map""#,
+				r#""Overlay""#,
+				Some("\"Base map\\nOverlay\""),
+			),
+			// Widened to cover both.
+			("minzoom", "4", "2", Some("2")),
+			("maxzoom", "9", "14", Some("14")),
+			// Dropped: these say where one source is served from.
+			(
+				"tiles",
+				r#"["https://a/{z}/{x}/{y}"]"#,
+				r#"["https://b/{z}/{x}/{y}"]"#,
+				None,
+			),
+			("data", r#"["https://a/data"]"#, r#"["https://b/data"]"#, None),
+			("grids", r#"["https://a/grid"]"#, r#"["https://b/grid"]"#, None),
+			// Not in the spec, but a source may carry anything: first wins.
+			("custom_key", r#""first""#, r#""second""#, Some(r#""first""#)),
+		];
+
+		for (key, first, second, expected) in cases {
+			let a = TileJSON::try_from(format!(r#"{{"tilejson":"3.0.0","{key}":{first}}}"#).as_str())?;
+			let b = TileJSON::try_from(format!(r#"{{"tilejson":"3.0.0","{key}":{second}}}"#).as_str())?;
+
+			let merged = TileJSON::merge_all([&a, &b])?;
+			let actual = merged.as_object().get(key).map(JsonValue::stringify);
+
+			assert_eq!(actual.as_deref(), *expected, "merging '{key}': {first} then {second}");
+		}
+
+		Ok(())
+	}
+
+	/// The same keys, in the override direction: the later document wins
+	/// outright, including the ones `merge` combines or drops.
+	#[test]
+	fn overlay_matrix_covers_every_key() -> Result<()> {
+		let cases: &[(&str, &str, &str)] = &[
+			("name", r#""Base""#, r#""New""#),
+			("version", r#""1.1""#, r#""2""#),
+			("type", r#""baselayer""#, r#""overlay""#),
+			("legend", r#""a""#, r#""b""#),
+			("template", r#""a""#, r#""b""#),
+			("scheme", r#""xyz""#, r#""tms""#),
+			("fillzoom", "6", "9"),
+			// Combined by `merge`, replaced here.
+			("attribution", r#""OSM""#, r#""Other""#),
+			("description", r#""Base map""#, r#""Overlay""#),
+			// Widened by `merge`, replaced here — including narrowing.
+			("minzoom", "4", "2"),
+			("maxzoom", "14", "9"),
+			// Dropped by `merge`, honoured here: a caller naming them means them.
+			("tiles", r#"["https://a/{z}/{x}/{y}"]"#, r#"["https://b/{z}/{x}/{y}"]"#),
+			("data", r#"["https://a/data"]"#, r#"["https://b/data"]"#),
+			("grids", r#"["https://a/grid"]"#, r#"["https://b/grid"]"#),
+			("custom_key", r#""first""#, r#""second""#),
+		];
+
+		for (key, base_value, update_value) in cases {
+			let mut base = TileJSON::try_from(format!(r#"{{"tilejson":"3.0.0","{key}":{base_value}}}"#).as_str())?;
+			let update = TileJSON::try_from(format!(r#"{{"tilejson":"3.0.0","{key}":{update_value}}}"#).as_str())?;
+
+			base.overlay(&update)?;
+			let actual = base.as_object().get(key).map(JsonValue::stringify);
+
+			assert_eq!(
+				actual.as_deref(),
+				Some(*update_value),
+				"overlaying '{key}': {base_value} then {update_value}"
+			);
+		}
+
+		Ok(())
 	}
 
 	#[test]
@@ -964,8 +1157,9 @@ mod tests {
 
 		// Bounds should be the union of both
 		assert_eq!(tj1.bounds, Some(GeoBBox::new(-5.0, -5.0, 5.0, 5.0).unwrap()));
-		// Center should be overwritten by the other
-		assert_eq!(tj1.center, Some(GeoCenter(2.0, 2.0, 4)));
+		// Center belongs to the first source that has one: a peer merged in
+		// later has no claim to move where the map opens.
+		assert_eq!(tj1.center, Some(GeoCenter(1.0, 1.0, 2)));
 		// Original value should remain, and new value should be inserted
 		assert_eq!(tj1.values.string("foo"), Some("bar".to_string()));
 		assert_eq!(tj1.values.string("baz"), Some("qux".to_string()));
@@ -1070,8 +1264,8 @@ mod tests {
 			Some("© OpenStreetMap · © Provider B".to_string())
 		);
 		assert_eq!(a.string("description"), Some("Base map\nOverlay".to_string()));
-		// …while ordinary scalars still follow last-write-wins.
-		assert_eq!(a.string("name"), Some("second".to_string()));
+		// …while ordinary scalars belong to the first source that set them.
+		assert_eq!(a.string("name"), Some("first".to_string()));
 		Ok(())
 	}
 
