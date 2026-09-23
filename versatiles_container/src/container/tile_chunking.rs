@@ -9,9 +9,11 @@
 //! default 256 MiB), so peak read memory is bounded regardless of CPU count — important
 //! when a bounding box coalesces into many large chunks.
 //!
-//! When a chunk read fails, the chunk is automatically split into smaller pieces
-//! and retried. This continues recursively down to individual tile reads, so a
-//! flaky connection can still make progress instead of failing on large downloads.
+//! A failing read is retried one layer down, not here: `NetworkReader` splits an
+//! over-large range in half and reads each part, learning the limit for later
+//! ranges, so a flaky connection still makes progress on large downloads. A file
+//! reader has nothing to retry, and either way a read that ends up failing is
+//! reported to the runtime by [`Chunks::stream`] and its tiles dropped.
 
 use std::sync::Arc;
 
@@ -21,7 +23,7 @@ use versatiles_core::{
 	Blob, ByteRange, ConcurrencyLimits, TileCompression, TileCoord, TileFormat, TileStream, io::DataReader,
 };
 
-use crate::Tile;
+use crate::{Tile, TilesRuntime};
 
 /// Default maximum size of a single coalesced chunk. Each chunk is read as one
 /// in-memory blob, so `chunk size × read-ahead` bounds peak read memory. Override
@@ -95,9 +97,11 @@ impl Chunk {
 
 	/// Read a chunk from the reader, slicing it into individual tiles.
 	///
-	/// On failure, the chunk is split into progressively smaller sub-chunks and
-	/// retried. This means a flaky connection that can't sustain a 200 MB download
-	/// can still succeed by reading smaller pieces.
+	/// Retrying is the reader's business, not this function's: a `NetworkReader`
+	/// splits a range it could not fetch and reads the halves, so a connection
+	/// that cannot sustain a 200 MB download still succeeds in pieces. An `Err`
+	/// here therefore means the read failed with whatever retries that reader
+	/// had — see [`Chunks::stream`] for what happens to the chunk's tiles then.
 	async fn read(
 		&self,
 		reader: &DataReader,
@@ -228,26 +232,49 @@ impl Chunks {
 
 	/// Convert chunks into a `TileStream` by reading each chunk as a single blob
 	/// and slicing out individual tiles.
+	///
+	/// A chunk that cannot be read is reported to `runtime` and its tiles are
+	/// dropped. Whether that ends the run is the caller's policy, not this
+	/// function's: `convert` sets
+	/// `abort_on_error` and fails once the stream has drained, so no truncated
+	/// output is written, while a server records the error and keeps serving the
+	/// tiles it can read.
+	///
+	/// This used to `panic!` instead, to avoid writing a corrupt output file. The
+	/// intent was right and the mechanism was not — the panic ran on a runtime
+	/// worker inside `buffer_unordered`, so any tile index entry pointing past
+	/// EOF took down a thread of whatever process was hosting the library.
 	pub fn stream(
 		self,
 		reader: Arc<DataReader>,
 		tile_compression: TileCompression,
 		tile_format: TileFormat,
+		runtime: &TilesRuntime,
 	) -> TileStream<'static, Tile> {
 		let concurrency = chunk_read_concurrency();
 		log::trace!(
 			"chunk stream: {} chunks, read concurrency {concurrency}",
 			self.chunks.len()
 		);
+		let runtime = runtime.clone();
 		TileStream::from_stream(
 			futures::stream::iter(self.chunks)
 				.map(move |chunk| {
 					let reader = Arc::clone(&reader);
+					let runtime = runtime.clone();
 					async move {
-						let entries = chunk
-							.read(&reader, tile_compression, tile_format)
-							.await
-							.unwrap_or_else(|e| panic!("aborting to prevent corrupt output — {e:#}"));
+						let range = chunk.range;
+						let tile_count = chunk.tiles.len();
+						let entries = match chunk.read(&reader, tile_compression, tile_format).await {
+							Ok(entries) => entries,
+							Err(e) => {
+								runtime.record_error(
+									"chunk read",
+									&e.context(format!("reading {tile_count} tiles from range {range:?}")),
+								);
+								Vec::new()
+							}
+						};
 						futures::stream::iter(entries)
 					}
 				})
@@ -345,13 +372,132 @@ mod tests {
 		});
 
 		let _ = chunks
-			.stream(Arc::new(reader), TileCompression::Uncompressed, TileFormat::BIN)
+			.stream(
+				Arc::new(reader),
+				TileCompression::Uncompressed,
+				TileFormat::BIN,
+				&TilesRuntime::new_silent(),
+			)
 			.to_vec()
 			.await;
 
 		assert_eq!(state.total_reads.load(Ordering::SeqCst), 8, "one read per chunk");
 		let peak = state.max_in_flight.load(Ordering::SeqCst);
 		assert!(peak >= 2, "expected concurrent chunk reads, saw peak {peak} in flight");
+	}
+
+	/// `DataReader` that fails every read, standing in for the crafted index
+	/// entry that points past EOF.
+	#[derive(Debug)]
+	struct AlwaysFails;
+
+	#[async_trait]
+	impl DataReaderTrait for AlwaysFails {
+		async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+			anyhow::bail!("range {range:?} is past the end of the file")
+		}
+
+		async fn read_all(&self) -> Result<Blob> {
+			unreachable!("AlwaysFails only used for read_range")
+		}
+
+		fn name(&self) -> &str {
+			"always-fails"
+		}
+	}
+
+	fn one_failing_chunk() -> Chunks {
+		Chunks::from_tile_ranges(vec![(TileCoord::new(3, 0, 0).unwrap(), ByteRange::new(0, 1))])
+	}
+
+	/// This used to be `panic!("aborting to prevent corrupt output")` on a
+	/// runtime worker inside `buffer_unordered`. The intent — never write a
+	/// truncated file — is now carried by the runtime, which is what lets the
+	/// *caller* decide, so the two halves are asserted separately below.
+	#[tokio::test]
+	async fn a_failing_chunk_is_recorded_rather_than_panicking() {
+		let runtime = TilesRuntime::new_silent();
+		let reader: DataReader = Box::new(AlwaysFails);
+
+		let tiles = one_failing_chunk()
+			.stream(
+				Arc::new(reader),
+				TileCompression::Uncompressed,
+				TileFormat::BIN,
+				&runtime,
+			)
+			.to_vec()
+			.await;
+
+		assert!(tiles.is_empty(), "no tile can come out of a chunk that did not read");
+		assert_eq!(runtime.error_count(), 1, "the failure must not be swallowed");
+	}
+
+	/// The half that replaces the panic: a conversion still refuses to write
+	/// truncated output, it just does so after the stream drains instead of from
+	/// inside a future.
+	#[tokio::test]
+	async fn a_converting_caller_still_refuses_the_truncated_result() {
+		let converting = TilesRuntime::new_silent();
+		converting.set_abort_on_error(true);
+		let reader: DataReader = Box::new(AlwaysFails);
+		let _ = one_failing_chunk()
+			.stream(
+				Arc::new(reader),
+				TileCompression::Uncompressed,
+				TileFormat::BIN,
+				&converting,
+			)
+			.to_vec()
+			.await;
+		assert!(converting.had_errors(), "convert must have something to fail on");
+
+		// The same failure, the other policy: a server drops the tile and keeps
+		// answering the requests it can.
+		let serving = TilesRuntime::new_silent();
+		let reader: DataReader = Box::new(AlwaysFails);
+		let _ = one_failing_chunk()
+			.stream(
+				Arc::new(reader),
+				TileCompression::Uncompressed,
+				TileFormat::BIN,
+				&serving,
+			)
+			.to_vec()
+			.await;
+		assert!(!serving.had_errors(), "a server keeps going");
+		assert_eq!(serving.error_count(), 1, "but the error is still reported");
+	}
+
+	/// The message has to name what was being read, or a truncated container is
+	/// a mystery rather than a diagnosis.
+	#[tokio::test]
+	async fn the_error_says_what_could_not_be_read() {
+		let runtime = TilesRuntime::new_silent();
+		let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let sink = Arc::clone(&seen);
+		runtime.events().subscribe(move |event| {
+			if let crate::Event::Error { message } = event {
+				sink.lock().unwrap().push(message.clone());
+			}
+		});
+
+		let reader: DataReader = Box::new(AlwaysFails);
+		let _ = one_failing_chunk()
+			.stream(
+				Arc::new(reader),
+				TileCompression::Uncompressed,
+				TileFormat::BIN,
+				&runtime,
+			)
+			.to_vec()
+			.await;
+
+		let messages = seen.lock().unwrap();
+		let message = messages.first().expect("an error event was emitted");
+		assert!(message.contains("chunk read"), "names the producer: {message}");
+		assert!(message.contains("1 tiles"), "names the scope: {message}");
+		assert!(message.contains("past the end of the file"), "carries why: {message}");
 	}
 
 	#[test]
@@ -386,7 +532,12 @@ mod tests {
 		});
 
 		let _ = chunks
-			.stream(Arc::new(reader), TileCompression::Uncompressed, TileFormat::BIN)
+			.stream(
+				Arc::new(reader),
+				TileCompression::Uncompressed,
+				TileFormat::BIN,
+				&TilesRuntime::new_silent(),
+			)
 			.to_vec()
 			.await;
 

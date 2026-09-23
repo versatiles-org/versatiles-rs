@@ -120,6 +120,9 @@ pub struct PMTilesReader {
 	pub root_bytes_uncompressed: Blob,
 	/// Parsed entries of the root directory (shared across queries).
 	pub root_entries: Arc<EntriesV3>,
+	/// Where a failed chunk read is reported, so the caller's abort-on-error
+	/// policy decides whether the run ends. See `Chunks::stream`.
+	pub runtime: TilesRuntime,
 }
 
 impl PMTilesReader {
@@ -143,7 +146,7 @@ impl PMTilesReader {
 	/// # Errors
 	/// Returns an error if reading or decompression fails, or if the header/dirs are invalid.
 	#[context("opening PMTiles from reader")]
-	pub async fn open_data(data_reader: DataReader, _runtime: TilesRuntime) -> Result<PMTilesReader>
+	pub async fn open_data(data_reader: DataReader, runtime: TilesRuntime) -> Result<PMTilesReader>
 	where
 		Self: Sized,
 	{
@@ -233,6 +236,7 @@ impl PMTilesReader {
 			metadata,
 			root_bytes_uncompressed,
 			root_entries,
+			runtime,
 		})
 	}
 
@@ -542,6 +546,7 @@ impl TileSource for PMTilesReader {
 			Arc::clone(&self.data_reader),
 			*self.metadata.tile_compression(),
 			*self.metadata.tile_format(),
+			&self.runtime,
 		))
 	}
 

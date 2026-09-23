@@ -457,6 +457,7 @@ impl TileSource for VersaTilesReader {
 			Arc::clone(&self.reader),
 			*self.metadata.tile_compression(),
 			*self.metadata.tile_format(),
+			&self.runtime,
 		))
 	}
 
