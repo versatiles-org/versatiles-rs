@@ -527,6 +527,66 @@ async fn convert_abort_on_error_bails_when_record_error_fires() -> Result<()> {
 		"error message should report the recorded error count, got: {msg}"
 	);
 	assert_eq!(runtime.error_count(), 1);
+
+	// The writer succeeded, so a complete-looking container was written. It must
+	// not be sitting at the path the caller asked for, where the next step of a
+	// pipeline would pick it up as the conversion it requested.
+	assert!(
+		!output_path.exists(),
+		"an incomplete conversion must not be left at the requested path"
+	);
+
+	// But it must not be destroyed either: it is a readable container missing
+	// only the tiles that failed, and that may be most of a long run.
+	let set_aside = output_path.with_file_name("output.incomplete.versatiles");
+	assert!(set_aside.is_file(), "the incomplete output should have been kept aside");
+	assert!(
+		std::fs::metadata(&set_aside)?.len() > 0,
+		"the set-aside output should still hold the tiles that did read"
+	);
+	assert!(
+		msg.contains("incomplete"),
+		"the error should say where the output went, got: {msg}"
+	);
+
+	// And it is still a real container: the tiles that did read are readable.
+	let reopened = TilesRuntime::new_silent()
+		.reader_from_str(set_aside.to_str().unwrap())
+		.await;
+	assert!(reopened.is_ok(), "the set-aside output should still open: {reopened:?}");
+
+	Ok(())
+}
+
+/// A leftover `.incomplete` from an earlier failed run must not block the next
+/// one — `rename` refuses an existing target on Windows.
+#[tokio::test]
+async fn an_earlier_incomplete_output_is_replaced() -> Result<()> {
+	let temp_dir = TempDir::new()?;
+	let output_path = temp_dir.path().join("output.versatiles");
+	std::fs::write(output_path.with_file_name("output.incomplete.versatiles"), b"stale")?;
+
+	let runtime = TilesRuntime::builder()
+		.silent_progress(true)
+		.abort_on_error(true)
+		.build();
+	runtime.record_error("synthetic test source", &anyhow::anyhow!("simulated read failure"));
+
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
+	let params = TilesConverterParameters {
+		tile_pyramid: Some(TilePyramid::new_full_up_to(5)),
+		..Default::default()
+	};
+	assert!(
+		convert_tiles_container(source, params, &output_path, runtime.clone())
+			.await
+			.is_err()
+	);
+
+	let set_aside = output_path.with_file_name("output.incomplete.versatiles");
+	let kept = std::fs::read(&set_aside)?;
+	assert_ne!(kept, b"stale", "the stale file must have been replaced, not kept");
+	assert!(kept.len() > 5);
 	Ok(())
 }
 
