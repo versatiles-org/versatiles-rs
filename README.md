@@ -314,6 +314,8 @@ If a conversion finishes writing but could not read every tile, the output is co
 
 The output path can also be an SFTP URL (`sftp://[user[:pass]@]host[:port]/path`) to write directly to a remote server. This requires the `sftp` feature. Only formats that support streaming writes (`.versatiles`, `.pmtiles`) are supported over SFTP.
 
+Remote writes follow the same rule: the upload goes to `.<name>.tmp` beside the destination and is moved into place at the end, so a failed upload never leaves a corrupt file under the name clients are fetching. Replacing an existing remote file is not a single step — SFTP's `rename` refuses an existing target — so the old one is moved to `.old` first and removed once the new one is in place. There is a brief moment where the destination does not exist; what cannot happen is losing the previous upload, which is restored if the move fails.
+
 **Real-world examples:**
 
 ```sh

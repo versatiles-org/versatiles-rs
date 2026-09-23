@@ -254,14 +254,10 @@ pub async fn convert_tiles_container_to_str(
 	check_tile_count(&pyramid, resolve_tile_count_limit())?;
 	runtime.write_to_str(converter.into_shared(), destination).await?;
 
-	// A remote destination does not go through `StagedOutput` yet, so this is
-	// the one path where an incomplete output can still reach the destination.
-	if runtime.had_errors() {
-		bail!(
-			"conversion completed with {} read error(s) — output may be incomplete",
-			runtime.error_count()
-		);
-	}
+	// No `had_errors` check here either: local writes go through `StagedOutput`
+	// and remote ones through `publish_remote`, and both keep an incomplete
+	// output away from the destination. A second decision at this level is what
+	// once moved the *previous* conversion aside instead of the new one.
 
 	runtime.events().step("Conversion complete".to_string());
 	Ok(())

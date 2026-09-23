@@ -71,6 +71,16 @@ enum FsEntry {
 	Dir,
 }
 
+/// An `SSH_FX_OK` status for `id`.
+fn ok_status(id: u32) -> Status {
+	Status {
+		id,
+		status_code: StatusCode::Ok,
+		error_message: String::new(),
+		language_tag: String::new(),
+	}
+}
+
 // ---------------------------------------------------------------------------
 // SFTP handler — error type is StatusCode (implements Into<StatusCode>)
 // ---------------------------------------------------------------------------
@@ -97,6 +107,28 @@ impl russh_sftp::server::Handler for SftpHandler {
 
 	async fn init(&mut self, _version: u32, _extensions: HashMap<String, String>) -> Result<Version, Self::Error> {
 		Ok(Version::new())
+	}
+
+	/// SFTP v3 `SSH_FXP_RENAME`: fails when the target already exists. That is
+	/// the whole reason `posix-rename@openssh.com` exists, so the restriction is
+	/// modelled rather than glossed over.
+	async fn rename(&mut self, id: u32, oldpath: String, newpath: String) -> Result<Status, Self::Error> {
+		let mut fs = self.fs.lock().await;
+		let (from, to) = (PathBuf::from(&oldpath), PathBuf::from(&newpath));
+		if fs.contains_key(&to) {
+			return Err(StatusCode::Failure);
+		}
+		let entry = fs.remove(&from).ok_or(StatusCode::NoSuchFile)?;
+		fs.insert(to, entry);
+		Ok(ok_status(id))
+	}
+
+	async fn remove(&mut self, id: u32, filename: String) -> Result<Status, Self::Error> {
+		let mut fs = self.fs.lock().await;
+		match fs.remove(&PathBuf::from(&filename)) {
+			Some(_) => Ok(ok_status(id)),
+			None => Err(StatusCode::NoSuchFile),
+		}
 	}
 
 	async fn open(

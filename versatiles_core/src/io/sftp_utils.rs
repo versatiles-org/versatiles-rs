@@ -129,6 +129,68 @@ pub fn remote_parent(path: &str) -> Option<&str> {
 	}
 }
 
+/// Moves a finished upload onto the name it was written for.
+///
+/// The remote equivalent of the local staging rename, and it carries the same
+/// rule: a partial upload never occupies the destination.
+///
+/// SFTP v3's `SSH_FXP_RENAME` refuses an existing target, so replacing one takes
+/// three steps — the same shape used for a local directory, and for the same
+/// reason:
+///
+/// 1. rename the destination aside to `.old`
+/// 2. rename the upload onto the destination
+/// 3. remove `.old`
+///
+/// Not atomic; there is a moment between 1 and 2 when the destination does not
+/// exist. What it *never* does is destroy the only copy: if step 2 fails the
+/// previous file is renamed back, and if the process dies in between it is
+/// sitting under `.old`, named clearly. That is the property worth having, and
+/// it is the one that `remove` followed by `rename` — the obvious shortcut —
+/// gives up.
+///
+/// `posix-rename@openssh.com` would make this one atomic call. `russh-sftp`
+/// negotiates extensions but keeps its raw session private, so `SSH_FXP_EXTENDED`
+/// is not reachable through the client API; revisit if that changes upstream.
+pub async fn publish_remote(sftp: &Sftp, staging: &str, destination: &str) -> Result<()> {
+	if sftp.metadata(destination.to_string()).await.is_err() {
+		// Nothing there: one rename, and it is atomic.
+		return sftp
+			.rename(staging.to_string(), destination.to_string())
+			.await
+			.with_context(|| format!("publishing {staging} as {destination}"));
+	}
+
+	let previous = format!("{destination}.old");
+	let _ = sftp.remove_file(previous.clone()).await;
+	sftp
+		.rename(destination.to_string(), previous.clone())
+		.await
+		.with_context(|| format!("moving the previous upload {destination} aside to {previous}"))?;
+
+	if let Err(e) = sftp.rename(staging.to_string(), destination.to_string()).await {
+		// Put the previous upload back rather than leave the destination missing:
+		// it is the only copy.
+		let _ = sftp.rename(previous.clone(), destination.to_string()).await;
+		return Err(anyhow!("publishing {staging} as {destination}: {e}"));
+	}
+
+	if let Err(e) = sftp.remove_file(previous.clone()).await {
+		// The new upload is already published; a leftover is untidy, not wrong.
+		log::warn!("could not remove the previous upload {previous}: {e}");
+	}
+	Ok(())
+}
+
+/// The remote path an upload is built at before it is published.
+#[must_use]
+pub fn staging_remote_path(destination: &str) -> String {
+	match destination.rsplit_once('/') {
+		Some((dir, name)) => format!("{dir}/.{name}.tmp"),
+		None => format!(".{destination}.tmp"),
+	}
+}
+
 /// Build a sanitized display name (without credentials).
 #[must_use]
 pub fn display_name(url: &Url) -> String {
@@ -1146,5 +1208,109 @@ mod tests {
 				.expect("test server accepts the password");
 			assert!(open_sftp(&handle).await.is_ok());
 		}
+	}
+}
+
+#[cfg(test)]
+mod publish_tests {
+	use super::*;
+	use crate::io::test_sftp_server::TestSftpServer;
+
+	async fn connect(server: &TestSftpServer) -> (SshHandle, Sftp) {
+		let url = server.url("/unused");
+		let session = open_session(&url, None).await.unwrap();
+		let sftp = open_sftp(&session).await.unwrap();
+		(session, sftp)
+	}
+
+	#[test]
+	fn staging_sits_beside_the_destination() {
+		assert_eq!(
+			staging_remote_path("/data/tiles.versatiles"),
+			"/data/.tiles.versatiles.tmp",
+			"same directory, so the rename does not cross a filesystem"
+		);
+		assert_eq!(staging_remote_path("tiles.versatiles"), ".tiles.versatiles.tmp");
+	}
+
+	/// The common case, and the only one that is a single atomic step.
+	#[tokio::test(flavor = "current_thread")]
+	#[serial_test::serial]
+	async fn publishing_to_a_free_name_is_one_rename() {
+		let server = TestSftpServer::start().await;
+		server.write_file("/.out.versatiles.tmp", b"the new upload").await;
+		let (_session, sftp) = connect(&server).await;
+
+		publish_remote(&sftp, "/.out.versatiles.tmp", "/out.versatiles")
+			.await
+			.unwrap();
+
+		assert_eq!(server.read_file("/out.versatiles").await, b"the new upload");
+	}
+
+	/// SFTP v3 `rename` refuses an existing target, so replacing one takes the
+	/// three-step dance. What must come out of it is the new upload published and
+	/// no `.old` left over.
+	#[tokio::test(flavor = "current_thread")]
+	#[serial_test::serial]
+	async fn publishing_over_an_existing_upload_replaces_it() {
+		let server = TestSftpServer::start().await;
+		server.write_file("/out.versatiles", b"the previous tileset").await;
+		server.write_file("/.out.versatiles.tmp", b"the new upload").await;
+		let (_session, sftp) = connect(&server).await;
+
+		publish_remote(&sftp, "/.out.versatiles.tmp", "/out.versatiles")
+			.await
+			.unwrap();
+
+		assert_eq!(server.read_file("/out.versatiles").await, b"the new upload");
+		assert!(
+			server.read_file("/out.versatiles.old").await.is_empty(),
+			"the previous upload must not be left lying around"
+		);
+		assert!(
+			server.read_file("/.out.versatiles.tmp").await.is_empty(),
+			"the staging name must be free again"
+		);
+	}
+
+	/// The property that matters more than atomicity: a failure must never leave
+	/// the destination missing, because there is no copy to put back.
+	#[tokio::test(flavor = "current_thread")]
+	#[serial_test::serial]
+	async fn a_failed_publish_puts_the_previous_upload_back() {
+		let server = TestSftpServer::start().await;
+		server.write_file("/out.versatiles", b"the previous tileset").await;
+		// No staging file: step 2 of the dance cannot succeed.
+		let (_session, sftp) = connect(&server).await;
+
+		let error = publish_remote(&sftp, "/.out.versatiles.tmp", "/out.versatiles")
+			.await
+			.unwrap_err();
+
+		assert!(error.to_string().contains("publishing"), "got: {error}");
+		assert_eq!(
+			server.read_file("/out.versatiles").await,
+			b"the previous tileset",
+			"the previous upload must be back where clients expect it"
+		);
+	}
+
+	/// A leftover `.old` from an earlier interrupted publish must not block the
+	/// next one — `rename` refuses an existing target.
+	#[tokio::test(flavor = "current_thread")]
+	#[serial_test::serial]
+	async fn a_leftover_old_upload_does_not_block_publishing() {
+		let server = TestSftpServer::start().await;
+		server.write_file("/out.versatiles", b"the previous tileset").await;
+		server.write_file("/out.versatiles.old", b"wreckage").await;
+		server.write_file("/.out.versatiles.tmp", b"the new upload").await;
+		let (_session, sftp) = connect(&server).await;
+
+		publish_remote(&sftp, "/.out.versatiles.tmp", "/out.versatiles")
+			.await
+			.unwrap();
+
+		assert_eq!(server.read_file("/out.versatiles").await, b"the new upload");
 	}
 }

@@ -40,7 +40,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use assert_fs::NamedTempFile;
 use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp, DataWriterTrait, url_for_display};
 #[cfg(feature = "sftp")]
-use versatiles_core::io::{DataReaderSftp, DataWriterSftp};
+use versatiles_core::io::{DataReaderSftp, DataWriterSftp, sftp_utils};
 #[cfg(test)]
 use versatiles_core::{TileCompression, TileFormat, TilePyramid};
 use versatiles_derive::context;
@@ -127,6 +127,20 @@ fn check_writer_options(options: &BTreeMap<String, String>, entry: &WriterEntry,
 		if unknown.len() == 1 { "" } else { "s" },
 		unknown.join(", ")
 	);
+}
+
+/// The remote name an upload takes when it is complete but missing tiles.
+///
+/// The marker goes before the extension, for the same reason it does locally:
+/// `tiles.incomplete.versatiles` still names a container that opens.
+#[cfg(feature = "sftp")]
+fn incomplete_remote_path(destination: &str) -> String {
+	match destination.rsplit_once('.') {
+		Some((stem, extension)) if !stem.is_empty() && !stem.ends_with('/') => {
+			format!("{stem}.incomplete.{extension}")
+		}
+		_ => format!("{destination}.incomplete"),
+	}
 }
 
 impl ContainerRegistry {
@@ -421,8 +435,6 @@ impl ContainerRegistry {
 				.map_or("", |(_, ext)| ext),
 		);
 
-		let writer = DataWriterSftp::from_url(&url, runtime.ssh_identity()).await?;
-
 		let entry = self
 			.writers
 			.get(&extension)
@@ -435,7 +447,41 @@ impl ContainerRegistry {
 					 (only formats with data writers are supported, e.g. versatiles, pmtiles)"
 			)
 		})?;
-		write_to_writer(reader, Box::new(writer), runtime).await
+
+		// Upload beside the destination and move it into place at the end, the
+		// same rule the local path follows: a failed upload must not leave a
+		// corrupt file under the name clients are fetching, and must not cost the
+		// operator the tileset that was already published there.
+		let staging_path = sftp_utils::staging_remote_path(&remote_path);
+		let mut staging_url = url.clone();
+		staging_url.set_path(&staging_path);
+
+		let writer = DataWriterSftp::from_url(&staging_url, runtime.ssh_identity()).await?;
+		let result = write_to_writer(reader, Box::new(writer), runtime.clone()).await;
+
+		let session = sftp_utils::open_session(&url, runtime.ssh_identity()).await?;
+		let sftp = sftp_utils::open_sftp(&session).await?;
+
+		if let Err(e) = result {
+			// Nothing was published, so the destination still holds whatever was
+			// there. Clear the upload so it does not accumulate.
+			if let Err(cleanup) = sftp.remove_file(staging_path.clone()).await {
+				log::warn!("could not remove the partial upload {staging_path}: {cleanup}");
+			}
+			return Err(e);
+		}
+
+		if runtime.had_errors() {
+			let incomplete = incomplete_remote_path(&remote_path);
+			sftp_utils::publish_remote(&sftp, &staging_path, &incomplete).await?;
+			bail!(
+				"conversion completed with {} read error(s); {remote_path} was left untouched and \
+				 the incomplete output kept at {incomplete}",
+				runtime.error_count()
+			);
+		}
+
+		sftp_utils::publish_remote(&sftp, &staging_path, &remote_path).await
 	}
 
 	/// Register both file and (optionally) data readers for a [`TilesReader`] implementation.
