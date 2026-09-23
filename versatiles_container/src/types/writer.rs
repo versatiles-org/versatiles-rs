@@ -22,7 +22,7 @@
 //! async fn main() -> anyhow::Result<()> {
 //!     let runtime = TilesRuntime::default();
 //!     let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
-//!     let output_path = std::env::temp_dir().join("example.versatiles");
+//!     let output_path = std::env::temp_dir().join("example_writer.versatiles");
 //!
 //!     // The runtime automatically dispatches to the correct writer
 //!     runtime.write_to_path(reader, &output_path).await?;

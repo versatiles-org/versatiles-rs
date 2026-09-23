@@ -30,7 +30,7 @@
 //!     let reader = Arc::new(TilesConvertReader::new_from_reader(reader, params).await?);
 //!
 //!     // Write to a target path; format is inferred from the extension
-//!     let output = std::env::temp_dir().join("example.versatiles");
+//!     let output = std::env::temp_dir().join("example_lib.versatiles");
 //!     runtime.write_to_path(reader, &output).await?;
 //!     Ok(())
 //! }

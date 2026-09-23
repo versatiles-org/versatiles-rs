@@ -4,6 +4,7 @@ mod data_location;
 mod data_source;
 mod reader;
 mod remapped_source;
+mod staged_output;
 mod tile;
 mod tile_content;
 mod tile_sink;

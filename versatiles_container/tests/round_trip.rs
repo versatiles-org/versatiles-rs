@@ -558,6 +558,67 @@ async fn convert_abort_on_error_bails_when_record_error_fires() -> Result<()> {
 	Ok(())
 }
 
+/// MBTiles stages its database and publishes it by renaming, so two layers could
+/// both decide where an incomplete output goes: the writer, and
+/// `convert_tiles_container`'s own set-aside handling. When they both acted, the
+/// destination — holding the *previous* conversion — was the thing that got moved
+/// aside, and the user lost it.
+#[tokio::test]
+async fn a_failed_mbtiles_overwrite_keeps_the_previous_output() -> Result<()> {
+	let temp_dir = TempDir::new()?;
+	let output_path = temp_dir.path().join("output.mbtiles");
+
+	// A real previous conversion, so "untouched" means byte-for-byte.
+	let first = TilesRuntime::builder().silent_progress(true).build();
+	let source = first.reader_from_str("../testdata/berlin.mbtiles").await?;
+	convert_tiles_container(
+		source,
+		TilesConverterParameters {
+			tile_pyramid: Some(TilePyramid::new_full_up_to(4)),
+			..Default::default()
+		},
+		&output_path,
+		first,
+	)
+	.await?;
+	let before = std::fs::read(&output_path)?;
+	assert!(!before.is_empty());
+
+	// Now overwrite it from a run that records a read error.
+	let second = TilesRuntime::builder()
+		.silent_progress(true)
+		.abort_on_error(true)
+		.build();
+	second.record_error("synthetic test source", &anyhow::anyhow!("simulated read failure"));
+	let source = second.reader_from_str("../testdata/berlin.mbtiles").await?;
+	let result = convert_tiles_container(
+		source,
+		TilesConverterParameters {
+			tile_pyramid: Some(TilePyramid::new_full_up_to(3)),
+			..Default::default()
+		},
+		&output_path,
+		second,
+	)
+	.await;
+	assert!(result.is_err(), "the run recorded an error and must fail");
+
+	assert_eq!(
+		std::fs::read(&output_path)?,
+		before,
+		"a failed overwrite must leave the previous output byte-identical"
+	);
+	assert!(
+		output_path.with_file_name("output.incomplete.mbtiles").is_file(),
+		"the incomplete database should have been kept under its own name"
+	);
+	assert!(
+		!temp_dir.path().join(".output.mbtiles.tmp").exists(),
+		"no staging file should survive"
+	);
+	Ok(())
+}
+
 /// A leftover `.incomplete` from an earlier failed run must not block the next
 /// one — `rename` refuses an existing target on Windows.
 #[tokio::test]

@@ -40,10 +40,7 @@
 //! }
 //! ```
 
-use std::{
-	path::{Path, PathBuf},
-	sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
@@ -215,88 +212,6 @@ fn group_digits(value: u64) -> String {
 
 /// Converts a source into a container at `path`, applying `cp`.
 ///
-/// Marker put into the name of an output that finished writing but is missing
-/// tiles — before the extension where there is one, so the file still opens.
-const INCOMPLETE_SUFFIX: &str = ".incomplete";
-
-/// Moves an output that is missing tiles out from under the name the caller
-/// asked for, returning where it went.
-///
-/// This is deliberately *not* what happens when the write itself fails. Those
-/// two failures leave very different things on disk:
-///
-/// - A writer error stops before the header and index are patched in, so what is
-///   left is structurally invalid — it cannot be opened, and it is worth nothing.
-///   `ContainerRegistry::write_to_path` deletes it.
-/// - Reaching here means the writer succeeded: the container is complete,
-///   readable and internally consistent. It is simply missing the tiles that
-///   could not be read. That may be hours of work and 99.9% of the data, so
-///   deleting it destroys something a person may well want — but leaving it at
-///   the requested path invites every script downstream to treat it as the
-///   conversion it asked for.
-///
-/// Renaming settles both: the data survives, under a name nothing mistakes for a
-/// finished conversion.
-///
-/// Best-effort. A failure to rename is logged, never propagated, because it must
-/// not replace the read errors that are the real reason the conversion failed.
-fn set_aside_incomplete_output(path: &Path) -> Option<PathBuf> {
-	if !path.exists() {
-		return None;
-	}
-
-	// Before the extension, not after it: `out.versatiles.incomplete` names a
-	// format nothing recognises, so the container could not be opened without
-	// being renamed back — which makes "the data survives" only half true.
-	// `out.incomplete.versatiles` still opens, and still cannot be mistaken for
-	// the conversion that was asked for.
-	let target = if let (Some(stem), Some(extension)) = (path.file_stem(), path.extension()) {
-		let mut name = stem.to_os_string();
-		name.push(INCOMPLETE_SUFFIX);
-		name.push(".");
-		name.push(extension);
-		path.with_file_name(name)
-	} else {
-		// A directory output, or a file without an extension.
-		let mut name = path.file_name()?.to_os_string();
-		name.push(INCOMPLETE_SUFFIX);
-		path.with_file_name(name)
-	};
-
-	// `rename` replaces an existing target on Unix but fails on Windows, and a
-	// leftover from a previous failed run is exactly what is in the way.
-	if target.exists() {
-		let removed = if target.is_dir() {
-			std::fs::remove_dir_all(&target)
-		} else {
-			std::fs::remove_file(&target)
-		};
-		if let Err(e) = removed {
-			log::warn!("could not replace {target:?} from an earlier failed run: {e}");
-			return None;
-		}
-	}
-
-	match std::fs::rename(path, &target) {
-		Ok(()) => Some(target),
-		Err(e) => {
-			log::warn!("could not move the incomplete output {path:?} aside: {e}");
-			None
-		}
-	}
-}
-
-/// The message for a conversion whose writer succeeded but whose reader did not.
-fn incomplete_output_error(runtime: &TilesRuntime, moved_to: Option<PathBuf>) -> anyhow::Error {
-	let count = runtime.error_count();
-	match moved_to {
-		Some(target) => anyhow::anyhow!(
-			"conversion completed with {count} read error(s); the output is missing tiles and has been moved to {target:?}"
-		),
-		None => anyhow::anyhow!("conversion completed with {count} read error(s) — output may be incomplete"),
-	}
-}
-
 /// The writer is chosen from the path's extension; the conversion itself is
 /// driven by [`TilesConverterParameters`].
 #[context("Converting tiles from reader to file")]
@@ -313,9 +228,10 @@ pub async fn convert_tiles_container(
 	check_tile_count(&pyramid, resolve_tile_count_limit())?;
 	runtime.write_to_path(converter.into_shared(), path).await?;
 
-	if runtime.had_errors() {
-		return Err(incomplete_output_error(&runtime, set_aside_incomplete_output(path)));
-	}
+	// No `had_errors` check here: `ContainerRegistry::write_to_path` decides
+	// where the output lands, and an incomplete one never reaches the
+	// destination. A second decision at this level is what once moved the
+	// *previous* conversion aside instead of the new one.
 
 	runtime.events().step("Conversion complete".to_string());
 	Ok(())
@@ -338,15 +254,13 @@ pub async fn convert_tiles_container_to_str(
 	check_tile_count(&pyramid, resolve_tile_count_limit())?;
 	runtime.write_to_str(converter.into_shared(), destination).await?;
 
+	// A remote destination does not go through `StagedOutput` yet, so this is
+	// the one path where an incomplete output can still reach the destination.
 	if runtime.had_errors() {
-		// Only a local destination can be moved aside from here; a remote one
-		// (e.g. `sftp://`) is left where it is, and the message says so.
-		let moved = if destination.contains("://") {
-			None
-		} else {
-			set_aside_incomplete_output(Path::new(destination))
-		};
-		return Err(incomplete_output_error(&runtime, moved));
+		bail!(
+			"conversion completed with {} read error(s) — output may be incomplete",
+			runtime.error_count()
+		);
 	}
 
 	runtime.events().step("Conversion complete".to_string());

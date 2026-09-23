@@ -49,7 +49,10 @@ use crate::{
 	DataSource, DirectoryReader, DirectoryWriter, MBTilesReader, MBTilesWriter, PMTilesReader, PMTilesWriter,
 	SharedTileSource, TarTilesReader, TarTilesWriter, TileSource, TilesReader, TilesRuntime, TilesWriter,
 	VersaTilesReader, VersaTilesWriter,
-	types::{data_location::DataLocation, data_source::looks_like_vpl, tile_sink::destination_is_directory},
+	types::{
+		data_location::DataLocation, data_source::looks_like_vpl, staged_output::StagedOutput,
+		tile_sink::destination_is_directory,
+	},
 };
 #[cfg(test)]
 use crate::{MockReader, TileSourceMetadata, Traversal};
@@ -124,31 +127,6 @@ fn check_writer_options(options: &BTreeMap<String, String>, entry: &WriterEntry,
 		if unknown.len() == 1 { "" } else { "s" },
 		unknown.join(", ")
 	);
-}
-
-/// Removes an output file a failed write left behind.
-///
-/// A writer opens its destination before it knows whether the conversion will
-/// succeed — `DataWriterFile::from_path` calls `File::create`, and `MBTilesWriter`
-/// creates its database — so a failure at any later point leaves a file that looks
-/// like a real output. Even the earliest possible failure leaves a zero-byte one.
-///
-/// **Only ever called for a path that did not exist before the write started.** An
-/// output that overwrites an existing file is left alone: the writer may have
-/// failed before opening it, and deleting a file the caller already had would turn
-/// a failed conversion into data loss. The truncated-overwrite case is not
-/// recoverable either way, and losing the user's file is the worse of the two.
-///
-/// Best-effort: a failure to remove is logged, never propagated, because it must
-/// not replace the real error that caused the write to fail.
-fn remove_partial_output(path: &Path) {
-	if !path.is_file() {
-		return;
-	}
-	match std::fs::remove_file(path) {
-		Ok(()) => log::debug!("removed partial output {path:?} after a failed write"),
-		Err(e) => log::warn!("could not remove partial output {path:?} after a failed write: {e}"),
-	}
 }
 
 impl ContainerRegistry {
@@ -359,16 +337,28 @@ impl ContainerRegistry {
 
 		check_writer_options(&runtime.writer_options(), entry, &extension)?;
 
-		// Whether the destination already existed decides whether a failed write
-		// may clean up after itself — see `remove_partial_output`.
-		let existed_before = path.exists();
-		let result = (entry.write_to_path)(reader, path.clone(), runtime).await;
-		if result.is_err() && !existed_before {
-			remove_partial_output(&path);
-		}
+		// The one place that decides where this output lands. Writers are handed
+		// a path that does not exist, write a complete container there, and touch
+		// nothing else; everything after that happens here.
+		let staged = StagedOutput::create(&path)?;
+		let result = (entry.write_to_path)(reader, staged.path().to_path_buf(), runtime.clone()).await;
+
+		// A writer error drops `staged`, whose `Drop` removes what it left behind.
 		result?;
 
-		Ok(())
+		if runtime.had_errors() {
+			// The writer succeeded; the *run* did not. Publishing over the
+			// destination would replace a complete previous output with one that
+			// is missing tiles.
+			let kept = staged.publish_as_incomplete()?;
+			bail!(
+				"conversion completed with {} read error(s); {path:?} was left untouched and the \
+				 incomplete output kept at {kept:?}",
+				runtime.error_count()
+			);
+		}
+
+		staged.publish()
 	}
 
 	/// Write tiles to a destination specified as a string (path or SFTP URL).
@@ -680,16 +670,6 @@ pub mod tests {
 		assert!(path.is_file(), "a successful write must keep its output");
 		assert!(std::fs::metadata(&path)?.len() > 0);
 		Ok(())
-	}
-
-	#[test]
-	fn remove_partial_output_is_a_no_op_for_a_missing_or_non_file_path() {
-		let dir = TempDir::new().unwrap();
-		// Neither of these must panic, and the directory must survive: cleanup
-		// never removes a directory output.
-		remove_partial_output(&dir.path().join("does-not-exist"));
-		remove_partial_output(dir.path());
-		assert!(dir.path().is_dir(), "cleanup must never remove a directory");
 	}
 
 	/// Issue #245: `convert in.versatiles out/` used to need `mkdir out` first, and
