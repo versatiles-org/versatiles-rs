@@ -58,10 +58,11 @@ pub struct DataWriterFile {
 //    not remove the blocking; it moves it to a pool thread and adds a
 //    round-trip per operation. A buffered local write is short and never
 //    yields, so paying that per call buys nothing.
-//  - `std::io::BufWriter` flushes on `Drop`. `tokio::io::BufWriter` cannot —
-//    a destructor cannot await — and of the five places that build a
-//    `DataWriterFile`, only the registry's `write_to_writer` path calls
-//    `finalize()`. Switching would silently truncate the other four.
+//  - `std::io::BufWriter` flushes on `Drop`; `tokio::io::BufWriter` cannot,
+//    because a destructor cannot await. Every path that builds a
+//    `DataWriterFile` now calls `finalize()`, so that destructor is a backstop
+//    rather than the mechanism — but it is the backstop that keeps a missed
+//    call from truncating a file outright, and switching would remove it.
 //
 // A further trap if anyone does revisit this: `append` and `write_start` call
 // `stream_position`, which `std` specialises on `BufWriter` to read the
@@ -104,9 +105,13 @@ impl DataWriterTrait for DataWriterFile {
 	#[context("while appending {} bytes to file", blob.len())]
 	async fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
 		let pos = self.writer.stream_position()?;
-		let len = self.writer.write(blob.as_slice())?;
+		// `write_all`, not `write`: a blob larger than the 8 KiB buffer is passed
+		// straight to the file, where a single `write(2)` may be short. `write`
+		// would then return a `ByteRange` shorter than the blob and report
+		// success — an index entry pointing at bytes that were never written.
+		self.writer.write_all(blob.as_slice())?;
 
-		Ok(ByteRange::new(pos, len as u64))
+		Ok(ByteRange::new(pos, blob.len()))
 	}
 
 	/// Writes data from the start of the file.
@@ -151,6 +156,32 @@ impl DataWriterTrait for DataWriterFile {
 		self.writer.seek(SeekFrom::Start(position))?;
 		Ok(())
 	}
+
+	/// Flushes the buffer, so a failure to write the last bytes is an error
+	/// rather than a silently truncated file.
+	///
+	/// Without this, the trait's promise — "after `finalize` returns `Ok`, the
+	/// destination holds all written bytes" — was false here: the default
+	/// `finalize` is a no-op, so the buffer reached the disk only through
+	/// `BufWriter`'s destructor, which cannot return an error and discards the
+	/// one it gets.
+	///
+	/// **This is a latent hole, not a live bug.** Every writer today ends with
+	/// `write_start`, and `BufWriter`'s `Seek` flushes, so by the time `finalize`
+	/// is called the buffer is empty — measured at 0 bytes for both the
+	/// `.versatiles` and `.pmtiles` routes. A writer whose last operation is an
+	/// `append` would be the one to lose its tail, and nothing in the type system
+	/// stops someone writing that. The destructor stays as the backstop.
+	///
+	/// Flush, not `sync_all`: this reports what the filesystem has accepted,
+	/// which is what surfaces `ENOSPC` and a failing disk. Durability across a
+	/// power cut is a separate question with a real cost per conversion, and is
+	/// not decided here.
+	#[context("while flushing buffered data to file")]
+	async fn finalize(&mut self) -> Result<()> {
+		self.writer.flush()?;
+		Ok(())
+	}
 }
 
 #[cfg(test)]
@@ -162,6 +193,67 @@ mod tests {
 
 	use super::*;
 	use crate::Blob;
+
+	/// The trait promises that after `finalize` returns `Ok` the destination
+	/// holds all written bytes. Read the file through a *separate* handle while
+	/// the writer is still alive: with `finalize` a no-op, the bytes are still
+	/// sitting in the `BufWriter` and the file on disk is empty.
+	#[tokio::test]
+	async fn finalize_puts_the_bytes_on_disk_before_the_writer_is_dropped() -> Result<()> {
+		let temp = NamedTempFile::new("finalize")?;
+		let mut writer = DataWriterFile::from_path(temp.path())?;
+		writer.append(&Blob::from(vec![1, 2, 3, 4, 5])).await?;
+
+		writer.finalize().await?;
+
+		let on_disk = std::fs::read(temp.path())?;
+		assert_eq!(on_disk, vec![1, 2, 3, 4, 5], "finalize must leave nothing buffered");
+		Ok(())
+	}
+
+	/// Pins the contract a container index depends on: the returned `ByteRange`
+	/// covers the whole blob, and the whole blob reaches the file.
+	///
+	/// A blob this size bypasses `BufWriter`'s 8 KiB buffer and reaches
+	/// `write(2)` directly, where a short write is legal — `write` would then
+	/// return a range shorter than the blob and report success, indexing bytes
+	/// that are not there, which is why `append` uses `write_all`. This test does
+	/// **not** reproduce that: a regular file on a normal filesystem does not
+	/// write short at this size, so it passes either way. It guards the
+	/// arithmetic, not the syscall.
+	#[tokio::test]
+	async fn a_blob_larger_than_the_buffer_is_written_whole() -> Result<()> {
+		let temp = NamedTempFile::new("big")?;
+		let mut writer = DataWriterFile::from_path(temp.path())?;
+
+		let big = Blob::from(vec![7u8; 100_000]);
+		let range = writer.append(&big).await?;
+		writer.finalize().await?;
+
+		assert_eq!(range.length, 100_000, "the reported range must cover the whole blob");
+		assert_eq!(range.offset, 0);
+		let on_disk = std::fs::read(temp.path())?;
+		assert_eq!(on_disk.len(), 100_000, "every byte must reach the file");
+		assert!(on_disk.iter().all(|&b| b == 7));
+		Ok(())
+	}
+
+	/// Two large appends in a row: the second range must start exactly where the
+	/// first ended, which is what the container indexes rely on.
+	#[tokio::test]
+	async fn consecutive_large_appends_stay_contiguous() -> Result<()> {
+		let temp = NamedTempFile::new("big2")?;
+		let mut writer = DataWriterFile::from_path(temp.path())?;
+
+		let first = writer.append(&Blob::from(vec![1u8; 50_000])).await?;
+		let second = writer.append(&Blob::from(vec![2u8; 50_000])).await?;
+		writer.finalize().await?;
+
+		assert_eq!(first.offset, 0);
+		assert_eq!(second.offset, first.length, "no gap and no overlap");
+		assert_eq!(std::fs::read(temp.path())?.len(), 100_000);
+		Ok(())
+	}
 
 	#[tokio::test]
 	async fn test_append_and_position() -> Result<()> {

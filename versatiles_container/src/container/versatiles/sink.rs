@@ -326,7 +326,14 @@ impl TileSink for VersaTilesSink {
 		// 5. Rewrite the placeholder header with the real values.
 		writer.write_start(&header.to_blob()?).await?;
 
-		// 6. Remove the now-empty temp directory.
+		// 6. Push the last buffered bytes and say so if they do not land. This
+		//    matters most on the SFTP route, whose writer coalesces into a 16 MiB
+		//    buffer and whose destructor cannot upload it — without this, a
+		//    `finish()` returning `Ok` could leave the tail of the container
+		//    unsent.
+		writer.finalize().await?;
+
+		// 7. Remove the now-empty temp directory.
 		fs::remove_dir_all(&self.temp_dir)?;
 
 		Ok(())

@@ -81,7 +81,12 @@ pub trait TilesWriter: Send {
 	/// # Errors
 	/// Returns an error if the file cannot be created or the writing operation fails.
 	async fn write_to_path(reader: &dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
-		Self::write_to_writer(reader, &mut DataWriterFile::from_path(path)?, runtime).await
+		let mut writer = DataWriterFile::from_path(path)?;
+		Self::write_to_writer(reader, &mut writer, runtime).await?;
+		// Without this the buffer reaches the disk only via `BufWriter`'s
+		// destructor, which cannot report a failure — so a disk filling up on the
+		// last flush ended the conversion successfully with a truncated file.
+		writer.finalize().await
 	}
 
 	/// Writes tile data from `reader` to the provided [`DataWriterTrait`] sink.

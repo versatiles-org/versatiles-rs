@@ -100,7 +100,10 @@ impl TilesWriter for PMTilesWriter {
 	/// happens to be.
 	async fn write_to_path(reader: &dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		let mut writer = DataWriterFile::from_path(path)?;
-		Self::write(reader, &mut writer, runtime, path.parent()).await
+		Self::write(reader, &mut writer, runtime, path.parent()).await?;
+		// The registry finalizes the `write_to_writer` route; this one owns its
+		// writer, so it has to flush its own last bytes.
+		writer.finalize().await
 	}
 
 	#[context("writing PMTiles to DataWriter")]
@@ -235,6 +238,12 @@ impl PMTilesWriter {
 		let mut entries = entries_mutex.lock().await;
 		let tile_contents_count = dedup_map.lock().await.len() as u64;
 		drop(writer_mutex.lock().await);
+		// Pass 2 reads this temporary back, so its buffer has to reach the disk
+		// first — and failing to get it there has to be an error, not a silently
+		// short file that pass 2 copies from.
+		if let Some(w) = temp_writer.as_mut() {
+			w.finalize().await?;
+		}
 		drop(temp_writer);
 
 		if let Some(temp) = &temp {
