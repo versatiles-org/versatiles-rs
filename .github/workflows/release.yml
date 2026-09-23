@@ -183,6 +183,11 @@ jobs:
     name: Build Linux ARM
     permissions:
       contents: write # uploads the CLI tarball to the release
+      # Both are what `attest-build-provenance` needs: an OIDC token to get a
+      # short-lived Sigstore certificate, and the attestations store to write
+      # the result to. Neither grants anything else in this job.
+      id-token: write
+      attestations: write
     runs-on: ubuntu-24.04-arm
     needs: prepare
     env:
@@ -227,10 +232,24 @@ jobs:
             .
 
       - name: Pack and upload CLI binary
+        id: pack
         if: env.BUILD_ENABLED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-aarch64" "${{ needs.prepare.outputs.tag }}"
+
+      # Signs the shipped files with a Sigstore keyless certificate and records
+      # what produced them — this commit, this workflow, this runner. Runs in
+      # the build job on purpose: provenance asserted anywhere else would only
+      # be asserting that a later job saw the bytes.
+      #
+      # Verify with:
+      #   gh attestation verify --owner versatiles-org versatiles-<platform>.tar.gz
+      - name: Attest build provenance
+        if: env.BUILD_ENABLED == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: ${{ steps.pack.outputs.artifacts }}
 
       - name: Upload NAPI binding
         if: env.BUILD_ENABLED == 'true'
@@ -246,6 +265,11 @@ jobs:
     name: Build Linux x86
     permissions:
       contents: write # uploads the CLI tarball to the release
+      # Both are what `attest-build-provenance` needs: an OIDC token to get a
+      # short-lived Sigstore certificate, and the attestations store to write
+      # the result to. Neither grants anything else in this job.
+      id-token: write
+      attestations: write
     runs-on: ubuntu-24.04
     needs: prepare
     env:
@@ -290,10 +314,24 @@ jobs:
             .
 
       - name: Pack and upload CLI binary
+        id: pack
         if: env.BUILD_ENABLED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-x86_64" "${{ needs.prepare.outputs.tag }}"
+
+      # Signs the shipped files with a Sigstore keyless certificate and records
+      # what produced them — this commit, this workflow, this runner. Runs in
+      # the build job on purpose: provenance asserted anywhere else would only
+      # be asserting that a later job saw the bytes.
+      #
+      # Verify with:
+      #   gh attestation verify --owner versatiles-org versatiles-<platform>.tar.gz
+      - name: Attest build provenance
+        if: env.BUILD_ENABLED == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: ${{ steps.pack.outputs.artifacts }}
 
       - name: Upload NAPI binding
         if: env.BUILD_ENABLED == 'true'
@@ -309,6 +347,11 @@ jobs:
     name: Build MacOS
     permissions:
       contents: write # uploads the CLI tarball to the release
+      # Both are what `attest-build-provenance` needs: an OIDC token to get a
+      # short-lived Sigstore certificate, and the attestations store to write
+      # the result to. Neither grants anything else in this job.
+      id-token: write
+      attestations: write
     runs-on: ${{ matrix.runner }}
     needs: prepare
     env:
@@ -364,10 +407,24 @@ jobs:
           cp "target/${{ matrix.arch }}-apple-darwin/release/libversatiles_node.dylib" "target/${{ matrix.arch }}-apple-darwin/release/node/"
 
       - name: Pack and upload CLI binary
+        id: pack
         if: env.BUILD_ENABLED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "target/${{ matrix.arch }}-apple-darwin/release" "macos-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
+
+      # Signs the shipped files with a Sigstore keyless certificate and records
+      # what produced them — this commit, this workflow, this runner. Runs in
+      # the build job on purpose: provenance asserted anywhere else would only
+      # be asserting that a later job saw the bytes.
+      #
+      # Verify with:
+      #   gh attestation verify --owner versatiles-org versatiles-<platform>.tar.gz
+      - name: Attest build provenance
+        if: env.BUILD_ENABLED == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: ${{ steps.pack.outputs.artifacts }}
 
       - name: Upload NAPI binding
         if: env.BUILD_ENABLED == 'true'
@@ -383,6 +440,11 @@ jobs:
     name: Build Windows
     permissions:
       contents: write # uploads the CLI tarball to the release
+      # Both are what `attest-build-provenance` needs: an OIDC token to get a
+      # short-lived Sigstore certificate, and the attestations store to write
+      # the result to. Neither grants anything else in this job.
+      id-token: write
+      attestations: write
     runs-on: windows-latest
     needs: prepare
     env:
@@ -444,11 +506,25 @@ jobs:
           Copy-Item "target\${{ matrix.arch }}-pc-windows-msvc\release\versatiles_node.dll" "target\${{ matrix.arch }}-pc-windows-msvc\release\node\"
 
       - name: Pack and upload CLI binary
+        id: pack
         if: env.BUILD_ENABLED == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts\workflow-pack-upload.ps1 "target\${{ matrix.arch }}-pc-windows-msvc\release" "windows-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
+
+      # Signs the shipped files with a Sigstore keyless certificate and records
+      # what produced them — this commit, this workflow, this runner. Runs in
+      # the build job on purpose: provenance asserted anywhere else would only
+      # be asserting that a later job saw the bytes.
+      #
+      # Verify with:
+      #   gh attestation verify --owner versatiles-org versatiles-<platform>.tar.gz
+      - name: Attest build provenance
+        if: env.BUILD_ENABLED == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: ${{ steps.pack.outputs.artifacts }}
 
       - name: Upload NAPI binding
         if: env.BUILD_ENABLED == 'true'

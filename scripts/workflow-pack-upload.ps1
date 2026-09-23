@@ -33,3 +33,13 @@ $sha256 = (Get-FileHash -Algorithm SHA256 -Path "$FILENAME.tar.gz").Hash.ToLower
 
 Write-Host "Upload tarball and checksum to GitHub release"
 &gh release upload $TAG "$FILENAME.tar.gz" "$FILENAME.tar.gz.sha256" --clobber
+
+# Name the published file for the build-provenance step. See
+# workflow-pack-upload.sh for why this is reported rather than globbed. No .deb
+# on Windows, so the tarball is the whole shipped set.
+if ($env:GITHUB_OUTPUT) {
+   $tarball = Join-Path (Get-Location) "$FILENAME.tar.gz"
+   Add-Content -Path $env:GITHUB_OUTPUT -Value "artifacts<<VERSATILES_EOF"
+   Add-Content -Path $env:GITHUB_OUTPUT -Value $tarball
+   Add-Content -Path $env:GITHUB_OUTPUT -Value "VERSATILES_EOF"
+}

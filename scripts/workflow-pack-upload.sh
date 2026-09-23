@@ -60,3 +60,21 @@ upload "$TAG" "$FILENAME.tar.gz" "$FILENAME.tar.gz.sha256" --clobber
 if ls ./*.deb 1>/dev/null 2>&1; then
    upload "$TAG" ./*.deb --clobber
 fi
+
+# Name the files that were actually published, so the build-provenance step
+# attests the shipped set. A glob written in the workflow would have to guess,
+# and guessing wrong is silent in both directions: `*.deb` matches nothing on
+# musl, macOS and Windows, and a broader glob would attest the .sha256 too.
+# Absolute paths because this script has cd'd away from the workspace root.
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+   {
+      echo "artifacts<<VERSATILES_EOF"
+      echo "$PWD/$FILENAME.tar.gz"
+      if ls ./*.deb 1>/dev/null 2>&1; then
+         for deb in ./*.deb; do
+            echo "$PWD/${deb#./}"
+         done
+      fi
+      echo "VERSATILES_EOF"
+   } >>"$GITHUB_OUTPUT"
+fi

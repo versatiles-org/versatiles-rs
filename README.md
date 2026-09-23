@@ -18,6 +18,7 @@ VersaTiles is a Rust-based tool for processing and serving tile data efficiently
   - [npm (Node.js)](#npm-nodejs)
   - [Building with Cargo](#building-with-cargo)
   - [Building from Source](#building-from-source)
+  - [Verifying a Release Download](#verifying-a-release-download)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
   - [Core Concepts](#core-concepts)
@@ -163,6 +164,18 @@ cargo build --bin versatiles --release -F gdal
 # Add to PATH
 sudo ln -sf "$(pwd)/target/release/versatiles" /usr/local/bin/versatiles
 ```
+
+### Verifying a Release Download
+
+Every released tarball ships with a `.sha256` beside it, which both install scripts check before unpacking. A checksum only proves the archive arrived intact, though — it is served from the same place as the archive, so it does not tell you who built it.
+
+Each tarball also carries a signed [build provenance attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations): a Sigstore keyless signature recording the commit, workflow and runner that produced it. To check one:
+
+```sh
+gh attestation verify --owner versatiles-org versatiles-linux-gnu-x86_64.tar.gz
+```
+
+That fails on an archive someone rebuilt or modified, even if its checksum file was replaced to match.
 
 ---
 
