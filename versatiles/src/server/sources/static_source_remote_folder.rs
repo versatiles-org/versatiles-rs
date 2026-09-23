@@ -6,7 +6,7 @@ use reqwest::Url as ReqwestUrl;
 use versatiles_core::{
 	TileCompression,
 	compression::TargetCompression,
-	io::{DataReaderHttp, DataReaderTrait},
+	io::{DataReaderHttp, DataReaderTrait, url_for_display},
 };
 
 use super::{
@@ -28,7 +28,10 @@ impl RemoteFolder {
 			base_url.set_path(&format!("{}/", base_url.path()));
 		}
 		RemoteFolder {
-			name: base_url.to_string(),
+			// `name` is what the Debug impl prints and what logs identify this
+			// source by, so it must not carry a password the operator put in
+			// the configured URL.
+			name: url_for_display(&base_url),
 			base_url,
 		}
 	}

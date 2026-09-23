@@ -38,7 +38,7 @@ use std::{
 use anyhow::{Context, Result, anyhow, bail};
 #[cfg(test)]
 use assert_fs::NamedTempFile;
-use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp, DataWriterTrait};
+use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp, DataWriterTrait, url_for_display};
 #[cfg(feature = "sftp")]
 use versatiles_core::io::{DataReaderSftp, DataWriterSftp};
 #[cfg(test)]
@@ -262,26 +262,26 @@ impl ContainerRegistry {
 	) -> Result<SharedTileSource> {
 		match data_source.into_location() {
 			DataLocation::Url(url) => {
-				let reader: DataReader = match url.scheme() {
-					#[cfg(feature = "sftp")]
-					"sftp" => {
-						// The SSH handshake is async now, so concurrent opens (e.g.
-						// from `from_stacked_raster` building several sub-pipelines
-						// at once) already interleave on one worker — no
-						// `spawn_blocking` needed to keep them from serializing.
-						// A key named on the source itself wins over the process-wide one.
-						let identity = ssh_identity.or_else(|| runtime.ssh_identity());
-						let reader = DataReaderSftp::open(&url, identity)
-							.await
-							.with_context(|| format!("Failed to create SFTP data reader for URL '{url}'"))?;
-						Box::new(reader)
-					}
-					"http" | "https" => Box::new(
-						DataReaderHttp::try_from(&url)
-							.with_context(|| format!("Failed to create HTTP data reader for URL '{url}'"))?,
-					),
-					scheme => bail!("unsupported URL scheme '{scheme}' in '{url}'"),
-				};
+				let reader: DataReader =
+					match url.scheme() {
+						#[cfg(feature = "sftp")]
+						"sftp" => {
+							// The SSH handshake is async now, so concurrent opens (e.g.
+							// from `from_stacked_raster` building several sub-pipelines
+							// at once) already interleave on one worker — no
+							// `spawn_blocking` needed to keep them from serializing.
+							// A key named on the source itself wins over the process-wide one.
+							let identity = ssh_identity.or_else(|| runtime.ssh_identity());
+							let reader = DataReaderSftp::open(&url, identity).await.with_context(|| {
+								format!("Failed to create SFTP data reader for URL '{}'", url_for_display(&url))
+							})?;
+							Box::new(reader)
+						}
+						"http" | "https" => Box::new(DataReaderHttp::try_from(&url).with_context(|| {
+							format!("Failed to create HTTP data reader for URL '{}'", url_for_display(&url))
+						})?),
+						scheme => bail!("unsupported URL scheme '{scheme}' in '{}'", url_for_display(&url)),
+					};
 
 				let entry = self
 					.readers
@@ -387,9 +387,27 @@ impl ContainerRegistry {
 
 	/// Write tiles to a remote SFTP destination.
 	#[cfg(feature = "sftp")]
-	#[context("writing tiles to SFTP '{url}'")]
+	// The context takes the parsed-and-redacted URL rather than the `url`
+	// argument: this one is the string the operator wrote, password and all,
+	// and a `#[context]` attribute is printed on every failure below it.
 	async fn write_to_sftp(&self, reader: SharedTileSource, url: &str, runtime: TilesRuntime) -> Result<()> {
-		let url = reqwest::Url::parse(url).with_context(|| format!("invalid SFTP URL: {url}"))?;
+		let url = reqwest::Url::parse(url)
+			.map_err(|e| anyhow::anyhow!("invalid SFTP URL: {e}"))
+			.context("parsing the SFTP destination")?;
+		let display = url_for_display(&url);
+		self
+			.write_to_sftp_impl(reader, url, runtime)
+			.await
+			.with_context(|| format!("writing tiles to SFTP '{display}'"))
+	}
+
+	#[cfg(feature = "sftp")]
+	async fn write_to_sftp_impl(
+		&self,
+		reader: SharedTileSource,
+		url: reqwest::Url,
+		runtime: TilesRuntime,
+	) -> Result<()> {
 		let remote_path = DataWriterSftp::path_from_url(&url);
 
 		// A `/`-separated remote path, so the extension is found by hand rather

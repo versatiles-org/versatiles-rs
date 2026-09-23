@@ -93,6 +93,13 @@ different file, or disables the check when set to `off`.
 4. `IdentityFile` entries in `~/.ssh/config` for the target host
 5. Default key files: `~/.ssh/id_ed25519`, `~/.ssh/id_rsa`, `~/.ssh/id_ecdsa`
 
+> **A password in the URL is visible to the whole machine.** A command line is
+> listed by `ps` for every local user while it runs, and your shell writes it to
+> its history file afterwards. VersaTiles keeps it out of its own output — error
+> messages and logs print the URL without it — but it cannot take it back out of
+> the places the shell put it. Prefer a key: options 2 to 5 above all avoid
+> writing the secret down anywhere.
+
 In a VPL pipeline, `from_container` takes `ssh_identity="…"` for one source, which overrides both
 of the above — that is how a single pipeline reads from two SFTP hosts needing different keys.
 

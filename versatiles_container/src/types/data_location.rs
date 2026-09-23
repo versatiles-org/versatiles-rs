@@ -16,7 +16,7 @@ use std::{
 
 use anyhow::{Context, Result, anyhow, bail};
 use reqwest::Url;
-use versatiles_core::Blob;
+use versatiles_core::{Blob, io::url_for_display};
 use versatiles_derive::context;
 
 /// A flexible location of data used across I/O code.
@@ -312,12 +312,16 @@ fn normalize(path: &Path) -> PathBuf {
 	out
 }
 
-/// Display as a plain URL string for `Url`, as a path using `Path::display()` for `Path`,
-/// and as `<blob len=N>` for in-memory `Blob` values.
+/// Display as a URL string for `Url`, as a path using `Path::display()` for
+/// `Path`, and as `<blob len=N>` for in-memory `Blob` values.
+///
+/// A URL is rendered without its password: a location reaches people through
+/// error messages and log lines, and `sftp://user:hunter2@host/x` is a shape an
+/// operator really does write.
 impl std::fmt::Display for DataLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			DataLocation::Url(url) => write!(f, "{url}"),
+			DataLocation::Url(url) => write!(f, "{}", url_for_display(url)),
 			DataLocation::Path(path) => write!(f, "{}", path.display()),
 			DataLocation::Blob(blob) => write!(f, "<blob len={}>", blob.len()),
 		}
@@ -384,7 +388,9 @@ impl From<Blob> for DataLocation {
 impl Debug for DataLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			DataLocation::Url(url) => write!(f, "Url({url})"),
+			// Without the password, for the same reason as `Display`: this is
+			// what `{location:?}` puts into an error context.
+			DataLocation::Url(url) => write!(f, "Url({})", url_for_display(url)),
 			DataLocation::Path(path) => write!(f, "Path({})", path.display()),
 			DataLocation::Blob(blob) => write!(f, "Blob(len={})", blob.len()),
 		}
@@ -645,6 +651,50 @@ mod tests {
 
 		assert!(d_url.starts_with("Url(") && d_url.contains("https://example.org/a/b.txt"));
 		assert!(d_path.starts_with("Path(") && d_path.contains("c.txt"));
+		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod credential_tests {
+	use super::*;
+
+	const SECRET: &str = "hunter2";
+
+	/// A location reaches people through error contexts and log lines, and
+	/// `{location}` / `{location:?}` are how it gets there. Neither may carry
+	/// the password out of a URL the operator configured.
+	#[test]
+	fn neither_display_nor_debug_shows_a_password() -> Result<()> {
+		for input in [
+			"sftp://alice:hunter2@example.org/tiles.versatiles",
+			"https://alice:hunter2@example.org/tiles.json",
+		] {
+			let location = DataLocation::try_from(input)?;
+
+			let shown = format!("{location}");
+			let debugged = format!("{location:?}");
+
+			assert!(!shown.contains(SECRET), "Display leaked the password: {shown}");
+			assert!(!debugged.contains(SECRET), "Debug leaked the password: {debugged}");
+			// Still useful: host and account survive.
+			assert!(shown.contains("example.org") && shown.contains("alice"), "{shown}");
+		}
+		Ok(())
+	}
+
+	/// The whole point is the rendered error, not the formatting impl — an
+	/// `anyhow` context is what `main` prints to stderr.
+	#[test]
+	fn an_error_chain_does_not_carry_the_password() -> Result<()> {
+		let location = DataLocation::try_from("sftp://alice:hunter2@example.org/x.versatiles")?;
+
+		let error = anyhow::anyhow!("something failed")
+			.context(format!("reading from '{location}'"))
+			.context(format!("opening {location:?}"));
+
+		let rendered = format!("{error:#}");
+		assert!(!rendered.contains(SECRET), "the error chain leaked it: {rendered}");
 		Ok(())
 	}
 }

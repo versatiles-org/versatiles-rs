@@ -104,6 +104,36 @@ pub fn user_agent() -> &'static str {
 	USER_AGENT_WITH_PRODUCT.get().map_or(USER_AGENT, String::as_str)
 }
 
+/// A URL written out for a person to read, with any password removed.
+///
+/// Error messages and log lines name the thing that failed, and for a remote
+/// source that name is a URL the operator may have written a password into —
+/// `sftp://user:hunter2@host/tiles.versatiles`. Interpolating it puts the
+/// password on the terminal, into the CI log that scrolls past, and into
+/// whatever collects that output.
+///
+/// The username is kept. It says which account was tried, which is what
+/// somebody reading the failure needs, and it is not the secret. (SFTP's own
+/// [`sftp_utils::display_name`] drops it as well, because it labels a
+/// connection rather than explaining a failure.)
+///
+/// Not `Display`: a `Url` that reaches a person should say so at the call site,
+/// so the ones that have not been thought about are visible.
+#[must_use]
+pub fn url_for_display(url: &reqwest::Url) -> String {
+	if url.password().is_none() {
+		return url.to_string();
+	}
+
+	let mut url = url.clone();
+	// Both fail only for a URL that cannot have credentials in the first
+	// place, which is then already safe to print.
+	if url.set_password(None).is_err() {
+		return url.to_string();
+	}
+	url.to_string()
+}
+
 /// Whether `text` is a non-empty RFC 9110 token, the only thing a product
 /// name or version may be.
 fn is_token(text: &str) -> bool {
@@ -216,5 +246,42 @@ mod tests {
 		assert!(!is_token("has space"));
 		assert!(!is_token("has/slash"));
 		assert!(!is_token("has(paren"));
+	}
+}
+
+#[cfg(test)]
+mod url_display_tests {
+	use super::*;
+
+	#[test]
+	fn a_password_never_survives() {
+		for input in [
+			"sftp://alice:hunter2@example.org/tiles.versatiles",
+			"https://alice:hunter2@example.org/tiles.json",
+			"sftp://alice:@example.org/x",
+		] {
+			let url = reqwest::Url::parse(input).unwrap();
+			let shown = url_for_display(&url);
+			assert!(!shown.contains("hunter2"), "password leaked: {shown}");
+			assert!(shown.contains("example.org"), "host should survive: {shown}");
+		}
+	}
+
+	#[test]
+	fn the_username_survives_because_it_says_which_account_was_tried() {
+		let url = reqwest::Url::parse("sftp://alice:hunter2@example.org/x").unwrap();
+		assert_eq!(url_for_display(&url), "sftp://alice@example.org/x");
+	}
+
+	#[test]
+	fn a_url_without_credentials_is_unchanged() {
+		for input in [
+			"https://example.org/tiles.json",
+			"sftp://example.org:2222/a/b.versatiles",
+			"https://example.org/a?x=1#y",
+		] {
+			let url = reqwest::Url::parse(input).unwrap();
+			assert_eq!(url_for_display(&url), input);
+		}
 	}
 }
