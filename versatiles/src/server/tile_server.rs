@@ -24,7 +24,7 @@ use axum::{
 	error_handling::HandleErrorLayer,
 	http::{
 		StatusCode,
-		header::{HeaderName, HeaderValue},
+		header::{self, HeaderName, HeaderValue},
 	},
 	response::IntoResponse,
 	routing::get,
@@ -327,6 +327,19 @@ impl TileServer {
 
 		let cors_layer = cors::build_cors_layer(&self.cors_allowed_origins, self.cors_max_age_seconds)?;
 		router = router.layer(ServiceBuilder::new().layer(cors_layer));
+
+		// Tell the browser to trust the `Content-Type` we sent rather than
+		// guessing from the bytes. An unknown extension in a static folder falls
+		// back to `application/octet-stream` (`utils::guess_mime`), and a sniffing
+		// browser will happily decide that an uploaded blob is HTML and run it
+		// against this origin.
+		//
+		// Applied *inside* the extra-header layers below, so an operator who sets
+		// `X-Content-Type-Options` in `extra_response_headers` still wins.
+		router = router.layer(SetResponseHeaderLayer::if_not_present(
+			header::X_CONTENT_TYPE_OPTIONS,
+			HeaderValue::from_static("nosniff"),
+		));
 
 		// Apply any extra response headers from configuration (overriding existing values).
 		for (name, value) in self.extra_response_headers.iter().cloned() {
@@ -773,6 +786,61 @@ mod tests {
 			headers.get("x-test-header").and_then(|v| v.to_str().ok()),
 			Some("ok"),
 			"expected custom header to be present on /status"
+		);
+
+		server.stop().await;
+		Ok(())
+	}
+
+	/// Static content is where sniffing bites: an unknown extension is served as
+	/// `application/octet-stream`, and a browser left to guess may decide it is
+	/// HTML and run it against this origin.
+	#[tokio::test]
+	async fn every_response_says_nosniff() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		server
+			.add_static_source_from_location(&DataLocation::from(Path::new("../testdata/static.tar.gz")), "/")
+			.await?;
+		server.start().await?;
+		let port = server.port;
+
+		for path in ["/status", "/index.html", "/does-not-exist"] {
+			let resp = reqwest::get(format!("http://{IP}:{port}{path}")).await.unwrap();
+			assert_eq!(
+				resp
+					.headers()
+					.get("x-content-type-options")
+					.and_then(|v| v.to_str().ok()),
+				Some("nosniff"),
+				"{path} (status {}) was served without nosniff",
+				resp.status()
+			);
+		}
+
+		server.stop().await;
+		Ok(())
+	}
+
+	/// The default is a default, not a policy: an operator who sets the header
+	/// themselves gets what they asked for.
+	#[tokio::test]
+	async fn a_configured_value_overrides_the_default_nosniff() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		server.extra_response_headers = vec![(
+			HeaderName::from_static("x-content-type-options"),
+			HeaderValue::from_static("nosniff, nosniff"),
+		)];
+
+		server.start().await?;
+		let port = server.port;
+
+		let resp = reqwest::get(format!("http://{IP}:{port}/status")).await.unwrap();
+		assert_eq!(
+			resp
+				.headers()
+				.get("x-content-type-options")
+				.and_then(|v| v.to_str().ok()),
+			Some("nosniff, nosniff")
 		);
 
 		server.stop().await;

@@ -701,6 +701,8 @@ extra_response_headers:
   CDN-Cache-Control: "max-age=604800" # For CDNs
 ```
 
+Every response carries `X-Content-Type-Options: nosniff` by default, so a browser uses the `Content-Type` the server sent instead of guessing from the bytes — a file with an unknown extension is served as `application/octet-stream`, and a browser left to guess may decide it is HTML. Setting the header in `extra_response_headers` overrides the default.
+
 **Multiple Tile Sources** - Serve multiple tile sets:
 
 ```yaml
