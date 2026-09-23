@@ -59,7 +59,7 @@ use std::{path::Path, sync::Arc};
 use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
+use r2d2_sqlite::{SqliteConnectionManager, rusqlite::OpenFlags};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
@@ -118,7 +118,35 @@ impl MBTilesReader {
 	fn load_from_sqlite(path: &Path, runtime: TilesRuntime) -> Result<MBTilesReader> {
 		log::debug!("load_from_sqlite {path:?}");
 
-		let manager = SqliteConnectionManager::file(path);
+		// Opened read-only, and deliberately not with SQLite's defaults
+		// (`READ_WRITE | CREATE | URI | NO_MUTEX`). This reader issues no write
+		// statements, and an `.mbtiles` is untrusted input like any other
+		// container:
+		//
+		// - `READ_ONLY` instead of `READ_WRITE`: a database with a hot journal
+		//   is *recovered* on open, so opening one to read a tile from it
+		//   rewrote the file, and `-wal`/`-shm` files appeared beside it. A
+		//   crafted journal made reading someone else's file a write to it.
+		// - no `CREATE`: belt and braces. `open` already refuses a path that
+		//   does not exist, so this is unreachable today; it stops a future
+		//   caller of this function from silently creating an empty database
+		//   that then reports no tiles.
+		// - no `URI`: the argument is a filesystem path. Interpreting it as a
+		//   URI would let `file:…?mode=rwc` put the write flags back.
+		//
+		// What this does *not* do: a WAL database still gets its `-shm`/`-wal`
+		// sidecars, because SQLite needs the shared-memory index to read one at
+		// all — measured, and pinned by
+		// `read_only_tests::a_wal_database_still_gets_its_sidecars`. Only
+		// `immutable=1` avoids that, and it asserts the file cannot change
+		// while open, which a reader pointed at someone else's file cannot
+		// promise.
+		//
+		// The cost is that a genuinely crash-damaged file now fails to open
+		// instead of being repaired in place. Repairing someone's archive as a
+		// side effect of reading it is not this reader's decision to make.
+		let manager = SqliteConnectionManager::file(path)
+			.with_flags(OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX);
 		let pool = Pool::builder().max_size(10).build(manager)?;
 		let metadata = TileSourceMetadata::new(MVT, Uncompressed, Traversal::ANY, None);
 
@@ -640,6 +668,73 @@ pub mod tests {
 			);
 		}
 
+		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod read_only_tests {
+	use super::*;
+
+	/// The reader's connections cannot write, whatever the file says.
+	///
+	/// This is the property, and the only one of these that discriminates: an
+	/// earlier version of this test checked that reading a clean database left
+	/// it byte-identical, which passes with read-write flags too, because a
+	/// clean database read with SELECTs is not written either way.
+	#[tokio::test]
+	async fn the_connection_refuses_to_write() -> Result<()> {
+		let source = std::env::current_dir()?.join("../testdata/berlin.mbtiles");
+		let dir = tempfile::tempdir()?;
+		let path = dir.path().join("berlin.mbtiles");
+		std::fs::copy(&source, &path)?;
+
+		let reader = MBTilesReader::open(&path, TilesRuntime::default())?;
+		let conn = reader.pool.get()?;
+
+		let error = conn
+			.execute("INSERT INTO metadata (name, value) VALUES ('x', 'y')", [])
+			.expect_err("the reader must not be able to write to the database");
+
+		assert!(
+			format!("{error}").contains("readonly"),
+			"expected a read-only error, got: {error}"
+		);
+		Ok(())
+	}
+
+	/// What read-only does *not* buy, pinned so the limitation is not mistaken
+	/// for a guarantee: a WAL database still gets its `-shm`/`-wal` sidecars,
+	/// because SQLite needs the shared-memory index to read one at all.
+	///
+	/// Preventing that needs `immutable=1`, which asserts the file cannot
+	/// change while open — wrong for a reader pointed at a file somebody else
+	/// may be writing.
+	#[tokio::test]
+	async fn a_wal_database_still_gets_its_sidecars() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let path = dir.path().join("wal.mbtiles");
+
+		{
+			// A minimal WAL-mode MBTiles, written with the sink's own stack.
+			let conn = r2d2_sqlite::rusqlite::Connection::open(&path)?;
+			conn.pragma_update(None, "journal_mode", "WAL")?;
+			conn.execute("CREATE TABLE metadata (name text, value text)", [])?;
+			conn.execute("INSERT INTO metadata VALUES ('format','pbf')", [])?;
+			conn.execute(
+				"CREATE TABLE tiles (zoom_level integer, tile_column integer, tile_row integer, tile_data blob)",
+				[],
+			)?;
+		}
+
+		let reader = MBTilesReader::open(&path, TilesRuntime::default())?;
+		drop(reader);
+
+		assert!(
+			path.with_extension("mbtiles-wal").exists() || path.with_extension("mbtiles-shm").exists(),
+			"if SQLite stops writing sidecars for read-only WAL access, this limitation is gone \
+			 and the comment above it should go too"
+		);
 		Ok(())
 	}
 }
