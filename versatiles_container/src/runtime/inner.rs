@@ -35,6 +35,10 @@ pub struct RuntimeInner {
 	/// (e.g. per subcommand in the CLI), without requiring the caller to
 	/// rebuild shared state like the registry and event bus.
 	pub abort_on_error: AtomicBool,
+	/// Whether the user has authorised replacing a destination that a conversion
+	/// would otherwise refuse to touch — today, a non-empty directory. Set by the
+	/// CLI's `--force`; see `StagedOutput::create`.
+	pub force: AtomicBool,
 	/// Count of errors recorded via `TilesRuntime::record_error`. Producers
 	/// can inspect this after a stream drains to detect silent drops.
 	pub error_count: AtomicUsize,
@@ -70,6 +74,7 @@ mod tests {
 			event_bus,
 			progress_factory,
 			abort_on_error: AtomicBool::new(false),
+			force: AtomicBool::new(false),
 			error_count: AtomicUsize::new(0),
 			writer_options: Mutex::new(BTreeMap::new()),
 		};
@@ -92,6 +97,7 @@ mod tests {
 			event_bus,
 			progress_factory,
 			abort_on_error: AtomicBool::new(false),
+			force: AtomicBool::new(false),
 			error_count: AtomicUsize::new(0),
 			writer_options: Mutex::new(BTreeMap::new()),
 		};
@@ -113,6 +119,7 @@ mod tests {
 			event_bus,
 			progress_factory,
 			abort_on_error: AtomicBool::new(false),
+			force: AtomicBool::new(false),
 			error_count: AtomicUsize::new(0),
 			writer_options: Mutex::new(BTreeMap::new()),
 		};
@@ -137,6 +144,7 @@ mod tests {
 			event_bus: event_bus.clone(),
 			progress_factory,
 			abort_on_error: AtomicBool::new(false),
+			force: AtomicBool::new(false),
 			error_count: AtomicUsize::new(0),
 			writer_options: Mutex::new(BTreeMap::new()),
 		};

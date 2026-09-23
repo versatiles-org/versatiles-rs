@@ -34,6 +34,7 @@ impl std::fmt::Debug for TilesRuntime {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TilesRuntime")
 			.field("abort_on_error", &self.inner.abort_on_error.load(Ordering::Relaxed))
+			.field("force", &self.inner.force.load(Ordering::Relaxed))
 			.field("error_count", &self.error_count())
 			.field("writer_options", &self.writer_options())
 			.finish_non_exhaustive()
@@ -139,6 +140,25 @@ impl TilesRuntime {
 	/// `false` so the server keeps running when a read fails.
 	pub fn set_abort_on_error(&self, abort: bool) {
 		self.inner.abort_on_error.store(abort, Ordering::Relaxed);
+	}
+
+	/// Whether the user has authorised replacing a destination a conversion
+	/// would otherwise refuse to touch.
+	///
+	/// Replacing a directory means deleting whatever else is inside it, which no
+	/// amount of atomicity makes safe — so an existing non-empty directory is
+	/// refused unless this is set. Overwriting a *file* needs no such
+	/// authorisation: it is atomic, and the old contents survive until the moment
+	/// the new output is complete.
+	#[must_use]
+	pub fn force(&self) -> bool {
+		self.inner.force.load(Ordering::Relaxed)
+	}
+
+	/// Override the force flag after construction, the way the CLI does from
+	/// `--force`.
+	pub fn set_force(&self, force: bool) {
+		self.inner.force.store(force, Ordering::Relaxed);
 	}
 
 	/// A format-specific writer option, if set.

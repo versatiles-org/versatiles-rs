@@ -50,7 +50,25 @@ impl StagedOutput {
 	///
 	/// Nothing at `destination` is touched here, or at any point before
 	/// [`publish`](Self::publish) succeeds.
-	pub fn create(destination: &Path) -> Result<Self> {
+	///
+	/// A **non-empty directory** destination is refused unless `force`. Replacing
+	/// a directory means deleting whatever else is inside it, and
+	/// `versatiles convert x.versatiles ~/Documents` must not delete
+	/// `~/Documents`. Overwriting a *file* needs no such authorisation: that is
+	/// atomic, and the old contents survive until the new output is complete.
+	///
+	/// The check is here rather than in [`publish`](Self::publish) so it fails
+	/// before a conversion spends an hour producing something it may not be
+	/// allowed to put down.
+	pub fn create(destination: &Path, force: bool) -> Result<Self> {
+		if !force && is_non_empty_dir(destination) {
+			bail!(
+				"{destination:?} is a directory and is not empty. Writing there replaces its \
+				 entire contents — pass --force if that is what you want, or choose a path that \
+				 does not exist"
+			);
+		}
+
 		let name = destination
 			.file_name()
 			.ok_or_else(|| anyhow::anyhow!("cannot write to {destination:?}: it does not name a file or directory"))?;
@@ -214,6 +232,20 @@ pub(crate) fn incomplete_path(destination: &Path) -> Result<PathBuf> {
 	Ok(destination.with_file_name(target))
 }
 
+/// Whether `path` is a directory with anything in it.
+///
+/// An unreadable directory counts as non-empty: if we cannot see what is inside,
+/// that is the more cautious of the two answers.
+fn is_non_empty_dir(path: &Path) -> bool {
+	if !path.is_dir() {
+		return false;
+	}
+	match std::fs::read_dir(path) {
+		Ok(mut entries) => entries.next().is_some(),
+		Err(_) => true,
+	}
+}
+
 /// Removes `path`, whether it is a file or a directory, and succeeds if it is
 /// already absent.
 fn remove_any(path: &Path) -> Result<()> {
@@ -246,7 +278,7 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		let destination = dir.path().join("out.versatiles");
 
-		let staged = StagedOutput::create(&destination).unwrap();
+		let staged = StagedOutput::create(&destination, false).unwrap();
 		assert!(
 			!staged.path().exists(),
 			"the writer is handed a path that does not exist"
@@ -267,7 +299,7 @@ mod tests {
 		let destination = dir.path().join("out.versatiles");
 		write(&destination, b"previous");
 
-		let staged = StagedOutput::create(&destination).unwrap();
+		let staged = StagedOutput::create(&destination, false).unwrap();
 		write(staged.path(), b"replacement");
 		assert_eq!(
 			std::fs::read(&destination).unwrap(),
@@ -288,7 +320,7 @@ mod tests {
 		write(&destination, b"previous");
 
 		{
-			let staged = StagedOutput::create(&destination).unwrap();
+			let staged = StagedOutput::create(&destination, false).unwrap();
 			write(staged.path(), b"half a conversion");
 		}
 
@@ -305,7 +337,7 @@ mod tests {
 		let stale = dir.path().join(".out.versatiles.tmp");
 		write(&stale, b"wreckage");
 
-		let staged = StagedOutput::create(&destination).unwrap();
+		let staged = StagedOutput::create(&destination, false).unwrap();
 		assert!(!staged.path().exists(), "stale staging must be gone");
 	}
 
@@ -316,7 +348,7 @@ mod tests {
 		let destination = dir.path().join("out.versatiles");
 		write(&destination, b"previous");
 
-		let staged = StagedOutput::create(&destination).unwrap();
+		let staged = StagedOutput::create(&destination, false).unwrap();
 		write(staged.path(), b"missing some tiles");
 		let kept = staged.publish_as_incomplete().unwrap();
 
@@ -338,7 +370,7 @@ mod tests {
 		write(&destination.join("tiles.json"), b"old metadata");
 		write(&destination.join("9/1/1.pbf"), b"a tile from a bigger pyramid");
 
-		let staged = StagedOutput::create(&destination).unwrap();
+		let staged = StagedOutput::create(&destination, true).unwrap();
 		write(&staged.path().join("tiles.json"), b"new metadata");
 		write(&staged.path().join("3/1/1.pbf"), b"a tile");
 		staged.publish().unwrap();
@@ -359,6 +391,58 @@ mod tests {
 		);
 	}
 
+	/// The guard on the one destructive operation. `versatiles convert
+	/// x.versatiles ~/Documents` must not delete `~/Documents`.
+	#[test]
+	fn a_non_empty_directory_is_refused_without_force() {
+		let dir = TempDir::new().unwrap();
+		let destination = dir.path().join("not-ours");
+		write(&destination.join("thesis.txt"), b"three years of work");
+
+		let error = StagedOutput::create(&destination, false).unwrap_err().to_string();
+		assert!(error.contains("--force"), "the error must say how to proceed: {error}");
+		assert!(
+			destination.join("thesis.txt").exists(),
+			"refusing must not have touched anything"
+		);
+
+		// And with force it is allowed — nothing is deleted yet, though.
+		let staged = StagedOutput::create(&destination, true).unwrap();
+		assert!(
+			destination.join("thesis.txt").exists(),
+			"even with --force, nothing goes until the new output is complete"
+		);
+		drop(staged);
+	}
+
+	/// An empty directory is not a collision worth stopping for, and neither is a
+	/// destination that does not exist yet.
+	#[test]
+	fn an_empty_or_absent_directory_needs_no_force() {
+		let dir = TempDir::new().unwrap();
+
+		let empty = dir.path().join("empty");
+		std::fs::create_dir_all(&empty).unwrap();
+		StagedOutput::create(&empty, false).unwrap();
+
+		StagedOutput::create(&dir.path().join("absent"), false).unwrap();
+	}
+
+	/// Overwriting a *file* is atomic and the old contents survive until the new
+	/// output is complete, so it needs no authorisation. Requiring `--force`
+	/// there would break every existing conversion for no gain in safety.
+	#[test]
+	fn an_existing_file_needs_no_force() {
+		let dir = TempDir::new().unwrap();
+		let destination = dir.path().join("out.versatiles");
+		write(&destination, b"previous");
+
+		let staged = StagedOutput::create(&destination, false).unwrap();
+		write(staged.path(), b"replacement");
+		staged.publish().unwrap();
+		assert_eq!(std::fs::read(&destination).unwrap(), b"replacement");
+	}
+
 	/// C3 — the destination is not the kind of thing this conversion produced.
 	#[test]
 	fn a_file_may_not_replace_a_directory_or_the_reverse() {
@@ -366,7 +450,7 @@ mod tests {
 
 		let as_dir = dir.path().join("a");
 		write(&as_dir.join("keep.txt"), b"not ours");
-		let staged = StagedOutput::create(&as_dir).unwrap();
+		let staged = StagedOutput::create(&as_dir, true).unwrap();
 		write(staged.path(), b"a container file");
 		let error = staged.publish().unwrap_err().to_string();
 		assert!(error.contains("it is a directory"), "got: {error}");
@@ -374,7 +458,7 @@ mod tests {
 
 		let as_file = dir.path().join("b.versatiles");
 		write(&as_file, b"a container file");
-		let staged = StagedOutput::create(&as_file).unwrap();
+		let staged = StagedOutput::create(&as_file, false).unwrap();
 		std::fs::create_dir_all(staged.path()).unwrap();
 		let error = staged.publish().unwrap_err().to_string();
 		assert!(error.contains("it is a file"), "got: {error}");
@@ -389,7 +473,7 @@ mod tests {
 		let destination = dir.path().join("out.versatiles");
 		write(&destination, b"previous");
 
-		let staged = StagedOutput::create(&destination).unwrap();
+		let staged = StagedOutput::create(&destination, false).unwrap();
 		let error = staged.publish().unwrap_err().to_string();
 
 		assert!(error.contains("produced nothing"), "got: {error}");
@@ -419,7 +503,7 @@ mod tests {
 	fn the_staging_path_sits_beside_the_destination() {
 		let dir = TempDir::new().unwrap();
 		let destination = dir.path().join("out.versatiles");
-		let staged = StagedOutput::create(&destination).unwrap();
+		let staged = StagedOutput::create(&destination, false).unwrap();
 		assert_eq!(staged.path().parent(), destination.parent(), "same filesystem");
 		assert_eq!(
 			staged.path().file_name().and_then(|n| n.to_str()),

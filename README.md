@@ -293,17 +293,24 @@ versatiles convert input.mbtiles output.versatiles
 
 **Advanced options:**
 
-| Option                     | Description                                      | Example                                  |
-| -------------------------- | ------------------------------------------------ | ---------------------------------------- |
-| `--min-zoom`, `--max-zoom` | Filter zoom levels                               | `--min-zoom=5 --max-zoom=12`             |
-| `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max) | `--bbox=13.0,52.3,13.8,52.7`             |
-| `--bbox-border`            | Add border tiles around bbox                     | `--bbox-border=3`                        |
-| `--compress`               | Set compression (gzip, brotli, zstd)             | `--compress=brotli`                      |
-| `--tile-format`            | Convert tile format (png, jpg, webp, avif, pbf)  | `--tile-format=webp`                     |
-| `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)             | `--swap-xy`                              |
-| `--flip-y`                 | Flip tiles vertically                            | `--flip-y`                               |
-| `--dry-run`                | Check the pipeline and exit, reading no tiles    | `--dry-run`                              |
-| `--writer-option`          | Format-specific output option (repeatable)       | `--writer-option=allow_unclustered=true` |
+| Option                     | Description                                       | Example                                  |
+| -------------------------- | ------------------------------------------------- | ---------------------------------------- |
+| `--min-zoom`, `--max-zoom` | Filter zoom levels                                | `--min-zoom=5 --max-zoom=12`             |
+| `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max)  | `--bbox=13.0,52.3,13.8,52.7`             |
+| `--bbox-border`            | Add border tiles around bbox                      | `--bbox-border=3`                        |
+| `--compress`               | Set compression (gzip, brotli, zstd)              | `--compress=brotli`                      |
+| `--tile-format`            | Convert tile format (png, jpg, webp, avif, pbf)   | `--tile-format=webp`                     |
+| `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)              | `--swap-xy`                              |
+| `--flip-y`                 | Flip tiles vertically                             | `--flip-y`                               |
+| `--dry-run`                | Check the pipeline and exit, reading no tiles     | `--dry-run`                              |
+| `--writer-option`          | Format-specific output option (repeatable)        | `--writer-option=allow_unclustered=true` |
+| `--force`                  | Replace a destination directory that is not empty | `--force`                                |
+
+**How the output is written.** A conversion builds its output beside the destination, under a `.<name>.tmp` name, and moves it into place as the last step. The destination therefore only ever holds a complete container: a conversion that fails part-way leaves whatever was there before exactly as it was, and leaves nothing new behind. (A crash leaves the `.tmp` behind; the next run to that destination clears it.) Writing to a _new_ path costs no extra disk — the bytes live under one name and the move is free — but overwriting an existing output holds both copies until the move completes.
+
+Writing to a directory replaces its entire contents, so a re-run over a smaller area cannot leave tiles from a previous run mixed in with the new ones. Because that deletes whatever else is inside, an existing non-empty directory is refused unless you pass `--force`. Overwriting a _file_ needs no such flag: that is atomic, and the previous output survives until the new one is complete.
+
+If a conversion finishes writing but could not read every tile, the output is complete and readable but missing tiles. It is kept as `<name>.incomplete.<ext>` rather than published or deleted — the destination is untouched, and nothing downstream can mistake the partial result for the conversion that was asked for.
 
 The output path can also be an SFTP URL (`sftp://[user[:pass]@]host[:port]/path`) to write directly to a remote server. This requires the `sftp` feature. Only formats that support streaming writes (`.versatiles`, `.pmtiles`) are supported over SFTP.
 

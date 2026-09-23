@@ -35,6 +35,7 @@ pub struct RuntimeBuilder {
 	registry_customizer: Vec<Box<dyn FnOnce(&mut ContainerRegistry)>>,
 	silent_progress: bool,
 	abort_on_error: bool,
+	force: bool,
 }
 
 impl RuntimeBuilder {
@@ -51,6 +52,7 @@ impl RuntimeBuilder {
 			#[cfg(test)]
 			silent_progress: true,
 			abort_on_error: false,
+			force: false,
 		}
 	}
 
@@ -87,15 +89,6 @@ impl RuntimeBuilder {
 		self
 	}
 
-	/// Enable abort-on-error mode.
-	///
-	/// When `true`, any read error recorded through
-	/// [`TilesRuntime::record_error`](super::TilesRuntime::record_error)
-	/// is remembered so the caller can abort after the stream drains via
-	/// [`TilesRuntime::had_errors`](super::TilesRuntime::had_errors).
-	///
-	/// Set this on the runtime used for tile conversion (where a silently
-	/// dropped tile would cause corrupt output). Leave it `false` for servers
 	/// Set a format-specific option for whichever writer this runtime drives.
 	///
 	/// Repeatable; a later call with the same key replaces the earlier value.
@@ -116,6 +109,24 @@ impl RuntimeBuilder {
 		self
 	}
 
+	/// Authorises replacing a destination that would otherwise be refused —
+	/// today, a non-empty directory. See
+	/// [`TilesRuntime::force`](super::TilesRuntime::force).
+	#[must_use]
+	pub fn force(mut self, force: bool) -> Self {
+		self.force = force;
+		self
+	}
+
+	/// Enable abort-on-error mode.
+	///
+	/// When `true`, any read error recorded through
+	/// [`TilesRuntime::record_error`](super::TilesRuntime::record_error)
+	/// is remembered so the caller can abort after the stream drains via
+	/// [`TilesRuntime::had_errors`](super::TilesRuntime::had_errors).
+	///
+	/// Set this on the runtime used for tile conversion (where a silently
+	/// dropped tile would cause corrupt output). Leave it `false` for servers
 	/// (which should log errors but keep running).
 	#[must_use]
 	pub fn abort_on_error(mut self, abort: bool) -> Self {
@@ -175,6 +186,7 @@ impl RuntimeBuilder {
 				event_bus,
 				progress_factory,
 				abort_on_error: AtomicBool::new(self.abort_on_error),
+				force: AtomicBool::new(self.force),
 				error_count: AtomicUsize::new(0),
 				writer_options: Mutex::new(self.writer_options),
 			}),

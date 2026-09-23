@@ -72,6 +72,10 @@ fn parse_writer_options(args: &[String]) -> Result<BTreeMap<String, String>> {
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
+#[expect(
+	clippy::struct_excessive_bools,
+	reason = "a clap arg struct: each bool is one command-line flag, and grouping them into a sub-struct would change the CLI"
+)]
 pub struct Subcommand {
 	/// Input tile container (path, URL, or data source expression).
 	/// Run `versatiles help source` for syntax details.
@@ -131,6 +135,15 @@ pub struct Subcommand {
 	#[arg(long, value_name = "key=value", display_order = 4, verbatim_doc_comment)]
 	writer_option: Vec<String>,
 
+	/// allow replacing a destination directory that is not empty
+	///
+	/// Writing to a directory replaces its entire contents — a re-run with a
+	/// smaller area must not leave tiles from the previous one behind. That is
+	/// destructive in a way overwriting a file is not, so an existing non-empty
+	/// directory is refused unless you say so here.
+	#[arg(long, display_order = 4, verbatim_doc_comment)]
+	force: bool,
+
 	/// check the pipeline and exit without reading or writing any tiles
 	///
 	/// Reports mistakes in the pipeline itself — an unknown operation or
@@ -148,6 +161,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	// Conversion must fail loudly on any silently-dropped tile: a truncated
 	// output would be indistinguishable from a successful conversion.
 	runtime.set_abort_on_error(true);
+	runtime.set_force(arguments.force);
 	runtime.set_writer_options(parse_writer_options(&arguments.writer_option)?);
 
 	// Periodically log RSS so memory growth (e.g. toward an OOM kill, which the

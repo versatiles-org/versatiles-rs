@@ -317,12 +317,16 @@ impl ContainerRegistry {
 		let path = env::current_dir()?.join(path);
 
 		if destination_is_directory(&path) {
+			let staged = StagedOutput::create(&path, runtime.force())?;
 			// `DirectoryWriter` creates each tile's parent on the way, so this is not
 			// what makes the write work — it turns an unwritable destination into an
 			// error naming the directory, and makes an empty conversion still produce
 			// the directory it was asked for.
-			std::fs::create_dir_all(&path).with_context(|| format!("Failed to create output directory {path:?}"))?;
-			return DirectoryWriter::write_to_path(reader.as_ref(), &path, runtime).await;
+			std::fs::create_dir_all(staged.path())
+				.with_context(|| format!("Failed to create output directory {:?}", staged.path()))?;
+			let result = DirectoryWriter::write_to_path(reader.as_ref(), staged.path(), runtime.clone()).await;
+			result?;
+			return Self::publish(staged, &runtime, &path);
 		}
 
 		let extension = sanitize_extension(&path.extension().unwrap_or_default().to_string_lossy());
@@ -340,24 +344,31 @@ impl ContainerRegistry {
 		// The one place that decides where this output lands. Writers are handed
 		// a path that does not exist, write a complete container there, and touch
 		// nothing else; everything after that happens here.
-		let staged = StagedOutput::create(&path)?;
+		let staged = StagedOutput::create(&path, runtime.force())?;
 		let result = (entry.write_to_path)(reader, staged.path().to_path_buf(), runtime.clone()).await;
 
 		// A writer error drops `staged`, whose `Drop` removes what it left behind.
 		result?;
 
+		Self::publish(staged, &runtime, &path)
+	}
+
+	/// Puts a finished output where it belongs — the only place that decides.
+	///
+	/// A writer succeeding is not the same as the *run* succeeding: tiles the
+	/// reader could not deliver are recorded on the runtime. Publishing over the
+	/// destination then would replace a complete previous output with one that is
+	/// missing tiles, so it goes to the `.incomplete` name instead and the
+	/// destination is left exactly as it was.
+	fn publish(staged: StagedOutput, runtime: &TilesRuntime, destination: &Path) -> Result<()> {
 		if runtime.had_errors() {
-			// The writer succeeded; the *run* did not. Publishing over the
-			// destination would replace a complete previous output with one that
-			// is missing tiles.
 			let kept = staged.publish_as_incomplete()?;
 			bail!(
-				"conversion completed with {} read error(s); {path:?} was left untouched and the \
-				 incomplete output kept at {kept:?}",
+				"conversion completed with {} read error(s); {destination:?} was left untouched and \
+				 the incomplete output kept at {kept:?}",
 				runtime.error_count()
 			);
 		}
-
 		staged.publish()
 	}
 
