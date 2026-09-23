@@ -193,6 +193,38 @@ impl OriginRule {
 ///
 /// See module docs for supported pattern forms.
 pub fn build_cors_layer(allowed_origins: &[String], max_age_seconds: u64) -> Result<CorsLayer> {
+	// `*` in the list means every origin is allowed, so say that literally
+	// rather than by reflecting whatever the client sent.
+	//
+	// A predicate answers "is this origin allowed?" by echoing the request's own
+	// `Origin` back in `Access-Control-Allow-Origin`, which has two costs when
+	// the answer is always yes. The response then varies by origin, so a cache
+	// in front of the server has to keep one copy per origin or none at all —
+	// and this is the default configuration, on a default bind of `0.0.0.0`.
+	// And an arbitrary client-supplied string ends up in a response header,
+	// including `null`, which is what a sandboxed iframe or a `file://` page
+	// sends.
+	//
+	// `*` is not more permissive than the predicate was: it is the same answer,
+	// written once. It is worth being clear that it does not *restrict*
+	// anything either — `*` still allows a null origin. What it stops is the
+	// reflection and the per-origin cache key.
+	//
+	// Any other pattern in the list is narrower than `*` by construction, so a
+	// list containing `*` allows everything regardless of what else is in it.
+	if allowed_origins.iter().any(|pattern| pattern == "*") {
+		if allowed_origins.len() > 1 {
+			log::warn!(
+				"CORS: the allow-list contains \"*\" alongside {} other pattern(s), which have no effect — \
+				 \"*\" already allows every origin",
+				allowed_origins.len() - 1
+			);
+		}
+		return Ok(CorsLayer::new()
+			.allow_origin(AllowOrigin::any())
+			.max_age(Duration::from_secs(max_age_seconds)));
+	}
+
 	// Compile the list of origin checks.
 	let checks: Vec<Predicate> = allowed_origins
 		.iter()
@@ -282,6 +314,66 @@ mod tests {
 	use tower::ServiceExt;
 
 	use super::*; // for `oneshot`
+
+	/// The `Access-Control-Allow-Origin` value, and whether the response says it
+	/// varies by origin.
+	///
+	/// `has_acao` only asks whether the header is there, which cannot tell a
+	/// reflected origin from a literal `*` — both are present.
+	async fn acao_and_vary(layer: &CorsLayer, origin: &str) -> (Option<String>, Option<String>) {
+		let app = Router::new().route("/", get(|| async { "ok" })).layer(layer.clone());
+
+		let req = Request::builder()
+			.uri("/")
+			.header(header::ORIGIN, origin)
+			.body(Body::empty())
+			.unwrap();
+
+		let resp = app.oneshot(req).await.unwrap();
+		let value = |name: header::HeaderName| {
+			resp
+				.headers()
+				.get(name)
+				.and_then(|v| v.to_str().ok())
+				.map(ToString::to_string)
+		};
+		(value(header::ACCESS_CONTROL_ALLOW_ORIGIN), value(header::VARY))
+	}
+
+	/// The default allow-list is `["*"]`, and it answers with a literal `*`
+	/// rather than echoing the request's own origin back at it.
+	#[tokio::test]
+	async fn a_wildcard_list_answers_with_a_literal_star() {
+		let layer = build_cors_layer(&["*".to_string()], 3600).unwrap();
+
+		for origin in ["https://example.org", "https://evil.example", "null"] {
+			let (acao, vary) = acao_and_vary(&layer, origin).await;
+			assert_eq!(acao.as_deref(), Some("*"), "for origin {origin}");
+			// Nothing origin-dependent to vary on, so a cache in front of the
+			// server can keep one copy.
+			assert!(
+				vary.is_none_or(|v| !v.to_lowercase().contains("origin")),
+				"the response should not vary by origin"
+			);
+		}
+	}
+
+	/// A narrower list still has to reflect: the answer genuinely depends on
+	/// who asked.
+	#[tokio::test]
+	async fn a_narrow_list_still_reflects_the_allowed_origin() {
+		let layer = build_cors_layer(&["https://example.org".to_string()], 3600).unwrap();
+
+		let (acao, vary) = acao_and_vary(&layer, "https://example.org").await;
+		assert_eq!(acao.as_deref(), Some("https://example.org"));
+		assert!(
+			vary.is_some_and(|v| v.to_lowercase().contains("origin")),
+			"a per-origin answer must be marked as varying by origin"
+		);
+
+		let (acao, _) = acao_and_vary(&layer, "https://evil.example").await;
+		assert_eq!(acao, None, "a disallowed origin gets no header at all");
+	}
 
 	async fn has_acao(layer: &CorsLayer, origin: &str) -> bool {
 		let app = Router::new().route("/", get(|| async { "ok" })).layer(layer.clone());
