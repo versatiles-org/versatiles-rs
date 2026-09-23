@@ -443,12 +443,19 @@ versatiles serve tiles.versatiles
 | `-s, --static`            | Serve static content from a folder or tar (repeatable) | -       |
 | `--minimal-recompression` | Fast serving (less compression)                        | false   |
 | `--disable-api`           | Disable `/api` endpoints                               | false   |
+| `--follow-symlinks`       | Let a symlink in a static folder point outside it      | false   |
 | `--cache-control`         | `Cache-Control` header sent with every tile            | -       |
 | `--auto-shutdown`         | Shut down automatically after N milliseconds           | -       |
 
 With `--port 0` the server binds a free port chosen by the operating system and
 prints it to stdout as `VERSATILES_PORT=<port>` before serving, so a wrapper
 script can discover where it landed.
+
+By default a symlink in a folder served with `--static` may not resolve outside
+that folder: `ln -s /etc/passwd public/passwd` makes `GET /passwd` a request for
+a file the operator never put there, and the path is only checked as text.
+Symlinks that stay inside the folder work either way — their target is being
+served anyway. Pass `--follow-symlinks` to serve a tree of links deliberately.
 
 **Custom tile IDs:**
 

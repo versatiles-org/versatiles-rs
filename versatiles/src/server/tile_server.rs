@@ -79,6 +79,8 @@ pub struct TileServer {
 	cache_control: Arc<str>,
 	/// Expose small helper endpoints like `/tiles/index.json` and `/status`.
 	disable_api: bool,
+	/// Whether a symlink in a served folder may resolve outside it.
+	follow_symlinks: bool,
 	runtime: TilesRuntime,
 	/// Configured CORS origins (supports `*`, prefix/suffix wildcard, or `/regex/`).
 	cors_allowed_origins: Vec<String>,
@@ -108,6 +110,7 @@ impl TileServer {
 			minimal_recompression,
 			cache_control: Arc::from(super::handlers::DEFAULT_CACHE_CONTROL),
 			disable_api,
+			follow_symlinks: false,
 			runtime,
 			cors_allowed_origins: crate::config::CorsConfig::default().allowed_origins,
 			cors_max_age_seconds: 3600,
@@ -150,6 +153,7 @@ impl TileServer {
 			minimal_recompression: config.server.minimal_recompression.unwrap_or(false),
 			cache_control: Arc::from(cache_control.as_str()),
 			disable_api: config.server.disable_api.unwrap_or(false),
+			follow_symlinks: config.server.follow_symlinks.unwrap_or(false),
 			runtime,
 			cors_allowed_origins: config.cors.allowed_origins.clone(),
 			cors_max_age_seconds: config.cors.max_age_seconds.unwrap_or(3600),
@@ -261,7 +265,7 @@ impl TileServer {
 	#[context("adding static source from location: location={location:?}, url_prefix='{url_prefix}'")]
 	pub async fn add_static_source_from_location(&mut self, location: &DataLocation, url_prefix: &str) -> Result<()> {
 		log::debug!("add static: {location:?}");
-		let source = sources::StaticSource::from_location(location, url_prefix).await?;
+		let source = sources::StaticSource::from_location(location, url_prefix, self.follow_symlinks).await?;
 		self.static_sources.rcu(|old| {
 			let mut new = (**old).clone();
 			new.push(source.clone());

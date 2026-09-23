@@ -19,15 +19,24 @@ use super::{
 
 // Folder struct definition
 #[derive(Clone)]
+#[expect(
+	clippy::struct_field_names,
+	reason = "`self.folder` is the served root; the third field only just crossed clippy's threshold"
+)]
 pub struct Folder {
 	folder: PathBuf,
 	name: String,
+	/// Whether a symlink may resolve to a file outside `folder`.
+	///
+	/// Symlinks *within* the folder work either way — their target is already
+	/// being served. This is only about one pointing out of it.
+	follow_symlinks: bool,
 }
 
 impl Folder {
 	// Constructor for the Folder struct
 	#[context("loading static folder from path: {path:?}")]
-	pub fn from(path: &Path) -> Result<Folder> {
+	pub fn from(path: &Path, follow_symlinks: bool) -> Result<Folder> {
 		let mut folder = current_dir()?;
 		folder.push(Path::new(path));
 		folder = folder.canonicalize()?;
@@ -46,6 +55,7 @@ impl Folder {
 				.to_str()
 				.ok_or_else(|| anyhow!("path {path:?} is not valid UTF-8"))?
 				.to_owned(),
+			follow_symlinks,
 		})
 	}
 }
@@ -73,29 +83,74 @@ impl StaticSourceTrait for Folder {
 			local_path.push("index.html");
 		}
 
-		// If the local path is not a subpath of the folder, return not found
+		// If the local path is not a subpath of the folder, return not found.
+		// Lexical only — `resolve` below is what accounts for symlinks.
 		if !local_path.starts_with(&self.folder) {
 			return None;
 		}
 
 		let mime = guess_mime(&local_path);
 
-		// Check for compressed versions first (".br" and ".gz"), falling back to uncompressed if neither is found
-
-		let (file, compression) = if let Ok(file) = File::open(&local_path) {
-			(file, TileCompression::Uncompressed)
-		} else if let Ok(file) = File::open(format!("{}.br", local_path.display())) {
-			(file, TileCompression::Brotli)
-		} else if let Ok(file) = File::open(format!("{}.gz", local_path.display())) {
-			(file, TileCompression::Gzip)
-		} else {
-			return None;
-		};
+		// The plain file, then the precompressed sidecars (".br", ".gz"). Each
+		// candidate is resolved separately: a `.br` sidecar can be a symlink
+		// even when the file beside it is not.
+		let (file, compression) = [
+			("", TileCompression::Uncompressed),
+			(".br", TileCompression::Brotli),
+			(".gz", TileCompression::Gzip),
+		]
+		.into_iter()
+		.find_map(|(suffix, compression)| {
+			let candidate = if suffix.is_empty() {
+				local_path.clone()
+			} else {
+				PathBuf::from(format!("{}{suffix}", local_path.display()))
+			};
+			let resolved = self.resolve(&candidate)?;
+			File::open(resolved).ok().map(|file| (file, compression))
+		})?;
 
 		let mut buffer = Vec::new();
 		BufReader::new(file).read_to_end(&mut buffer).ok()?;
 
 		SourceResponse::new_some(Blob::from(buffer), compression, &mime)
+	}
+}
+
+impl Folder {
+	/// The real path `candidate` names, or `None` if it may not be served.
+	///
+	/// `to_pathbug` already refuses `..` as a path component, but that is a
+	/// check on the *text* of the request. A symlink inside the folder is not
+	/// text: `ln -s /etc/passwd public/passwd` makes `GET /passwd` a request for
+	/// a file the operator never put there, and `File::open` follows it without
+	/// comment. The lexical check upstream cannot see that, because the path it
+	/// examines really is under the folder — it is the filesystem that leaves.
+	///
+	/// So the path is canonicalised, which resolves every link in it, and the
+	/// result checked against the (already canonical) root. Links that stay
+	/// inside are unaffected: their target is being served anyway.
+	///
+	/// `--follow-symlinks` turns the check off for operators who deliberately
+	/// serve a tree of links — nginx follows them by default, so this is a
+	/// posture choice rather than a fault to be fixed. Off by default, because a
+	/// tool pointed at an arbitrary directory should not hand out whatever that
+	/// directory happens to reference.
+	fn resolve(&self, candidate: &Path) -> Option<PathBuf> {
+		// Also fails for a path that does not exist, which is the 404 path and
+		// wants no further comment.
+		let real = candidate.canonicalize().ok()?;
+
+		if self.follow_symlinks || real.starts_with(&self.folder) {
+			return Some(real);
+		}
+
+		log::warn!(
+			"refusing to serve {candidate:?}: it resolves to {real:?}, outside the served folder {:?}. \
+			 Pass --follow-symlinks if that is deliberate",
+			self.folder
+		);
+		None
 	}
 }
 
@@ -115,7 +170,7 @@ mod tests {
 	#[tokio::test]
 	async fn test() {
 		// Create a new Folder instance
-		let folder = Folder::from(Path::new("../testdata")).unwrap();
+		let folder = Folder::from(Path::new("../testdata"), false).unwrap();
 
 		let debug: String = format!("{folder:?}");
 		assert!(debug.starts_with("Folder { folder: \""));
@@ -152,7 +207,7 @@ mod tests {
 		std::fs::write(&index_path, b"Hello, world!").unwrap();
 
 		// Test initialization with the temporary directory
-		let folder = Folder::from(temp_dir.path()).unwrap();
+		let folder = Folder::from(temp_dir.path(), false).unwrap();
 
 		// Attempt to retrieve data from the directory, expecting to get the contents of index.html
 		let response = folder
@@ -178,7 +233,7 @@ mod tests {
 		std::fs::write(public.join("index.html"), b"public").unwrap();
 		std::fs::write(temp_dir.path().join("secret.txt"), b"TOP-SECRET").unwrap();
 
-		let folder = Folder::from(&public).unwrap();
+		let folder = Folder::from(&public, false).unwrap();
 
 		// The file inside the folder is still served.
 		assert!(
@@ -219,7 +274,7 @@ mod tests {
 		std::fs::write(&gz_file_path, b"Gzip compressed content").unwrap();
 
 		// Initialize folder and test get_data with Brotli file
-		let folder = Folder::from(temp_dir.path()).unwrap();
+		let folder = Folder::from(temp_dir.path(), false).unwrap();
 
 		// Test Brotli compression
 		let response_br = folder
@@ -244,5 +299,95 @@ mod tests {
 
 		// Cleanup
 		temp_dir.close().unwrap();
+	}
+}
+
+#[cfg(test)]
+mod symlink_tests {
+	use super::*;
+	use crate::server::sources::static_source::StaticSourceTrait;
+
+	/// A tree with a secret outside the served folder, a symlink pointing at
+	/// it, and a symlink that stays inside.
+	fn tree() -> (assert_fs::TempDir, PathBuf) {
+		let temp = assert_fs::TempDir::new().unwrap();
+		let public = temp.path().join("public");
+		std::fs::create_dir(&public).unwrap();
+		std::fs::write(public.join("index.html"), b"public").unwrap();
+		std::fs::write(temp.path().join("secret.txt"), b"TOP-SECRET").unwrap();
+
+		#[cfg(unix)]
+		{
+			std::os::unix::fs::symlink(temp.path().join("secret.txt"), public.join("leak.txt")).unwrap();
+			std::os::unix::fs::symlink(public.join("index.html"), public.join("inside.html")).unwrap();
+		}
+
+		(temp, public)
+	}
+
+	/// The lexical check upstream cannot see this: the requested path really is
+	/// under the served folder, and it is the filesystem that leaves.
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn a_symlink_out_of_the_folder_is_refused_by_default() {
+		let (_temp, public) = tree();
+		let folder = Folder::from(&public, false).unwrap();
+
+		assert!(
+			folder
+				.get_data(&Url::from("leak.txt"), &TargetCompression::from_none())
+				.await
+				.is_none(),
+			"a symlink pointing outside the folder was served"
+		);
+	}
+
+	/// Off by default does not mean "no symlinks": one whose target is inside
+	/// the folder is serving a file that is being served anyway.
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn a_symlink_inside_the_folder_still_works() {
+		let (_temp, public) = tree();
+		let folder = Folder::from(&public, false).unwrap();
+
+		assert!(
+			folder
+				.get_data(&Url::from("inside.html"), &TargetCompression::from_none())
+				.await
+				.is_some(),
+			"a symlink staying inside the folder was refused"
+		);
+	}
+
+	/// The flag is what an operator serving a tree of links deliberately turns
+	/// on.
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn the_flag_allows_a_symlink_to_leave() {
+		let (_temp, public) = tree();
+		let folder = Folder::from(&public, true).unwrap();
+
+		let response = folder
+			.get_data(&Url::from("leak.txt"), &TargetCompression::from_none())
+			.await
+			.expect("--follow-symlinks should serve it");
+		assert_eq!(response.blob.as_slice(), b"TOP-SECRET");
+	}
+
+	/// An ordinary file is unaffected either way.
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn ordinary_files_are_unaffected() {
+		let (_temp, public) = tree();
+		for follow in [false, true] {
+			let folder = Folder::from(&public, follow).unwrap();
+			assert!(
+				folder
+					.get_data(&Url::from("index.html"), &TargetCompression::from_none())
+					.await
+					.is_some(),
+				"follow_symlinks={follow}"
+			);
+		}
 	}
 }

@@ -28,7 +28,7 @@ pub struct StaticSource {
 
 impl StaticSource {
 	#[context("creating static source from location: location={location:?}, prefix={prefix}")]
-	pub async fn from_location(location: &DataLocation, prefix: &str) -> Result<StaticSource> {
+	pub async fn from_location(location: &DataLocation, prefix: &str, follow_symlinks: bool) -> Result<StaticSource> {
 		let prefix = Url::from(prefix).to_dir();
 		Ok(StaticSource {
 			source: match location {
@@ -42,7 +42,7 @@ impl StaticSource {
 				}
 				DataLocation::Path(path) => {
 					if std::fs::metadata(path)?.is_dir() {
-						Arc::new(Folder::from(path)?) as Arc<dyn StaticSourceTrait>
+						Arc::new(Folder::from(path, follow_symlinks)?) as Arc<dyn StaticSourceTrait>
 					} else {
 						Arc::new(TarFile::from(path).await?)
 					}
@@ -118,13 +118,13 @@ mod tests {
 
 		let check_type = |path: PathBuf, type_name: &'static str| async move {
 			let loc = DataLocation::from(path);
-			let source = StaticSource::from_location(&loc, "").await.unwrap();
+			let source = StaticSource::from_location(&loc, "", false).await.unwrap();
 			assert_eq!(source.type_name(), type_name);
 		};
 
 		let check_error = |path: PathBuf, error_should: &'static str| async move {
 			let loc = DataLocation::from(path);
-			let result = StaticSource::from_location(&loc, "").await;
+			let result = StaticSource::from_location(&loc, "", false).await;
 			let error = result
 				.err()
 				.iter()

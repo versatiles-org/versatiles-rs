@@ -29,7 +29,14 @@ impl ReloadHandle {
 	pub async fn reload(&self) -> Result<()> {
 		let new_config = Config::from_path(&self.config_path)?;
 		self.apply_tile_source_diff(&new_config.tile_sources).await;
-		self.apply_static_source_diff(&new_config.static_sources).await;
+		// The new config's value, not one captured at startup: a reload that
+		// re-reads `follow_symlinks` and then ignores it would be a surprise.
+		self
+			.apply_static_source_diff(
+				&new_config.static_sources,
+				new_config.server.follow_symlinks.unwrap_or(false),
+			)
+			.await;
 		Ok(())
 	}
 
@@ -83,7 +90,7 @@ impl ReloadHandle {
 		*self.current_tile_configs.lock().unwrap() = new_configs.to_vec();
 	}
 
-	async fn apply_static_source_diff(&self, new_configs: &[StaticSourceConfig]) {
+	async fn apply_static_source_diff(&self, new_configs: &[StaticSourceConfig], follow_symlinks: bool) {
 		let old_configs = self.current_static_configs.lock().unwrap().clone();
 		if old_configs == new_configs {
 			return;
@@ -92,7 +99,7 @@ impl ReloadHandle {
 		let mut new_sources: Vec<StaticSource> = Vec::new();
 		for cfg in new_configs {
 			let prefix = cfg.prefix.as_deref().unwrap_or("/");
-			match StaticSource::from_location(&cfg.src, prefix).await {
+			match StaticSource::from_location(&cfg.src, prefix, follow_symlinks).await {
 				Ok(source) => new_sources.push(source),
 				Err(e) => log::error!("reload: failed to build static source at '{prefix}': {e:#}"),
 			}
@@ -286,14 +293,17 @@ mod tests {
 		let handle = handle(PathBuf::from("unused"));
 
 		handle
-			.apply_static_source_diff(&[StaticSourceConfig {
-				src: DataLocation::from(Path::new("../testdata/static.tar.gz")),
-				prefix: Some("/assets/".to_string()),
-			}])
+			.apply_static_source_diff(
+				&[StaticSourceConfig {
+					src: DataLocation::from(Path::new("../testdata/static.tar.gz")),
+					prefix: Some("/assets/".to_string()),
+				}],
+				false,
+			)
 			.await;
 		assert_eq!(handle.static_sources.load().len(), 1);
 
-		handle.apply_static_source_diff(&[]).await;
+		handle.apply_static_source_diff(&[], false).await;
 		assert_eq!(handle.static_sources.load().len(), 0);
 	}
 
@@ -305,10 +315,10 @@ mod tests {
 			prefix: None,
 		}];
 
-		handle.apply_static_source_diff(&config).await;
+		handle.apply_static_source_diff(&config, false).await;
 		let first = handle.static_sources.load_full();
 
-		handle.apply_static_source_diff(&config).await;
+		handle.apply_static_source_diff(&config, false).await;
 		let second = handle.static_sources.load_full();
 
 		// The early return exists so an unchanged mount is not re-read from disk.
@@ -320,16 +330,19 @@ mod tests {
 		let handle = handle(PathBuf::from("unused"));
 
 		handle
-			.apply_static_source_diff(&[
-				StaticSourceConfig {
-					src: DataLocation::from(Path::new("../testdata/does_not_exist.tar")),
-					prefix: None,
-				},
-				StaticSourceConfig {
-					src: DataLocation::from(Path::new("../testdata/static.tar.gz")),
-					prefix: Some("/ok/".to_string()),
-				},
-			])
+			.apply_static_source_diff(
+				&[
+					StaticSourceConfig {
+						src: DataLocation::from(Path::new("../testdata/does_not_exist.tar")),
+						prefix: None,
+					},
+					StaticSourceConfig {
+						src: DataLocation::from(Path::new("../testdata/static.tar.gz")),
+						prefix: Some("/ok/".to_string()),
+					},
+				],
+				false,
+			)
 			.await;
 
 		assert_eq!(handle.static_sources.load().len(), 1);

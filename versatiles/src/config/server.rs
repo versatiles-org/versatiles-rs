@@ -31,6 +31,7 @@ use versatiles_derive::ConfigDoc;
 /// * `port` — Optional port to listen on (default `8080`).
 /// * `minimal_recompression` — If `true`, prefer faster compression over smaller output.
 /// * `disable_api` — If `true`, disable the `/api` endpoints entirely.
+/// * `follow_symlinks` — If `true`, a symlink in a served folder may resolve outside it.
 #[derive(Debug, Default, Clone, Deserialize, PartialEq, ConfigDoc)]
 #[serde(deny_unknown_fields)]
 pub struct ServerConfig {
@@ -57,6 +58,12 @@ pub struct ServerConfig {
 	#[serde()]
 	#[config_demo("false")]
 	pub disable_api: Option<bool>,
+
+	/// Optional flag to serve files that symlinks point to outside the served folder
+	/// Defaults to false (a symlink may not leave the folder)
+	#[serde()]
+	#[config_demo("false")]
+	pub follow_symlinks: Option<bool>,
 
 	/// Optional `Cache-Control` header sent with every tile
 	/// Defaults to "public, max-age=2419200, no-transform" (four weeks)
@@ -104,6 +111,12 @@ impl ServerConfig {
 	pub fn override_optional_disable_api(&mut self, disable_api: &Option<bool>) {
 		if disable_api.is_some() {
 			self.disable_api = *disable_api;
+		}
+	}
+	/// Overrides whether a symlink may leave the served folder, if a value is given.
+	pub fn override_optional_follow_symlinks(&mut self, follow_symlinks: &Option<bool>) {
+		if follow_symlinks.is_some() {
+			self.follow_symlinks = *follow_symlinks;
 		}
 	}
 }

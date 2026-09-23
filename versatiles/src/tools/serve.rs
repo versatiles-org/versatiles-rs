@@ -56,6 +56,15 @@ pub struct Subcommand {
 	#[arg(long, display_order = 4)]
 	pub disable_api: Option<bool>,
 
+	/// serve files that symlinks in a static folder point to outside that folder
+	///
+	/// Off by default: a symlink inside a served folder works either way, but one
+	/// pointing out of it is refused, so a folder cannot hand out files the
+	/// operator did not put there. Turn it on to serve a tree that deliberately
+	/// links elsewhere.
+	#[arg(long, verbatim_doc_comment, display_order = 4)]
+	pub follow_symlinks: Option<bool>,
+
 	/// Cache-Control header sent with every tile, e.g. "no-cache"
 	///
 	/// Tile URLs are stable, so a client answers from its own cache when the
@@ -80,6 +89,9 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		.server
 		.override_optional_minimal_recompression(&arguments.minimal_recompression);
 	config.server.override_optional_disable_api(&arguments.disable_api);
+	config
+		.server
+		.override_optional_follow_symlinks(&arguments.follow_symlinks);
 	config.server.override_optional_cache_control(&arguments.cache_control);
 
 	for src in &arguments.tile_sources {

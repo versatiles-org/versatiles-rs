@@ -49,6 +49,10 @@ server:
   # Defaults to false (enabling the API)
   disable_api: false
 
+  # Optional flag to serve files that symlinks point to outside the served folder
+  # Defaults to false (a symlink may not leave the folder)
+  follow_symlinks: false
+
   # Optional `Cache-Control` header sent with every tile
   # Defaults to "public, max-age=2419200, no-transform" (four weeks)
   #

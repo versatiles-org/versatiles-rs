@@ -192,6 +192,7 @@ mod tests {
 					port: Some(51234),
 					minimal_recompression: Some(true),
 					disable_api: Some(true),
+					follow_symlinks: None,
 					cache_control: None,
 				},
 				cors: CorsConfig {
@@ -236,7 +237,7 @@ mod tests {
 				.collect::<Vec<_>>(),
 			vec![
 				"parsing config from string (YAML)",
-				"server: unknown field `pi`, expected one of `ip`, `port`, `minimal_recompression`, `disable_api`, `cache_control` at line 2 column 3"
+				"server: unknown field `pi`, expected one of `ip`, `port`, `minimal_recompression`, `disable_api`, `follow_symlinks`, `cache_control` at line 2 column 3"
 			]
 		);
 	}
@@ -253,6 +254,7 @@ mod tests {
 					port: Some(8080,),
 					minimal_recompression: Some(false,),
 					disable_api: Some(false,),
+					follow_symlinks: Some(false,),
 					cache_control: Some("public, max-age=2419200, no-transform".to_string()),
 				},
 				cors: CorsConfig {
