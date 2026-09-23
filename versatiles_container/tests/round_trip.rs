@@ -691,3 +691,139 @@ async fn convert_default_runtime_tolerates_record_error() -> Result<()> {
 	assert!(events[0].contains("synthetic test source"));
 	Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Output contract — one set of assertions, every writer.
+//
+// `StagedOutput` is what actually provides the guarantee and is tested directly,
+// so these are conformance tests: they check each format is genuinely routed
+// through it rather than quietly doing its own thing. A writer that reached
+// around the staging layer would pass its own round-trip tests and fail here.
+// ---------------------------------------------------------------------------
+
+/// A snapshot of a destination, whether it is a file or a directory tree.
+fn snapshot(path: &std::path::Path) -> Vec<(String, Vec<u8>)> {
+	if path.is_file() {
+		return vec![(String::new(), std::fs::read(path).unwrap())];
+	}
+	let mut entries = Vec::new();
+	let mut stack = vec![path.to_path_buf()];
+	while let Some(dir) = stack.pop() {
+		for entry in std::fs::read_dir(&dir).unwrap() {
+			let entry = entry.unwrap().path();
+			if entry.is_dir() {
+				stack.push(entry);
+			} else {
+				let name = entry.strip_prefix(path).unwrap().to_string_lossy().into_owned();
+				entries.push((name, std::fs::read(&entry).unwrap()));
+			}
+		}
+	}
+	entries.sort();
+	entries
+}
+
+/// Everything sitting beside the destination — staging and `.old` leftovers show
+/// up here.
+fn siblings(dir: &std::path::Path, destination: &str) -> Vec<String> {
+	let mut names: Vec<String> = std::fs::read_dir(dir)
+		.unwrap()
+		.map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+		.filter(|name| name != destination)
+		.collect();
+	names.sort();
+	names
+}
+
+async fn convert_into(destination: &std::path::Path, max_zoom: u8, fail: bool) -> Result<()> {
+	let runtime = TilesRuntime::builder()
+		.silent_progress(true)
+		.abort_on_error(true)
+		.force(true)
+		.build();
+	if fail {
+		// A tile the reader could not deliver — the common real-world failure,
+		// and the one that reaches the writer having already succeeded.
+		runtime.record_error("synthetic test source", &anyhow::anyhow!("simulated read failure"));
+	}
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
+	convert_tiles_container(
+		source,
+		TilesConverterParameters {
+			tile_pyramid: Some(TilePyramid::new_full_up_to(max_zoom)),
+			..Default::default()
+		},
+		destination,
+		runtime,
+	)
+	.await
+}
+
+/// A run that could not read every tile must leave the previous output exactly
+/// as it was, keep the partial result under its own name, and leave no scratch.
+#[rstest]
+#[case::versatiles("out.versatiles", "out.incomplete.versatiles", ".out.versatiles.tmp")]
+#[case::pmtiles("out.pmtiles", "out.incomplete.pmtiles", ".out.pmtiles.tmp")]
+#[case::mbtiles("out.mbtiles", "out.incomplete.mbtiles", ".out.mbtiles.tmp")]
+#[case::tar("out.tar", "out.incomplete.tar", ".out.tar.tmp")]
+#[case::directory("out", "out.incomplete", ".out.tmp")]
+#[tokio::test]
+async fn an_incomplete_run_keeps_the_previous_output(
+	#[case] name: &str,
+	#[case] incomplete: &str,
+	#[case] staging: &str,
+) -> Result<()> {
+	let dir = TempDir::new()?;
+	let destination = dir.path().join(name);
+
+	convert_into(&destination, 4, false).await?;
+	let before = snapshot(&destination);
+	assert!(!before.is_empty(), "the first conversion produced nothing");
+
+	let result = convert_into(&destination, 3, true).await;
+	assert!(result.is_err(), "a recorded read error must fail the run");
+
+	assert_eq!(
+		snapshot(&destination),
+		before,
+		"{name}: a failed run must leave the previous output byte-identical"
+	);
+	assert!(
+		dir.path().join(incomplete).exists(),
+		"{name}: the incomplete output should have been kept"
+	);
+	assert_eq!(
+		siblings(dir.path(), name),
+		vec![incomplete.to_string()],
+		"{name}: nothing but the incomplete output may be left beside the destination (no {staging})"
+	);
+	Ok(())
+}
+
+/// And a clean run replaces it, leaving nothing beside it at all.
+#[rstest]
+#[case::versatiles("out.versatiles")]
+#[case::pmtiles("out.pmtiles")]
+#[case::mbtiles("out.mbtiles")]
+#[case::tar("out.tar")]
+#[case::directory("out")]
+#[tokio::test]
+async fn a_clean_run_replaces_the_previous_output(#[case] name: &str) -> Result<()> {
+	let dir = TempDir::new()?;
+	let destination = dir.path().join(name);
+
+	convert_into(&destination, 4, false).await?;
+	let before = snapshot(&destination);
+
+	convert_into(&destination, 2, false).await?;
+	let after = snapshot(&destination);
+
+	assert_ne!(after, before, "{name}: the output should have been replaced");
+	assert!(!after.is_empty(), "{name}: the replacement is empty");
+	assert!(
+		siblings(dir.path(), name).is_empty(),
+		"{name}: a successful run must leave nothing beside the destination, found {:?}",
+		siblings(dir.path(), name)
+	);
+	Ok(())
+}
