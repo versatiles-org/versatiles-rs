@@ -49,15 +49,44 @@ fn osc_reset() {
 	let _ = std::io::stderr().flush();
 }
 
-/// Install the panic hook and (on Unix) signal handlers that reset the
-/// OSC progress indicator before the process terminates abnormally.
+/// Whether [`install_terminal_reset_hooks`] has run, for tests and for
+/// [`terminal_reset_hooks_installed`].
+static HOOKS_INSTALLED: AtomicBool = AtomicBool::new(false);
+
+/// Whether the process-wide terminal-reset hooks have been installed.
+#[must_use]
+pub fn terminal_reset_hooks_installed() -> bool {
+	HOOKS_INSTALLED.load(Ordering::Relaxed)
+}
+
+/// Install the panic hook and (on Unix) signal handlers that reset the OSC
+/// progress indicator before the process terminates abnormally.
 ///
-/// Safe to call multiple times — the setup runs exactly once.
+/// **For applications only — never call this from a library.** Both the panic
+/// hook and the signal disposition are process-wide, singular resources, and
+/// installing them is a decision that belongs to whoever owns `main`:
+///
+/// - `libc::signal` *replaces* the existing SIGINT/SIGTERM disposition rather
+///   than chaining to it. A host that shuts down gracefully on SIGTERM —
+///   flushing a write, draining in-flight requests — loses that: this handler
+///   restores `SIG_DFL` and re-raises, so the process dies immediately. Node,
+///   which installs its own handlers, is the case that motivated pulling this
+///   out of the library.
+/// - `set_hook` chains to the previous hook, so it is better behaved, but the
+///   result still depends on *when* it runs relative to the host's own
+///   `set_hook`. Installed lazily from library code, that ordering was a
+///   function of which container happened to draw a progress bar first.
+///
+/// Safe to call multiple times — the setup runs exactly once, and the first
+/// call is the one that takes effect.
+///
 /// Note: SIGKILL cannot be caught by any process; only SIGTERM and SIGINT
 /// (Ctrl+C) are covered here.
-fn install_osc_reset_hooks() {
+pub fn install_terminal_reset_hooks() {
 	static ONCE: Once = Once::new();
 	ONCE.call_once(|| {
+		HOOKS_INSTALLED.store(true, Ordering::Relaxed);
+
 		// Detect tmux once and cache the result in a static AtomicBool so
 		// the signal handler (which must be allocation-free) can read it.
 		if std::env::var_os("TMUX").is_some() {
@@ -121,9 +150,9 @@ impl ProgressHandle {
 	/// server or a test wants.
 	#[must_use]
 	pub fn new(id: ProgressId, message: String, total: u64, event_bus: EventBus, silent: bool) -> Self {
-		if !silent {
-			install_osc_reset_hooks();
-		}
+		// Deliberately does *not* install the terminal-reset hooks: see
+		// `install_terminal_reset_hooks`. Drawing a bar is not a reason to take
+		// over the host process's panic hook and signal handlers.
 		let start = Instant::now();
 		let handle = Self {
 			state: Arc::new(Mutex::new(ProgressState {
@@ -376,6 +405,41 @@ mod tests {
 	use std::time::Duration;
 
 	use super::*;
+
+	/// One test, not two, because the hooks are process-global: a second test
+	/// asserting they are *not* installed would race this one for which runs
+	/// first. So both halves run here, in order.
+	///
+	/// The first half is the regression guard for S-30. `ProgressHandle::new`
+	/// used to call the installer whenever `silent` was false, which meant any
+	/// embedder using the default `TilesRuntime::new()` had its SIGINT and
+	/// SIGTERM handlers replaced by whichever container drew a bar first.
+	#[test]
+	fn hooks_are_installed_by_the_application_and_never_by_a_handle() {
+		assert!(
+			!terminal_reset_hooks_installed(),
+			"something installed the hooks before this test ran"
+		);
+
+		let handle = ProgressHandle::new(
+			crate::ProgressId(1),
+			"Test".to_string(),
+			100,
+			EventBus::new(),
+			// Not silent: this is the path that used to install them.
+			false,
+		);
+		assert!(
+			!terminal_reset_hooks_installed(),
+			"drawing a progress bar took over the process's panic hook and signal handlers"
+		);
+		// Leaves the terminal's OSC 9;4 indicator cleared, which `new` set.
+		handle.finish();
+
+		// An application asking for them explicitly still gets them.
+		install_terminal_reset_hooks();
+		assert!(terminal_reset_hooks_installed());
+	}
 
 	#[test]
 	fn test_progress_handle_new() {

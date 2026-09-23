@@ -185,6 +185,13 @@ fn report_error<W: Write>(err: &anyhow::Error, out: &mut W) {
 fn main() {
 	let cli = Cli::parse();
 	init_logger(log_level_from_verbosity(cli.verbose, cli.quiet));
+
+	// This process is the CLI, so it owns the panic hook and the SIGINT/SIGTERM
+	// disposition and may spend them on clearing the terminal's progress
+	// indicator. The library no longer does this on its own: an application
+	// embedding it keeps its own handlers unless it asks for ours.
+	versatiles_container::install_terminal_reset_hooks();
+
 	let runtime = build_runtime(&cli);
 
 	if let Err(err) = run(&cli, &runtime) {
