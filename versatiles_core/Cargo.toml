@@ -52,6 +52,11 @@ zstd = { version = "0.14.0", default-features = false }
 
 versatiles_derive.workspace = true
 
+# Host keys for the in-process SFTP test server. Optional and carried by the
+# `test` feature so dependent crates can run their own SFTP paths against it;
+# it is also a dev-dependency, for this crate's own `cfg(test)` builds.
+getrandom = { version = "0.4", optional = true }
+
 [dev-dependencies]
 approx.workspace = true
 assert_fs.workspace = true
@@ -97,7 +102,7 @@ sftp = [
 	"tokio/net",
 	"tokio/time",
 ]
-test = []
+test = ["dep:getrandom"]
 
 [[bench]]
 name = "byte_iterator"

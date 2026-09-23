@@ -165,8 +165,13 @@ mod sftp_pool;
 pub mod sftp_utils;
 #[cfg(feature = "sftp")]
 mod sftp_wrappers;
-#[cfg(all(feature = "sftp", test))]
-pub(crate) mod test_sftp_server;
+/// In-process SFTP server for tests.
+///
+/// Behind the `test` feature as well as `cfg(test)` so the crates that depend on
+/// this one can exercise their own SFTP paths against it — the alternative is
+/// leaving their remote wiring untested, which is where the bugs are.
+#[cfg(all(feature = "sftp", any(test, feature = "test")))]
+pub mod test_sftp_server;
 #[cfg(feature = "sftp")]
 pub use sftp_wrappers::*;
 mod value_reader;

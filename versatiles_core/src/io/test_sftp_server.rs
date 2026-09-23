@@ -1,5 +1,5 @@
 //! In-process SFTP server backed by an in-memory filesystem, for integration tests.
-#![cfg(all(feature = "sftp", test))]
+#![cfg(all(feature = "sftp", any(test, feature = "test")))]
 
 use reqwest::Url;
 use russh::{
@@ -438,6 +438,7 @@ impl TestSftpServer {
 	/// Returns `sftp://testuser:testpass@127.0.0.1:{port}{path}?timeout_ms={timeout_ms}`.
 	/// The `timeout_ms` query parameter is read by `sftp_utils::open_session` in
 	/// test builds to set the SFTP operation timeout for that connection.
+	#[must_use]
 	pub fn url(&self, path: &str) -> Url {
 		Url::parse(&format!(
 			"sftp://testuser:testpass@127.0.0.1:{}{}?timeout_ms={}",
