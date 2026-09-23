@@ -38,6 +38,22 @@ pub trait TileSink: Send + Sync {
 	/// The `runtime` provides access to progress reporting and other services.
 	///
 	/// Uses `Box<Self>` instead of `self` for object safety.
+	///
+	/// # Known gap: sinks write in place
+	///
+	/// [`TilesWriter`](crate::TilesWriter) implementations are handed a staging
+	/// path and the caller publishes the result, so a destination only ever holds
+	/// a complete output. **Sinks do not work that way yet.** They open the
+	/// destination directly, which means a run that fails part-way leaves a
+	/// partial container under the name the user asked for — and
+	/// [`MBTilesTileSink`](crate::MBTilesTileSink) removes an existing file
+	/// before it starts, so a failure costs the previous output.
+	///
+	/// [`open_tile_sink`] is the choke point where the same treatment belongs: a
+	/// wrapper holding the staging location and publishing it in `finish`, the
+	/// way [`deduplicating_tile_sink`] wraps for its own concern. Until then,
+	/// `versatiles mosaic assemble` is the user-facing path that does not get the
+	/// guarantee.
 	async fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &TilesRuntime) -> Result<()>;
 }
 
