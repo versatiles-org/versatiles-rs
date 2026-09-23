@@ -15,15 +15,18 @@ use crate::{PipelineFactory, helpers::location::FilePath, vpl::VPLNode};
 ///
 /// Three ways to supply the new values, applied in that order: a whole document
 /// via `tilejson` or `tilejson_file` replaces the source's, `tilejson_update` or
-/// `tilejson_update_file` merges onto it, and the individual parameters below
+/// `tilejson_update_file` is laid over it, and the individual parameters below
 /// override whatever the first two produced.
 ///
 /// Each of those pairs is mutually exclusive: `tilejson` with `tilejson_file`,
 /// `tilejson_update` with `tilejson_update_file`, `vector_layers` with
 /// `vector_layers_file`. The `_file` form exists to avoid quoting JSON inline.
 ///
-/// A merge overwrites scalar fields and `vector_layers`, and widens `bounds`
-/// and the zoom range to the union.
+/// Every field the update carries replaces the one below it, including
+/// `bounds` and the zoom range — an update that could only widen them would not
+/// be able to narrow a tileset's declared extent. Fields the update does not
+/// mention are left as they were. `vector_layers` named in the update replace
+/// the ones below; layers it does not name are kept.
 ///
 /// The fields and their meaning follow the TileJSON 3.0.0 specification:
 /// <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
@@ -92,8 +95,14 @@ impl Operation {
 		};
 
 		// Overlay the update document before the scalar parameters, so the latter win.
+		//
+		// `overlay`, not `merge`: this document is authoritative over the
+		// source's, where `merge` treats its two sides as peers. Through `merge`
+		// a `description` in the update was appended to the source's rather than
+		// replacing it, and `bounds` could only ever widen — neither of which is
+		// what "update" means, or what this operation documents.
 		if let Some(update) = tilejson_update_arg {
-			tilejson.merge(&update).context("merging 'tilejson_update'")?;
+			tilejson.overlay(&update).context("applying 'tilejson_update'")?;
 		}
 
 		if let Some(attribution) = args.attribution {
@@ -323,9 +332,53 @@ mod tests {
 
 		let tj = op.tilejson();
 		assert_eq!(get_str(tj, "name").as_deref(), Some("Just the name"));
-		// The source-derived zoom range is preserved (overlay only widens it).
+		// The source-derived zoom range survives because the update does not
+		// mention it. An update that *does* mention it replaces it — see
+		// `test_meta_update_can_narrow_the_zoom_range`.
 		assert_relative_eq!(tj.as_object().number("minzoom")?.unwrap(), 2.0);
 		assert_relative_eq!(tj.as_object().number("maxzoom")?.unwrap(), 7.0);
+		Ok(())
+	}
+
+	/// `tilejson_update` replaces a value rather than appending to it.
+	///
+	/// This went through `TileJSON::merge`, which combines `description` so no
+	/// peer's text is lost — right for merging two tilesets, wrong for an
+	/// update, which produced "source description\nnew description" against
+	/// this operation's own documentation.
+	#[tokio::test]
+	async fn test_meta_update_replaces_description_rather_than_appending() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_debug format=mvt | meta_update \
+				 tilejson='{\"tilejson\":\"3.0.0\",\"description\":\"old\",\"attribution\":\"old attr\"}' \
+				 tilejson_update='{\"description\":\"new\",\"attribution\":\"new attr\"}'",
+			)
+			.await?;
+
+		let tj = op.tilejson();
+		assert_eq!(get_str(tj, "description").as_deref(), Some("new"));
+		assert_eq!(get_str(tj, "attribution").as_deref(), Some("new attr"));
+		Ok(())
+	}
+
+	/// An update that can only widen a range is not an override. Through
+	/// `merge` the zoom range took the union, so `tilejson_update` could never
+	/// narrow it.
+	#[tokio::test]
+	async fn test_meta_update_can_narrow_the_zoom_range() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_debug format=mvt | filter bbox=[0,0,10,10] level_min=2 level_max=7 \
+				 | meta_update tilejson_update='{\"minzoom\":4,\"maxzoom\":5}'",
+			)
+			.await?;
+
+		let tj = op.tilejson();
+		assert_relative_eq!(tj.as_object().number("minzoom")?.unwrap(), 4.0);
+		assert_relative_eq!(tj.as_object().number("maxzoom")?.unwrap(), 5.0);
 		Ok(())
 	}
 

@@ -374,6 +374,62 @@ impl TileJSON {
 		Ok(merged)
 	}
 
+	/// Applies `other` on top of this `TileJSON`: every key `other` carries
+	/// replaces the one here, and keys it does not carry are left alone.
+	///
+	/// This is the *override* direction, and it is deliberately not
+	/// [`merge`](Self::merge). The two answer different questions and the same
+	/// input should give different answers:
+	///
+	/// - `merge` combines tilesets that are **peers**. Nothing there is more
+	///   authoritative than anything else, so bounds widen, zoom ranges widen,
+	///   and credits accumulate.
+	/// - `overlay` applies something a caller wrote **about** a tileset, which
+	///   is authoritative by construction. `meta_update` is the caller: a user
+	///   writing `tilejson_update={"description":"…"}` means that description,
+	///   not that description appended to the old one.
+	///
+	/// Sharing one function between the two is what made
+	/// `tilejson_update={"description":"new"}` produce `"old\nnew"`, against the
+	/// operation's own documentation, and what let a small overlay's `name`
+	/// replace a base tileset's when the two were merged as peers (#276).
+	///
+	/// `bounds` and the zoom range override here rather than widening — an
+	/// update that cannot narrow a range is not an override — which is also how
+	/// `meta_update`'s separate `bounds` and `minzoom` parameters already
+	/// behave.
+	///
+	/// `vector_layers` keeps [`VectorLayers::merge`] semantics: layers named in
+	/// `other` replace the ones here, layers it does not name are kept. Dropping
+	/// unnamed layers would make every update have to restate all of them.
+	///
+	/// Not touched: `tile_type`, `tile_format`, `tile_schema` and `tile_size`.
+	/// Those describe the tiles themselves and come from
+	/// [`TileSourceMetadata`](crate::TileSourceMetadata), not from a TileJSON
+	/// document.
+	///
+	/// # Errors
+	/// May fail if inserting into `self.values` fails.
+	pub fn overlay(&mut self, other: &TileJSON) -> Result<()> {
+		if other.bounds.is_some() {
+			self.bounds = other.bounds;
+		}
+		if other.center.is_some() {
+			self.center = other.center;
+		}
+
+		// Every value, with no special cases: `attribution` and `description`
+		// are combined by `merge` because no peer's credit may be lost, and
+		// that reasoning does not apply to a value a caller wrote to replace
+		// what is here.
+		for (k, v) in other.values.iter_json_values() {
+			self.values.insert(&k, &v)?;
+		}
+
+		self.vector_layers.merge(&other.vector_layers)?;
+		Ok(())
+	}
+
 	/// Merges `other` into this `TileJSON` with specific rules:
 	/// 1. **Bounds**: extends or sets `self.bounds` if `other.bounds` is present.
 	/// 2. **Center**: overwrites `self.center` if `other.center` is `Some`.
@@ -913,6 +969,84 @@ mod tests {
 		// Original value should remain, and new value should be inserted
 		assert_eq!(tj1.values.string("foo"), Some("bar".to_string()));
 		assert_eq!(tj1.values.string("baz"), Some("qux".to_string()));
+		Ok(())
+	}
+
+	/// The override direction: what the caller wrote replaces what was there.
+	/// `merge` combines peers, which is a different question with a different
+	/// answer — see the note on `overlay`.
+	#[test]
+	fn overlay_replaces_rather_than_combining() -> Result<()> {
+		let mut base = TileJSON::try_from(
+			r#"{"tilejson":"3.0.0","name":"Base","description":"old description",
+			   "attribution":"OSM","version":"1.1"}"#,
+		)?;
+		let update = TileJSON::try_from(r#"{"tilejson":"3.0.0","description":"new description"}"#)?;
+
+		base.overlay(&update)?;
+
+		// The bug this fixes: through `merge` this was "old description\nnew description".
+		assert_eq!(base.string("description"), Some("new description".to_string()));
+		// Keys the update does not carry are left alone.
+		assert_eq!(base.string("name"), Some("Base".to_string()));
+		assert_eq!(base.string("attribution"), Some("OSM".to_string()));
+		assert_eq!(base.string("version"), Some("1.1".to_string()));
+		Ok(())
+	}
+
+	/// `attribution` is the one key `merge` never lets a peer lose. An override
+	/// is not a peer, so it replaces it like anything else.
+	#[test]
+	fn overlay_replaces_attribution() -> Result<()> {
+		let mut base = TileJSON::try_from(r#"{"tilejson":"3.0.0","attribution":"OSM"}"#)?;
+		base.overlay(&TileJSON::try_from(
+			r#"{"tilejson":"3.0.0","attribution":"Someone else"}"#,
+		)?)?;
+
+		assert_eq!(base.string("attribution"), Some("Someone else".to_string()));
+		Ok(())
+	}
+
+	/// An update that cannot narrow a range is not an override. Through `merge`
+	/// these could only ever widen.
+	#[test]
+	fn overlay_narrows_bounds_and_zoom() -> Result<()> {
+		let mut base = TileJSON {
+			bounds: Some(GeoBBox::new(-180.0, -85.0, 180.0, 85.0)?),
+			center: Some(GeoCenter(0.0, 0.0, 2)),
+			..Default::default()
+		};
+		base.set_zoom_min(0);
+		base.set_zoom_max(14);
+
+		let mut update = TileJSON {
+			bounds: Some(GeoBBox::new(0.0, 0.0, 10.0, 10.0)?),
+			center: Some(GeoCenter(5.0, 5.0, 8)),
+			..Default::default()
+		};
+		update.set_zoom_min(6);
+		update.set_zoom_max(10);
+
+		base.overlay(&update)?;
+
+		assert_eq!(base.bounds, Some(GeoBBox::new(0.0, 0.0, 10.0, 10.0)?));
+		assert_eq!(base.center, Some(GeoCenter(5.0, 5.0, 8)));
+		assert_eq!(base.zoom_min(), Some(6));
+		assert_eq!(base.zoom_max(), Some(10));
+		Ok(())
+	}
+
+	/// Absent is not the same as empty: an update carrying nothing changes
+	/// nothing.
+	#[test]
+	fn overlay_leaves_untouched_what_it_does_not_carry() -> Result<()> {
+		let original =
+			TileJSON::try_from(r#"{"tilejson":"3.0.0","name":"Base","attribution":"OSM","minzoom":3,"maxzoom":9}"#)?;
+		let mut base = original.clone();
+
+		base.overlay(&TileJSON::default())?;
+
+		assert_eq!(base, original);
 		Ok(())
 	}
 

@@ -480,11 +480,11 @@ That ring matters wherever a cropped tileset is rendered rather than just stored
 
 Overwrites fields of the source's TileJSON metadata.
 
-Three ways to supply the new values, applied in that order: a whole document via `tilejson` or `tilejson_file` replaces the source's, `tilejson_update` or `tilejson_update_file` merges onto it, and the individual parameters below override whatever the first two produced.
+Three ways to supply the new values, applied in that order: a whole document via `tilejson` or `tilejson_file` replaces the source's, `tilejson_update` or `tilejson_update_file` is laid over it, and the individual parameters below override whatever the first two produced.
 
 Each of those pairs is mutually exclusive: `tilejson` with `tilejson_file`, `tilejson_update` with `tilejson_update_file`, `vector_layers` with `vector_layers_file`. The `_file` form exists to avoid quoting JSON inline.
 
-A merge overwrites scalar fields and `vector_layers`, and widens `bounds` and the zoom range to the union.
+Every field the update carries replaces the one below it, including `bounds` and the zoom range — an update that could only widen them would not be able to narrow a tileset's declared extent. Fields the update does not mention are left as they were. `vector_layers` named in the update replace the ones below; layers it does not name are kept.
 
 The fields and their meaning follow the TileJSON 3.0.0 specification: <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
 
