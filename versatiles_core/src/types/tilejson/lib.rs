@@ -416,8 +416,8 @@ impl TileJSON {
 	/// unnamed layers would make every update have to restate all of them.
 	///
 	/// Not touched: `tile_type`, `tile_format`, `tile_schema` and `tile_size`.
-	/// Those describe the tiles themselves and come from
-	/// [`TileSourceMetadata`](crate::TileSourceMetadata), not from a TileJSON
+	/// Those describe the tiles themselves and come from the source's metadata
+	/// (`TileSourceMetadata`, in `versatiles_container`), not from a TileJSON
 	/// document.
 	///
 	/// # Errors
@@ -453,8 +453,9 @@ impl TileJSON {
 	/// 3. **`minzoom` / `maxzoom`**: widened to the range covering both.
 	/// 4. **`attribution` / `description`**: combined, de-duplicated, so no
 	///    source's credit or text is lost.
-	/// 5. **`tiles` / `data` / `grids`**: dropped — see
-	///    [`SOURCE_SPECIFIC_KEYS`](Self::SOURCE_SPECIFIC_KEYS).
+	/// 5. **`tiles` / `data` / `grids`**: dropped. They name where *one* source's
+	///    tiles live, so carrying either source's value onto a merged result
+	///    would point readers at half the data (see `SOURCE_SPECIFIC_KEYS`).
 	/// 6. **Every other value**: the first source to set it wins; sources that
 	///    do not set it at all still contribute it.
 	/// 7. **Vector layers**: unioned, layers with the same id merged.

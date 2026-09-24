@@ -41,21 +41,21 @@ pub trait TileSink: Send + Sync {
 	///
 	/// Uses `Box<Self>` instead of `self` for object safety.
 	///
-	/// # Known gap: sinks write in place
+	/// # This is the publishing point
 	///
-	/// [`TilesWriter`](crate::TilesWriter) implementations are handed a staging
-	/// path and the caller publishes the result, so a destination only ever holds
-	/// a complete output. **Sinks do not work that way yet.** They open the
-	/// destination directly, which means a run that fails part-way leaves a
-	/// partial container under the name the user asked for — and
-	/// [`MBTilesTileSink`](crate::MBTilesTileSink) removes an existing file
-	/// before it starts, so a failure costs the previous output.
+	/// A sink is opened on a staging location, never on the destination:
+	/// [`open_tile_sink`] wraps it so that the output is moved into place here,
+	/// and only here. `finish` returning `Ok` is the one moment the container is
+	/// known to be complete.
 	///
-	/// [`open_tile_sink`] is the choke point where the same treatment belongs: a
-	/// wrapper holding the staging location and publishing it in `finish`, the
-	/// way [`deduplicating_tile_sink`] wraps for its own concern. Until then,
-	/// `versatiles mosaic assemble` is the user-facing path that does not get the
-	/// guarantee.
+	/// So an implementation finalizes *its* container — metadata, index,
+	/// terminator, flushed buffers — and nothing else. It does not know the
+	/// destination, does not rename, and does not clean up when it fails: a sink
+	/// dropped without `finish`, which is what every failure path does, has its
+	/// staging location removed by the wrapper.
+	///
+	/// The guarantee that buys: a run that fails part-way leaves whatever was at
+	/// the destination exactly as it was.
 	async fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &TilesRuntime) -> Result<()>;
 }
 
