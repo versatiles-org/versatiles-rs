@@ -23,7 +23,7 @@ use std::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use tokio::io::{AsyncReadExt, AsyncWrite};
+use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_tar::{Builder, Header};
 use versatiles_core::{Blob, compression::compress, io::DataWriterTrait};
 use versatiles_derive::context;
@@ -114,8 +114,14 @@ impl TarTilesWriter {
 impl TilesWriter for TarTilesWriter {
 	#[context("writing tar to path '{}'", path.display())]
 	async fn write_to_path(reader: &dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
-		let file = tokio::fs::File::create(path).await?;
-		Self::write_tar(reader, file, runtime).await
+		let mut file = tokio::fs::File::create(path).await?;
+		Self::write_tar(reader, &mut file, runtime).await?;
+		// `tokio::fs::File` cannot flush on drop — a destructor cannot await — so
+		// returning here without this leaves the tail of the archive unwritten
+		// and reports success. `TarTileSink` has always shut its writer down; this
+		// is the same call, in the sibling that was missing it.
+		file.shutdown().await?;
+		Ok(())
 	}
 
 	#[context("writing tar to DataWriter")]

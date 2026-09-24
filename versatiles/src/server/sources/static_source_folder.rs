@@ -302,7 +302,9 @@ mod tests {
 	}
 }
 
-#[cfg(test)]
+/// Symlink behaviour, and therefore these tests, are Unix-only: creating one on
+/// Windows needs a privilege the CI runner does not have.
+#[cfg(all(test, unix))]
 mod symlink_tests {
 	use super::*;
 	use crate::server::sources::static_source::StaticSourceTrait;
@@ -316,18 +318,14 @@ mod symlink_tests {
 		std::fs::write(public.join("index.html"), b"public").unwrap();
 		std::fs::write(temp.path().join("secret.txt"), b"TOP-SECRET").unwrap();
 
-		#[cfg(unix)]
-		{
-			std::os::unix::fs::symlink(temp.path().join("secret.txt"), public.join("leak.txt")).unwrap();
-			std::os::unix::fs::symlink(public.join("index.html"), public.join("inside.html")).unwrap();
-		}
+		std::os::unix::fs::symlink(temp.path().join("secret.txt"), public.join("leak.txt")).unwrap();
+		std::os::unix::fs::symlink(public.join("index.html"), public.join("inside.html")).unwrap();
 
 		(temp, public)
 	}
 
 	/// The lexical check upstream cannot see this: the requested path really is
 	/// under the served folder, and it is the filesystem that leaves.
-	#[cfg(unix)]
 	#[tokio::test]
 	async fn a_symlink_out_of_the_folder_is_refused_by_default() {
 		let (_temp, public) = tree();
@@ -344,7 +342,6 @@ mod symlink_tests {
 
 	/// Off by default does not mean "no symlinks": one whose target is inside
 	/// the folder is serving a file that is being served anyway.
-	#[cfg(unix)]
 	#[tokio::test]
 	async fn a_symlink_inside_the_folder_still_works() {
 		let (_temp, public) = tree();
@@ -361,7 +358,6 @@ mod symlink_tests {
 
 	/// The flag is what an operator serving a tree of links deliberately turns
 	/// on.
-	#[cfg(unix)]
 	#[tokio::test]
 	async fn the_flag_allows_a_symlink_to_leave() {
 		let (_temp, public) = tree();
@@ -375,7 +371,6 @@ mod symlink_tests {
 	}
 
 	/// An ordinary file is unaffected either way.
-	#[cfg(unix)]
 	#[tokio::test]
 	async fn ordinary_files_are_unaffected() {
 		let (_temp, public) = tree();

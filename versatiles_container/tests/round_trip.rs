@@ -759,6 +759,44 @@ async fn convert_into(destination: &std::path::Path, max_zoom: u8, fail: bool) -
 	.await
 }
 
+/// Fails with a description of how two snapshots differ, rather than dumping
+/// both.
+fn describe_difference(name: &str, before: &[(String, Vec<u8>)], after: &[(String, Vec<u8>)]) {
+	if before == after {
+		return;
+	}
+
+	let names = |s: &[(String, Vec<u8>)]| s.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>();
+	assert_eq!(
+		names(before),
+		names(after),
+		"{name}: a failed run changed which files exist at the destination"
+	);
+
+	for ((entry, a), (_, b)) in before.iter().zip(after) {
+		let where_ = if entry.is_empty() {
+			String::new()
+		} else {
+			format!(" in {entry}")
+		};
+		assert_eq!(
+			a.len(),
+			b.len(),
+			"{name}: the destination{where_} changed size after a failed run \
+			 ({} bytes before, {} after) — the writer returned before its bytes were on disk, \
+			 or something published over the destination",
+			a.len(),
+			b.len()
+		);
+		if let Some(offset) = a.iter().zip(b).position(|(x, y)| x != y) {
+			panic!(
+				"{name}: the destination{where_} changed at byte {offset} of {}",
+				a.len()
+			);
+		}
+	}
+}
+
 /// A run that could not read every tile must leave the previous output exactly
 /// as it was, keep the partial result under its own name, and leave no scratch.
 #[rstest]
@@ -783,11 +821,9 @@ async fn an_incomplete_run_keeps_the_previous_output(
 	let result = convert_into(&destination, 3, true).await;
 	assert!(result.is_err(), "a recorded read error must fail the run");
 
-	assert_eq!(
-		snapshot(&destination),
-		before,
-		"{name}: a failed run must leave the previous output byte-identical"
-	);
+	// Not `assert_eq!` on the snapshots: they are megabytes, and the dump is
+	// unreadable in a CI log (and gets truncated). Report what differs instead.
+	describe_difference(name, &before, &snapshot(&destination));
 	assert!(
 		dir.path().join(incomplete).exists(),
 		"{name}: the incomplete output should have been kept"
