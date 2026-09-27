@@ -36,9 +36,35 @@ if ! jq -e . >/dev/null 2>&1 <tags.json; then
   exit 1
 fi
 
-# get new tag (latest) and old tag (previous), keeping the existing ordering
-NEW_TAG=$(jq -r "nth(0; .[] | .name | select(startswith(\"v\")))" tags.json)
-OLD_TAG=$(jq -r "nth(1; .[] | .name | select(startswith(\"v\")))" tags.json)
+# The tags endpoint returns newest first (chronologically, not lexically — it
+# lists v4.10.0 ahead of v4.9.1), so the release being built is the first one.
+NEW_TAG=$(jq -r 'first(.[] | .name | select(startswith("v")))' tags.json)
+
+# The changelog range ends at the previous *stable* tag, skipping prereleases.
+#
+# Taking simply the previous tag broke the release that matters most: promoting
+# v5.0.0-rc.1 to v5.0.0 would span rc.1..5.0.0, which holds nothing but the
+# version bump, so the notes for the actual major release came out empty. Every
+# release now reports what changed since the last stable one — an rc shows the
+# full scope a tester needs, and the final release repeats it for everyone who
+# skipped the rc.
+#
+# A prerelease is any tag with a hyphen, per semver.
+OLD_TAG=$(jq -r --arg new "$NEW_TAG" '
+  first(.[] | .name
+    | select(startswith("v"))
+    | select(. != $new)
+    | select(contains("-") | not))
+' tags.json)
+
+# No stable predecessor (a first release, or a history of prereleases only):
+# fall back to whatever came before, and let git-cliff walk from the beginning
+# if there is nothing at all.
+if [ -z "$OLD_TAG" ] || [ "$OLD_TAG" = "null" ]; then
+  OLD_TAG=$(jq -r --arg new "$NEW_TAG" \
+    'first(.[] | .name | select(startswith("v")) | select(. != $new)) // empty' tags.json)
+fi
+
 export NEW_TAG
 rm -f tags.json
 
@@ -51,14 +77,21 @@ if [ "$NEW_TAG" != "$VERSION" ]; then
   exit 1
 fi
 
-# Assemble grouped release notes for the commits in OLD_TAG..NEW_TAG with git-cliff
+# Assemble grouped release notes for the commits since OLD_TAG with git-cliff
 # (grouping/filtering configured in cliff.toml), then append a compare link.
+#
+# With no predecessor — a first release — there is no range to bound and no two
+# points to compare, so walk the whole history and drop the link.
 {
   # `--strip all` drops the (empty) header/footer; the sed removes any leading
   # blank lines git-cliff emits before the first group.
-  git-cliff --config cliff.toml --strip all "$OLD_TAG..$NEW_TAG" | sed '/./,$!d'
-  echo
-  echo "**Full changelog:** https://github.com/$REPO/compare/$OLD_TAG...$NEW_TAG"
+  if [ -n "$OLD_TAG" ]; then
+    git-cliff --config cliff.toml --strip all "$OLD_TAG..$NEW_TAG" | sed '/./,$!d'
+    echo
+    echo "**Full changelog:** https://github.com/$REPO/compare/$OLD_TAG...$NEW_TAG"
+  else
+    git-cliff --config cliff.toml --strip all "$NEW_TAG" | sed '/./,$!d'
+  fi
 } >notes.txt
 
 # Try to create release (keeps existing drafts untouched on re-run)
