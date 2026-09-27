@@ -333,7 +333,7 @@ tiles:
 
 cors:
   allowed_origins:
-    - "*.example.org"
+    - "https://*.example.org"
 "#
 	);
 

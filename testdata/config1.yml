@@ -9,10 +9,10 @@ server:
 # --- CORS & Headers ----------------------------------------------------------
 # CORS applies to API and tile/static responses.
 cors:
-  # List of allowed origins. Supports glob patterns.
+  # List of allowed origins. Supports `https://*.host` and `https://host:*`.
   allowed_origins:
     - "https://example.org"
-    - "*.other-example.org"
+    - "https://*.other-example.org"
 
   # Preflight cache duration in seconds (Access-Control-Max-Age).
   max_age_seconds: 86400

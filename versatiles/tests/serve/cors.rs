@@ -133,7 +133,7 @@ async fn e2e_cors_headers_absent_for_disallowed_origin() {
 /// Test that wildcard origins work correctly.
 #[tokio::test]
 async fn e2e_cors_wildcard_subdomain() {
-	let server = CorsTestServer::new(&["*.example.org"], None).await;
+	let server = CorsTestServer::new(&["https://*.example.org"], None).await;
 
 	// Subdomain should be allowed
 	let (status, headers) = server

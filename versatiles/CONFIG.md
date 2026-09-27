@@ -75,15 +75,10 @@ cors:
   # - `null` for the null origin (sandboxed iframes, `file://`)
   # - Regular expressions enclosed in slashes like `/^https:\/\/example\.com$/`
   #
-  # Two older forms still work but match raw string edges rather than the
-  # parts of an origin, and are open at one end: `https://example.com*` also
-  # allows `https://example.com.attacker.test`, and `*example.com` also
-  # allows `https://notexample.com`. A scheme-less `*.example.com` is open in
-  # a third way — it allows `http://` as readily as `https://`, while never
-  # matching an origin that carries a port. All three log a warning at
-  # startup. `https://*.example.com` and `https://example.com:*` say what
-  # those are usually reached for, without the open end. An unanchored regular
-  # expression matches any origin *containing* it, so wrap it in `^...$`.
+  # Any other use of `*` is refused at startup, with a replacement in the
+  # error: `https://example.com*`, `*example.com` and a scheme-less
+  # `*.example.com` matched raw string edges rather than the parts of an
+  # origin. A regular expression has to be anchored with `^...$`.
   allowed_origins:
     - "https://example.org"
     - "https://*.example.net"

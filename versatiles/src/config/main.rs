@@ -196,7 +196,10 @@ mod tests {
 					cache_control: None,
 				},
 				cors: CorsConfig {
-					allowed_origins: vec!["https://example.org".to_string(), "*.other-example.org".to_string()],
+					allowed_origins: vec![
+						"https://example.org".to_string(),
+						"https://*.other-example.org".to_string()
+					],
 					max_age_seconds: Some(86400)
 				},
 				extra_response_headers: [

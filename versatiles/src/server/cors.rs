@@ -8,27 +8,20 @@
 //! - `"null"` → the null origin (sandboxed iframes, `file://`)
 //! - `"/^https://(foo|bar)\.example\.com$/"` → regex (leading and trailing `/`)
 //!
-//! Two older glob forms are still accepted and still mean exactly what they
-//! always did, but they match on raw string edges rather than on the structure
-//! of an origin, and both are anchored at one end only:
+//! Every other use of `*` is refused at startup, with a replacement in the
+//! error message. Earlier versions accepted open-ended globs that matched on
+//! raw string edges rather than on the structure of an origin:
 //!
-//! - `"prefix*"` is a `starts_with` test, so `"https://example.com*"` also
-//!   allows `https://example.com.attacker.test`;
-//! - `"*suffix"` is an `ends_with` test, so `"*example.com"` also allows
-//!   `https://notexample.com` — the dot in `"*.example.com"` is what makes that
-//!   form mean what it looks like on the host.
+//! - `"prefix*"` was a `starts_with` test, so `"https://example.com*"` also
+//!   allowed `https://example.com.attacker.test`;
+//! - `"*suffix"` was an `ends_with` test, so `"*example.com"` also allowed
+//!   `https://notexample.com`;
+//! - even `"*.example.com"` named no scheme, so it allowed `http://` as readily
+//!   as `https://`, and never matched an origin carrying a port.
 //!
-//! Even written with the dot, `"*.example.com"` constrains neither end of the
-//! origin: it names no scheme, so `http://a.example.com` is allowed as readily
-//! as `https://`, and it never matches `https://a.example.com:8443`, because a
-//! port sits exactly where the suffix has to end. That combination — looser than
-//! it looks against a MITM, stricter than it looks against a port — is why the
-//! scheme-qualified form exists.
-//!
-//! Each of those logs a warning at startup naming the origins it lets through,
-//! because the failure is otherwise silent. `https://*.example.org` and
-//! `https://host:*` express the two things people reach for them for — any
-//! subdomain, any port — without the open end.
+//! A regex has to be anchored with `^...$`; unanchored, it would match any
+//! origin *containing* it. None of these is reinterpreted, because giving an
+//! existing config a new meaning silently is worse than refusing to start.
 //!
 //! The returned [`CorsLayer`] can be added to the Axum router. We only set
 //! the origin predicate here to avoid surprising defaults; methods/headers
@@ -36,7 +29,7 @@
 
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail, ensure};
 use axum::http::{header::HeaderValue, request::Parts};
 use regex::Regex;
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -189,10 +182,101 @@ impl OriginRule {
 	}
 }
 
+/// Compile one `allowed_origins` pattern other than `*` into an origin check.
+///
+/// The open-ended glob forms of earlier versions are refused rather than
+/// reinterpreted: giving an existing config a new meaning silently is worse
+/// than refusing to start. Each error names a replacement that can be pasted
+/// back into the config.
+fn compile_pattern(pattern: &str) -> Result<Predicate> {
+	if let Some(rule) = OriginRule::parse(pattern) {
+		// "scheme://*.host", "scheme://host:*" → matched on the parts of an
+		// origin, so neither end is left open.
+		return Ok(Box::new(move |origin: &str| rule.matches(origin)));
+	}
+
+	if let Some(source) = pattern.strip_prefix('/').and_then(|p| p.strip_suffix('/'))
+		&& !source.is_empty()
+	{
+		// "/regex/" → full regex, which has to be anchored at both ends.
+		ensure!(
+			source.starts_with('^') && source.ends_with('$'),
+			"the regex {pattern:?} is not anchored, so it would match any origin *containing* it — \
+			 wrap it in ^...$ so it has to match the whole origin, scheme included, \
+			 like \"/^https://maps\\.example\\.org$/\""
+		);
+		let re = Regex::new(source).with_context(|| format!("the regex {pattern:?} does not compile"))?;
+		return Ok(Box::new(move |origin: &str| re.is_match(origin)));
+	}
+
+	if let Some(suffix) = pattern.strip_prefix('*')
+		&& !suffix.is_empty()
+		&& !suffix.contains('*')
+	{
+		if let Some(host) = suffix.strip_prefix('.') {
+			// Scheme-less "*.example.com": the dot keeps `notexample.com` out, but
+			// it names no scheme and, as a suffix test, never matched a port.
+			bail!(
+				"the pattern {pattern:?} names no scheme — write \"https://*.{host}\" for that scheme on the \
+				 default port, or \"https://*.{host}:*\" for any port"
+			);
+		}
+		// "*example.com" is an `ends_with` test, so it also allowed `notexample.com`.
+		bail!(
+			"the pattern {pattern:?} would match any origin ending in {suffix:?}, including \
+			 https://not{suffix} — write \"https://*.{suffix}\" for subdomains and \"https://{suffix}\" for \
+			 the host itself"
+		);
+	}
+
+	if let Some(prefix) = pattern.strip_suffix('*')
+		&& !prefix.is_empty()
+		&& !prefix.contains('*')
+	{
+		// Which migration fits depends on what the prefix was standing in for,
+		// and the pattern does not say — so name all three, each as something that
+		// can be pasted back into the config. The regex is the one for a prefix
+		// that is not a whole host, like `https://dev-*`, where the open end is the
+		// point.
+		bail!(
+			"the pattern {pattern:?} would match any origin starting with {prefix:?}, including \
+			 {prefix}.attacker.test — write \"{prefix}:*\" for any port, \"scheme://*.host\" for any \
+			 subdomain, or the anchored regex \"/^{}.*$/\" when the open end is deliberate",
+			regex::escape(prefix)
+		);
+	}
+
+	// No origin contains a `*`, so as an exact match this would allow nothing.
+	ensure!(
+		!pattern.contains('*'),
+		"the pattern {pattern:?} uses `*` in a position that is not supported — use \"*\", \
+		 \"scheme://*.host\", \"scheme://host:*\" or an anchored regex \"/^...$/\""
+	);
+
+	// Exact match
+	let exact = pattern.to_string();
+	Ok(Box::new(move |origin: &str| origin == exact))
+}
+
 /// Build a `CorsLayer` with a predicate assembled from `allowed_origins`.
 ///
 /// See module docs for supported pattern forms.
 pub fn build_cors_layer(allowed_origins: &[String], max_age_seconds: u64) -> Result<CorsLayer> {
+	// Compile the list of origin checks. Every rejected pattern is reported at
+	// once, so an operator upgrading a config fixes it in one pass rather than
+	// one restart per line.
+	let mut checks: Vec<Predicate> = Vec::with_capacity(allowed_origins.len());
+	let mut rejected: Vec<String> = Vec::new();
+	for pattern in allowed_origins.iter().filter(|pattern| *pattern != "*") {
+		match compile_pattern(pattern) {
+			Ok(check) => checks.push(check),
+			Err(e) => rejected.push(format!("{e:#}")),
+		}
+	}
+	if !rejected.is_empty() {
+		bail!("CORS: invalid allowed_origins:\n  - {}", rejected.join("\n  - "));
+	}
+
 	// `*` in the list means every origin is allowed, so say that literally
 	// rather than by reflecting whatever the client sent.
 	//
@@ -224,73 +308,6 @@ pub fn build_cors_layer(allowed_origins: &[String], max_age_seconds: u64) -> Res
 			.allow_origin(AllowOrigin::any())
 			.max_age(Duration::from_secs(max_age_seconds)));
 	}
-
-	// Compile the list of origin checks.
-	let checks: Vec<Predicate> = allowed_origins
-		.iter()
-		.map(|pattern| {
-			Ok::<Predicate, anyhow::Error>(if pattern == "*" {
-				// Allow everything.
-				Box::new(|_: &str| true)
-			} else if let Some(rule) = OriginRule::parse(pattern) {
-				// "scheme://*.host", "scheme://host:*" → matched on the parts of
-				// an origin, so neither end is left open.
-				Box::new(move |origin: &str| rule.matches(origin))
-			} else if Regex::new(r"^\*[^*]+$")?.is_match(pattern) {
-				// "*suffix" → suffix match
-				let suffix = pattern[1..].to_string();
-				if suffix.starts_with('.') {
-					// Written with the dot, this form at least means what it looks
-					// like on the host — but it is still a string test over the whole
-					// origin, and the two ends of an origin it does not constrain are
-					// worth naming: the scheme it never checks, and the port it cannot
-					// tolerate, since a port sits exactly where the suffix has to end.
-					log::warn!(
-						"CORS: the pattern {pattern:?} names no scheme, so it also allows http://any{suffix} — \
-						 and being a plain suffix test it never matches an origin carrying an explicit port. \
-						 Write \"https://*{suffix}\" for that scheme on the default port, or \
-						 \"https://*{suffix}:*\" for any port"
-					);
-				} else {
-					log::warn!(
-						"CORS: the pattern {pattern:?} matches any origin ending in {suffix:?}, including \
-						 https://not{suffix} — write \"*.{suffix}\" for subdomains only"
-					);
-				}
-				Box::new(move |origin: &str| origin.ends_with(&suffix))
-			} else if Regex::new(r"^[^*]+\*$")?.is_match(pattern) {
-				// "prefix*" → prefix match
-				let prefix = pattern[..pattern.len() - 1].to_string();
-				// Which migration fits depends on what the prefix was standing in
-				// for, and the pattern does not say — so name all three, each as
-				// something that can be pasted back into the config. The regex is
-				// the one for a prefix that is not a whole host, like
-				// `https://dev-*`, where the open end is the point.
-				log::warn!(
-					"CORS: the pattern {pattern:?} matches any origin starting with {prefix:?}, including \
-					 {prefix}.attacker.test — write \"{prefix}:*\" for any port, \"scheme://*.host\" for \
-					 any subdomain, or the anchored regex \"/^{}.*$/\" when the open end is deliberate",
-					regex::escape(&prefix)
-				);
-				Box::new(move |origin: &str| origin.starts_with(&prefix))
-			} else if Regex::new(r"^/.+/$")?.is_match(pattern) {
-				// "/regex/" → full regex (strip slashes)
-				let source = &pattern[1..pattern.len() - 1];
-				if !(source.starts_with('^') && source.ends_with('$')) {
-					log::warn!(
-						"CORS: the regex {source:?} is not anchored, so it matches any origin *containing* it. \
-						 Wrap it in ^...$ unless that is what you meant"
-					);
-				}
-				let re = Regex::new(source)?;
-				Box::new(move |origin: &str| re.is_match(origin))
-			} else {
-				// Exact match
-				let exact = pattern.clone();
-				Box::new(move |origin: &str| origin == exact)
-			})
-		})
-		.collect::<Result<Vec<_>>>()?;
 
 	// Build the layer with a predicate function that ORs all checks.
 	let layer = CorsLayer::new()
@@ -402,21 +419,6 @@ mod tests {
 		assert!(has_acao(&layer, "https://whatever.example").await);
 	}
 
-	#[tokio::test]
-	async fn suffix_match() {
-		let layer = build_cors_layer(&["*example.com".into()], 3600).unwrap();
-		assert!(has_acao(&layer, "https://foo.example.com").await);
-		assert!(has_acao(&layer, "https://bar.example.com").await);
-		assert!(!has_acao(&layer, "https://example.org").await);
-	}
-
-	#[tokio::test]
-	async fn prefix_match() {
-		let layer = build_cors_layer(&["https://dev-*".into()], 3600).unwrap();
-		assert!(has_acao(&layer, "https://dev-01.example.com").await);
-		assert!(!has_acao(&layer, "https://prod-01.example.com").await);
-	}
-
 	/// `scheme://*.host` matches subdomains on label boundaries — the thing the
 	/// suffix glob only approximates.
 	#[tokio::test]
@@ -518,77 +520,76 @@ mod tests {
 		assert_eq!(parse_origin("null"), None);
 	}
 
-	/// The older forms keep working exactly as before — including the loose ends,
-	/// which is the point of not breaking them yet.
-	#[tokio::test]
-	async fn the_legacy_globs_are_unchanged() {
-		let prefix = build_cors_layer(&["https://dev-*".into()], 3600).unwrap();
-		assert!(has_acao(&prefix, "https://dev-01.example.com").await);
-
-		let suffix = build_cors_layer(&["*example.com".into()], 3600).unwrap();
-		assert!(has_acao(&suffix, "https://foo.example.com").await);
-		assert!(has_acao(&suffix, "https://notexample.com").await);
+	/// The error for a list, as the operator would read it in the log.
+	fn rejection(patterns: &[&str]) -> String {
+		let patterns: Vec<String> = patterns.iter().map(ToString::to_string).collect();
+		format!(
+			"{:#}",
+			build_cors_layer(&patterns, 3600).expect_err("the list should be refused")
+		)
 	}
 
-	/// The globs are anchored at one end only. This is the documented behaviour
-	/// — `https://dev-*` matching `https://dev-01.example.com` is the point —
-	/// but it also means a pattern meant to name one host allows anything
-	/// extending it. Pinned here so the trade-off is visible rather than
-	/// discovered.
-	#[tokio::test]
-	async fn a_glob_is_anchored_at_one_end_only() {
-		let prefix = build_cors_layer(&["https://example.com*".into()], 3600).unwrap();
-		assert!(has_acao(&prefix, "https://example.com").await);
-		assert!(has_acao(&prefix, "https://example.com.attacker.test").await);
+	/// The open-ended globs of earlier versions are refused, each with a
+	/// replacement in the message.
+	#[test]
+	fn open_ended_globs_are_refused() {
+		let message = rejection(&["https://example.com*"]);
+		assert!(message.contains("https://example.com.attacker.test"), "{message}");
+		assert!(message.contains(r#""https://example.com:*""#), "{message}");
 
-		let suffix = build_cors_layer(&["*example.com".into()], 3600).unwrap();
-		assert!(has_acao(&suffix, "https://foo.example.com").await);
-		assert!(has_acao(&suffix, "https://notexample.com").await);
+		let message = rejection(&["https://dev-*"]);
+		assert!(message.contains(r#""/^https://dev\-.*$/""#), "{message}");
 
-		// Written with the dot, the suffix form means what it looks like.
-		let dotted = build_cors_layer(&["*.example.com".into()], 3600).unwrap();
-		assert!(has_acao(&dotted, "https://foo.example.com").await);
-		assert!(!has_acao(&dotted, "https://notexample.com").await);
+		let message = rejection(&["*example.com"]);
+		assert!(message.contains("https://notexample.com"), "{message}");
+		assert!(message.contains(r#""https://*.example.com""#), "{message}");
+		assert!(message.contains(r#""https://example.com""#), "{message}");
 	}
 
-	/// A scheme-less `*.example.com` is open at an end the dot does not close.
-	///
-	/// It reads as "any subdomain of example.com", and on the host it is: the dot
-	/// keeps `notexample.com` out. But it constrains neither the scheme nor the
-	/// port, and the two failures point opposite ways — it admits a plain-HTTP
-	/// origin a MITM can occupy, and it refuses the very origin an operator
-	/// running a dev server on `:8443` would expect it to cover, because a port
-	/// sits where the suffix has to end.
-	///
-	/// Pinned as the baseline for #254: the scheme-qualified form is what these
-	/// patterns should migrate to, and this is what they do until they are.
-	#[tokio::test]
-	async fn a_scheme_less_suffix_ignores_the_scheme_and_trips_over_a_port() {
-		let dotted = build_cors_layer(&["*.example.com".into()], 3600).unwrap();
-		assert!(has_acao(&dotted, "https://foo.example.com").await);
-		assert!(
-			has_acao(&dotted, "http://foo.example.com").await,
-			"no scheme is named, so http passes"
-		);
-		assert!(
-			!has_acao(&dotted, "https://foo.example.com:8443").await,
-			"a port breaks the suffix test"
-		);
-		assert!(!has_acao(&dotted, "https://notexample.com").await);
-
-		// The scheme-qualified forms say what was meant, on the parts of an origin.
-		let scoped = build_cors_layer(&["https://*.example.com".into()], 3600).unwrap();
-		assert!(has_acao(&scoped, "https://foo.example.com").await);
-		assert!(!has_acao(&scoped, "http://foo.example.com").await);
-
-		let any_port = build_cors_layer(&["https://*.example.com:*".into()], 3600).unwrap();
-		assert!(has_acao(&any_port, "https://foo.example.com:8443").await);
-		assert!(!has_acao(&any_port, "http://foo.example.com:8443").await);
+	/// A scheme-less `*.example.com` is refused too. On the host the dot does its
+	/// job, but it names no scheme — so it admitted a plain-HTTP origin a MITM
+	/// can occupy — and, as a suffix test, it refused the very origin an operator
+	/// running a dev server on `:8443` would expect it to cover.
+	#[test]
+	fn a_scheme_less_subdomain_pattern_is_refused() {
+		let message = rejection(&["*.example.com"]);
+		assert!(message.contains("names no scheme"), "{message}");
+		assert!(message.contains(r#""https://*.example.com""#), "{message}");
+		assert!(message.contains(r#""https://*.example.com:*""#), "{message}");
 	}
 
-	/// The replacements the warnings name have to work when pasted back.
+	/// Silently anchoring an unanchored regex would change what the config
+	/// means, so it is refused instead.
+	#[test]
+	fn an_unanchored_regex_is_refused() {
+		for pattern in ["/example\\.com/", "/^https://example\\.com/", "/example\\.com$/"] {
+			let message = rejection(&[pattern]);
+			assert!(message.contains("not anchored"), "{message}");
+		}
+		assert!(rejection(&["/^(unclosed$/"]).contains("does not compile"));
+	}
+
+	/// A `*` anywhere else would have been an exact match that nothing satisfies.
+	#[test]
+	fn a_stray_star_is_refused() {
+		for pattern in ["https://ex*ample.com", "https://*.example.*", "**"] {
+			assert!(build_cors_layer(&[pattern.to_string()], 3600).is_err(), "{pattern}");
+		}
+	}
+
+	/// Every bad pattern is named in one error, and `*` elsewhere in the list
+	/// does not hide them.
+	#[test]
+	fn all_rejections_are_reported_together() {
+		let message = rejection(&["*", "https://ok.example.org", "*.a.example", "https://b.example*"]);
+		assert!(message.contains(r#""*.a.example""#), "{message}");
+		assert!(message.contains(r#""https://b.example*""#), "{message}");
+		assert!(!message.contains("ok.example.org"), "{message}");
+	}
+
+	/// The replacements the errors name have to work when pasted back.
 	///
-	/// Each legacy form is warned about with a concrete migration in the message;
+	/// Each legacy form is refused with a concrete migration in the message;
 	/// a suggestion that does not parse, or that stops matching what the operator
 	/// was covering, is worse than no suggestion at all.
 	#[tokio::test]

@@ -712,7 +712,7 @@ cors:
 
 The first four forms are matched on the parts of an origin — scheme, host labels, port — so they cannot be extended from either end.
 
-Two older forms are still accepted, and both warn at startup: `https://example.*` allows anything starting with `https://example.`, including `https://example.attacker.test`, and `*example.org` allows `https://notexample.org`. Prefer `https://*.example.org` for subdomains and `https://example.org:*` for ports. A regex is unanchored unless you write `^...$`, so `/example\.org/` matches any origin containing it.
+Any other use of `*` is refused at startup, and the error names a replacement. Versions before 5.0 accepted open-ended globs that matched on raw string edges: `https://example.*` also allowed `https://example.attacker.test`, `*example.org` allowed `https://notexample.org`, and a scheme-less `*.example.org` allowed `http://` as well as `https://`. Use `https://*.example.org` for subdomains and `https://example.org:*` for ports. A regex must be anchored with `^...$`; `/example\.org/` is refused.
 
 **Custom Response Headers** - Add caching and CDN headers:
 
@@ -774,7 +774,7 @@ server:
 cors:
   allowed_origins:
     - "https://myapp.com"
-    - "*.myapp.dev"
+    - "https://*.myapp.dev"
   max_age_seconds: 86400
 
 extra_response_headers:
