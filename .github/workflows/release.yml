@@ -868,15 +868,71 @@ jobs:
           echo ""
           echo "✓ All npm packages published"
 
+  verify-npm:
+    name: Verify npm publication
+    needs:
+      - prepare
+      - publish-npm
+    runs-on: ubuntu-latest
+    env:
+      PUBLISH_ENABLED: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_npm }}
+    steps:
+      - name: Gate — fast pass when deselected
+        if: env.PUBLISH_ENABLED != 'true'
+        run: echo "npm publish deselected; nothing to verify."
+
+      - name: Checkout
+        if: env.PUBLISH_ENABLED == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Read-after-write against the registry. npm says it plainly on publish —
+      # "Your package is being processed and may take a few minutes to become
+      # available" — so a single `sleep 60` then one `npm view` is a race, and it
+      # is one this workflow lost twice: v4.15.0 and v5.0.0-rc.1 both published
+      # all nine packages and then failed the check, on a 404 that had cleared by
+      # the time anyone looked.
+      #
+      # Every package, not a sample of two: the one that 404'd was darwin-arm64
+      # the first time and the main package the second, so sampling would not
+      # reliably catch a real miss either. `optionalDependencies` is the list
+      # worth checking — it is literally what npm resolves when someone installs
+      # the main package, so a gap there is a broken install for that platform.
       - name: Check publication
         if: env.PUBLISH_ENABLED == 'true'
+        working-directory: ./versatiles_node
         run: |
-          sleep 60
           TAG_VERSION="${{ needs.prepare.outputs.tag }}"
           TAG_VERSION="${TAG_VERSION#v}"
           echo "Verifying publication of version: $TAG_VERSION"
-          npm view @versatiles/versatiles-rs@$TAG_VERSION version
-          npm view @versatiles/versatiles-rs-darwin-arm64@$TAG_VERSION version
+
+          specs=$(node -p "
+            const p = require('./package.json');
+            [p.name, ...Object.keys(p.optionalDependencies ?? {})].join('\\n')
+          ")
+
+          missing=""
+          for name in $specs; do
+            spec="$name@$TAG_VERSION"
+            found=false
+            # ~5 minutes: 10 tries, 30s apart. Propagation has taken over a
+            # minute in practice, and waiting is far cheaper than a false alarm.
+            for attempt in $(seq 1 10); do
+              if npm view "$spec" version >/dev/null 2>&1; then
+                echo "✓ $spec"
+                found=true
+                break
+              fi
+              echo "  … $spec not visible yet (attempt $attempt/10)"
+              sleep 30
+            done
+            [ "$found" = true ] || missing="$missing $spec"
+          done
+
+          if [ -n "$missing" ]; then
+            echo "❌ never became visible on the registry:$missing"
+            exit 1
+          fi
+          echo "✓ All npm packages verified on the registry"
 
   publish-crates:
     name: Publish to crates.io
