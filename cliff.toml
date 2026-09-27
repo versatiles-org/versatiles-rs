@@ -2,15 +2,20 @@
 # scripts/workflow-create-release.sh. This relies on git-cliff's defaults and only
 # overrides what the defaults get wrong for *release notes*:
 #   - a minimal body: no per-version "## [x.y.z]" header, plain group headings,
-#     subject line only;
+#     `scope`-prefixed subject line only. The scope is what makes a one-line
+#     summary legible — "Open containers read-only" says nothing without the
+#     `mbtiles` in front of it;
 #   - commit groups that SKIP noise (style/test/chore/ci/build/release/bench +
 #     merges), which the default would otherwise render as their own sections.
 #
 # A commit marked breaking — `feat!: ...` or a `BREAKING CHANGE:` footer — is
-# labelled as such in the notes. Nothing detects an API removal on its own, so a
-# commit that removes public API has to say so to be flagged: v4.9.0 dropped
-# TileProcessor and ReadTileSource from published crates and the generated notes
-# filed both under "Refactoring".
+# listed in a "Breaking Changes" section at the top *and* flagged in its own
+# group, so the summary is prominent without the group listing being incomplete.
+#
+# Nothing detects a break on its own, so a commit that makes one has to say so.
+# No commit in this repository ever has, which is why that section has never
+# rendered: v4.9.0 dropped TileProcessor and ReadTileSource from published
+# crates and the generated notes filed both under "Refactoring".
 #
 # Internal-only work should NOT appear in release notes. It is dropped either by
 # its type (`ci: ...`) or by its scope on any type (`feat(ci): ...`). Parsers are
@@ -22,11 +27,19 @@
 [changelog]
 header = ""
 body = """
+{% set breaking = commits | filter(attribute="breaking", value=true) -%}
+{%- if breaking | length > 0 %}
+### \u26a0 Breaking Changes
+
+{% for commit in breaking -%}
+- {% if commit.scope %}`{{ commit.scope }}`: {% endif %}{{ commit.message | split(pat="\n") | first | upper_first }}
+{% endfor %}
+{%- endif -%}
 {%- for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | striptags | trim | upper_first }}
 
 {% for commit in commits -%}
-- {% if commit.breaking %}**Breaking:** {% endif %}{{ commit.message | split(pat="\n") | first | upper_first }}
+- {% if commit.breaking %}**Breaking:** {% endif %}{% if commit.scope %}`{{ commit.scope }}`: {% endif %}{{ commit.message | split(pat="\n") | first | upper_first }}
 {% endfor -%}
 {% endfor -%}
 """
