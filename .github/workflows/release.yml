@@ -127,7 +127,7 @@ jobs:
   prepare:
     name: Prepare release
     permissions:
-      contents: write # creates the draft release
+      contents: write # creates the draft release and uploads the install scripts
     needs: pre-flight-checks
     runs-on: ubuntu-latest
     outputs:
@@ -151,6 +151,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-create-release.sh
+
+      # Uploaded here, as soon as the draft release exists, rather than at the
+      # end of the run.
+      #
+      # These two are the most important assets on a release — the README's
+      # documented install is `curl .../releases/latest/download/install-unix.sh
+      # | sudo sh` — and they used to go up in the very last job, after every
+      # build and both publishes. So any late failure produced a release with
+      # binaries and no installer, and the moment such a release became
+      # `latest`, that documented URL started returning 404. v4.15.0 did exactly
+      # that. Nothing about generating them depends on the builds, so nothing
+      # about uploading them should either.
+      #
+      # The rewrite pins each release's script to its own tag, so the installer
+      # attached to v1.2.3 fetches v1.2.3's tarballs rather than whatever is
+      # latest at the time someone runs it.
+      - name: Upload install scripts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.create_release.outputs.tag }}
+        run: |
+          mkdir -p release
+          OLD_URL="versatiles-org/versatiles-rs/releases/latest/download/"
+          NEW_URL="versatiles-org/versatiles-rs/releases/download/${TAG}/"
+          sed "s|${OLD_URL}|${NEW_URL}|g" ./scripts/install-unix.sh > ./release/install-unix.sh
+          sed "s|${OLD_URL}|${NEW_URL}|g" ./scripts/install-windows.ps1 > ./release/install-windows.ps1
+          gh release upload "${TAG}" ./release/install-unix.sh ./release/install-windows.ps1 --clobber
 
       - id: detect_prerelease
         name: Detect prerelease type
@@ -1080,19 +1107,6 @@ jobs:
         run: |
           echo "TAG=${{ needs.prepare.outputs.tag }}" >> $GITHUB_ENV
           echo "IS_PRERELEASE=${{ needs.prepare.outputs.is_prerelease }}" >> $GITHUB_ENV
-
-      - name: Update install scripts
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p release
-          OLD_URL="versatiles-org/versatiles-rs/releases/latest/download/"
-          NEW_URL="versatiles-org/versatiles-rs/releases/download/${TAG}/"
-          sed "s|${OLD_URL}|${NEW_URL}|g" ./scripts/install-unix.sh > ./release/install-unix.sh
-          sed "s|${OLD_URL}|${NEW_URL}|g" ./scripts/install-windows.ps1 > ./release/install-windows.ps1
-          gh auth status -h github.com
-          gh release upload "${TAG}" ./release/install-unix.sh --clobber
-          gh release upload "${TAG}" ./release/install-windows.ps1 --clobber
 
       - name: Finalize the release
         env:
