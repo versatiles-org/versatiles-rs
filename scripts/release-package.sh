@@ -53,43 +53,24 @@ validate_specific_version() {
 	local version="$1"
 	local current_version="$2"
 
-	# Validate it's a valid semver using cargo-release
-	if ! cargo release version "$version" --workspace 2>/dev/null | grep -q "Upgrading workspace to version"; then
-		log_error "Invalid semver version: $version"
-		exit 1
-	fi
-
-	# Check it's not the same as current
 	if [ "$version" = "$current_version" ]; then
 		log_error "New version must be different from current version ($current_version)"
 		exit 1
 	fi
 
-	# Check it's greater than current version using Node.js + semver
-	local is_greater
-	if command -v node >/dev/null 2>&1; then
-		is_greater=$(node -e "
-			try {
-				const semver = require('semver');
-				console.log(semver.gt('$version', '$current_version'));
-			} catch (e) {
-				// Fallback: basic comparison
-				const v1 = '$version'.split(/[-.]/).map(p => parseInt(p) || p);
-				const v2 = '$current_version'.split(/[-.]/).map(p => parseInt(p) || p);
-				for (let i = 0; i < Math.max(v1.length, v2.length); i++) {
-					if ((v1[i] || 0) > (v2[i] || 0)) { console.log('true'); process.exit(0); }
-					if ((v1[i] || 0) < (v2[i] || 0)) { console.log('false'); process.exit(0); }
-				}
-				console.log('false');
-			}
-		" 2>/dev/null)
-
-		if [ "$is_greater" != "true" ]; then
-			log_error "New version ($version) must be greater than current version ($current_version)"
-			exit 1
-		fi
-	else
-		log_error "Node.js not found, cannot validate version ordering"
+	# `cargo release version` without `--execute` is a dry run, and it checks both
+	# things worth checking: that the version parses, and that no crate would move
+	# backwards. Let it be the judge rather than re-deriving semver here.
+	#
+	# `2>&1`, not `2>/dev/null`: cargo-release writes this to **stderr**. Discarding
+	# it meant the grep below never matched and *every* explicit version was
+	# rejected as invalid semver, however well formed. `calculate_new_version`
+	# redirects correctly, which is why the keyword path always worked.
+	local output
+	if ! output=$(cargo release version "$version" --workspace 2>&1) ||
+		! grep -q "Upgrading workspace to version" <<<"$output"; then
+		log_error "Cannot release version $version (current: $current_version):"
+		grep -E "^error|^warning" <<<"$output" | head -3
 		exit 1
 	fi
 
