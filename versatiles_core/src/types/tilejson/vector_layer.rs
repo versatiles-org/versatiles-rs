@@ -174,7 +174,12 @@ impl VectorLayers {
 			"water_polygons_labels",
 			"water_polygons",
 		]) {
-			TileSchema::VectorShortbread1_0
+			// 1.0 and 1.1 define the same layers; only 1.1 declares `streets.motorcar`.
+			if self.0.get("streets").is_some_and(|l| l.fields.contains_key("motorcar")) {
+				TileSchema::VectorShortbread1_1
+			} else {
+				TileSchema::VectorShortbread1_0
+			}
 		} else {
 			TileSchema::VectorOther
 		}
@@ -792,8 +797,14 @@ mod tests {
 				},
 			);
 		}
-		let vl = VectorLayers(map);
+		let mut vl = VectorLayers(map);
 		assert_eq!(vl.tile_schema(), VectorShortbread1_0);
+
+		vl.0.get_mut("streets")
+			.unwrap()
+			.fields
+			.insert("motorcar".to_string(), "Boolean".to_string());
+		assert_eq!(vl.tile_schema(), VectorShortbread1_1);
 	}
 
 	#[test]
