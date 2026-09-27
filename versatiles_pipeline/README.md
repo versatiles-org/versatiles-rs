@@ -497,7 +497,7 @@ The fields and their meaning follow the TileJSON 3.0.0 specification: <https://g
 - _`fillzoom`: 0-30 (optional)_ - Zoom level from which clients should fill from the parent tile. Defaults to the source's.
 - _`legend`: String (optional)_ - Legend text. Defaults to the source's.
 - _`name`: String (optional)_ - Name of the tileset. Defaults to the source's.
-- _`schema`: TileSchema (optional)_ - Values: `rgb`, `rgba`, `dem/mapbox`, `dem/terrarium`, `dem/versatiles`, `openmaptiles`, `shortbread@1.0`, `other`. What the tiles contain. Defaults to the source's.
+- _`schema`: TileSchema (optional)_ - Values: `rgb`, `rgba`, `dem/mapbox`, `dem/terrarium`, `dem/versatiles`, `openmaptiles`, `shortbread@1.0`, `shortbread@1.1`, `other`. What the tiles contain. Defaults to the source's.
 - _`tilejson`: TileJSON as JSON (optional)_ - Complete TileJSON document, as a JSON string. Defaults to the source's metadata.
 - _`tilejson_file`: path (optional)_ - Path to a file holding a complete TileJSON document. Defaults to the source's metadata.
 - _`tilejson_update`: TileJSON as JSON (optional)_ - Partial TileJSON document to merge on, as a JSON string. Defaults to merging nothing.
