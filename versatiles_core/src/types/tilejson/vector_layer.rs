@@ -800,7 +800,8 @@ mod tests {
 		let mut vl = VectorLayers(map);
 		assert_eq!(vl.tile_schema(), VectorShortbread1_0);
 
-		vl.0.get_mut("streets")
+		vl.0
+			.get_mut("streets")
 			.unwrap()
 			.fields
 			.insert("motorcar".to_string(), "Boolean".to_string());
