@@ -182,6 +182,19 @@ impl OriginRule {
 	}
 }
 
+/// Whether `value` is exactly `scheme://host`, with no port and a host that
+/// ends where a host can end — so that appending `:*` names that host.
+///
+/// Comparing against the parsed origin's own spelling rules out a port, a
+/// path and a trailing dot in one go: `https://example.` parses, but to a host
+/// without the dot.
+fn is_whole_host(value: &str) -> bool {
+	parse_origin(value).is_some_and(|origin| {
+		format!("{}://{}", origin.scheme, origin.host).eq_ignore_ascii_case(value)
+			&& origin.host.ends_with(|c: char| c.is_ascii_alphanumeric() || c == ']')
+	})
+}
+
 /// Compile one `allowed_origins` pattern other than `*` into an origin check.
 ///
 /// The open-ended glob forms of earlier versions are refused rather than
@@ -234,14 +247,19 @@ fn compile_pattern(pattern: &str) -> Result<Predicate> {
 		&& !prefix.contains('*')
 	{
 		// Which migration fits depends on what the prefix was standing in for,
-		// and the pattern does not say — so name all three, each as something that
-		// can be pasted back into the config. The regex is the one for a prefix
-		// that is not a whole host, like `https://dev-*`, where the open end is the
-		// point.
+		// and the pattern does not say — so name each that fits, as something
+		// that can be pasted back into the config. The port form only fits a
+		// prefix that is a whole `scheme://host`: for `https://dev-*` it would
+		// name a host called `dev-`, which is where the regex comes in.
+		let any_port = if is_whole_host(prefix) {
+			format!("\"{prefix}:*\" for any port, ")
+		} else {
+			String::new()
+		};
 		bail!(
 			"the pattern {pattern:?} would match any origin starting with {prefix:?}, including \
-			 {prefix}.attacker.test — write \"{prefix}:*\" for any port, \"scheme://*.host\" for any \
-			 subdomain, or the anchored regex \"/^{}.*$/\" when the open end is deliberate",
+			 {prefix}.attacker.test — write {any_port}\"scheme://*.host\" for any subdomain, or the \
+			 anchored regex \"/^{}.*$/\" when the open end is deliberate",
 			regex::escape(prefix)
 		);
 	}
@@ -539,6 +557,14 @@ mod tests {
 
 		let message = rejection(&["https://dev-*"]);
 		assert!(message.contains(r#""/^https://dev\-.*$/""#), "{message}");
+
+		// The port form is only offered where the prefix is a whole host; for the
+		// rest it would name a host nobody has.
+		for pattern in ["https://dev-*", "https://example.*", "https://example.com:80*"] {
+			let message = rejection(&[pattern]);
+			assert!(!message.contains(":*\" for any port"), "{message}");
+		}
+		assert!(rejection(&["http://[::1]*"]).contains(r#""http://[::1]:*" for any port"#));
 
 		let message = rejection(&["*example.com"]);
 		assert!(message.contains("https://notexample.com"), "{message}");
