@@ -52,6 +52,11 @@ Special characters in the username or password must be percent-encoded
 https://user%40company:p%40ssw0rd@example.org/tiles.versatiles
 ```
 
+The URL is the only place an HTTP password can go, so it shares the exposure
+described under [SFTP](#sftp): a command line is visible to every local user
+while it runs and is kept in the shell history. With `versatiles serve`, put the
+URL in a configuration file (`-c`) readable only by you instead.
+
 ### WebDAV
 
 WebDAV servers speak HTTP/HTTPS, so no special syntax is needed.
@@ -71,7 +76,6 @@ are available over SFTP: `versatiles` and `pmtiles`.
 ```text
 sftp://fileserver.example.org/data/world.versatiles
 sftp://user@fileserver.example.org/data/world.versatiles
-sftp://user:password@fileserver.example.org/data/world.versatiles
 sftp://fileserver.example.org:2222/data/world.versatiles
 ```
 
@@ -86,7 +90,8 @@ different file, or disables the check when set to `off`.
 
 **Authentication** is tried in this order:
 
-1. Password embedded in the URL (`sftp://user:password@host/…`)
+1. Password embedded in the URL (`sftp://user:password@host/…`) — see the note
+   below before using it
 2. Explicit identity file: `--ssh-identity`, or the `VERSATILES_SSH_IDENTITY`
    environment variable when the flag is not given
 3. SSH agent
@@ -100,8 +105,9 @@ different file, or disables the check when set to `off`.
 > the places the shell put it. Prefer a key: options 2 to 5 above all avoid
 > writing the secret down anywhere.
 
-In a VPL pipeline, `from_container` takes `ssh_identity="…"` for one source, which overrides both
-of the above — that is how a single pipeline reads from two SFTP hosts needing different keys.
+In a VPL pipeline, `from_container` takes `ssh_identity="…"` for one source, which overrides
+`--ssh-identity` and `VERSATILES_SSH_IDENTITY` — that is how a single pipeline reads from two SFTP
+hosts needing different keys.
 
 Writing to SFTP:
 
@@ -196,11 +202,11 @@ versatiles probe tiles.db[,mbtiles]
 # HTTPS with basic auth (e.g., WebDAV)
 versatiles probe https://user:password@webdav.example.org/tiles.versatiles
 
-# SFTP read with password auth
-versatiles probe sftp://user:password@fileserver.example.org/data/tiles.versatiles
-
-# SFTP read with SSH agent or key (no password in URL)
+# SFTP read, authenticated by SSH agent or key
 versatiles probe sftp://user@fileserver.example.org/data/tiles.versatiles
+
+# SFTP read with an explicit key file
+versatiles probe --ssh-identity ~/.ssh/tiles_ed25519 sftp://user@fileserver.example.org/data/tiles.versatiles
 
 # SFTP write
 versatiles convert world.mbtiles sftp://user@fileserver.example.org/tiles/world.versatiles
