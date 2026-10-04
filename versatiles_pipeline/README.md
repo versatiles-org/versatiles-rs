@@ -43,7 +43,7 @@ Gridded statistics — population per cell, sensor readings, anything aggregated
 ```vpl
 from_grid epsg=3035 size=1000 bbox=[5.8,47.2,15.1,55.1]
   | vector_update_properties data_source_path="population.csv"
-      id_field_tiles="id" id_field_data="GRD_ID"
+      layer_name="grid" id_field_tiles="id" id_field_data="GRD_ID"
 ```
 
 `from_grid` produces squares of a fixed size in a projected CRS, `from_h3` produces H3 hexagons addressed by resolution. See their own sections for ids, projections and the zoom level each starts at.

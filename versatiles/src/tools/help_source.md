@@ -28,7 +28,10 @@ Connection details:
 
 - Connect timeout: 30 s
 - TCP keepalive: 60 s (no overall timeout — large range reads can take minutes)
-- Automatic retry on transient failures (up to 2 retries with backoff)
+- Automatic retry on transient failures: up to 32 retries, waiting 1 s at first
+  and doubling up to 60 s, so roughly 25–30 minutes before giving up. Tune it
+  with `VERSATILES_NET_MAX_RETRIES`, `VERSATILES_NET_RETRY_BASE_MS` and
+  `VERSATILES_NET_RETRY_MAX_MS`; the same policy covers SFTP and every upload
 - Adaptive range splitting when the server rejects oversized requests
 
 ### HTTP and HTTPS with Basic Authentication
@@ -70,8 +73,8 @@ https://user:password@webdav.example.org/tiles/world.versatiles
 ### SFTP
 
 SFTP URLs are supported for both **reading** and **writing** when VersaTiles
-is built with the `sftp` feature. Only formats with data-reader/writer support
-are available over SFTP: `versatiles` and `pmtiles`.
+is built with the `sftp` feature. `versatiles` and `pmtiles` can be read and
+written over SFTP; `tar` can be written but not read.
 
 ```text
 sftp://fileserver.example.org/data/world.versatiles
@@ -80,8 +83,9 @@ sftp://fileserver.example.org:2222/data/world.versatiles
 ```
 
 Default port is **22**. Connect timeout is 30 s. TCP and SSH keepalive both fire every 15 s
-(`VERSATILES_SFTP_KEEPALIVE_SECS`), and a single SFTP operation may take 30 s
-(`VERSATILES_SFTP_TIMEOUT_MS`) before it is given up on.
+(`VERSATILES_SFTP_KEEPALIVE_SECS`). A connection that receives nothing for 30 s
+(`VERSATILES_SFTP_TIMEOUT_MS`) is dropped and reconnected by the retry policy
+above — a server that has stopped answering, not a slow transfer, is what ends it.
 
 **Host keys** are verified against `~/.ssh/known_hosts` before authentication,
 OpenSSH `accept-new` style: an unknown host is recorded and accepted, a host
@@ -174,7 +178,7 @@ JSON fields:
 - `versatiles` - VersaTiles format (*.versatiles) — supports HTTP, HTTPS, SFTP
 - `pmtiles` - PMTiles format (*.pmtiles) — supports HTTP, HTTPS, SFTP
 - `mbtiles` - MBTiles SQLite format (*.mbtiles) — local files only
-- `tar` - Tar archive (*.tar) — local files only
+- `tar` - Tar archive (*.tar) — local files; can also be written to SFTP
 - `vpl` - VersaTiles Pipeline Language (*.vpl)
 - Directory containing tiles in `{z}/{x}/{y}.{ext}` structure
 
