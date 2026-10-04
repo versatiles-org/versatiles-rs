@@ -55,10 +55,12 @@ download() {
 }
 
 verify_provenance() {
-	if command -v gh >/dev/null 2>&1; then
-		gh attestation verify "$1" --repo "$REPO"
-	else
+	if ! command -v gh >/dev/null 2>&1; then
 		echo "skipped: gh is not installed"
+	elif ! gh auth status >/dev/null 2>&1; then
+		echo "skipped: gh is not logged in (run \`gh auth login\` or set GH_TOKEN)"
+	else
+		gh attestation verify "$1" --repo "$REPO"
 	fi
 }
 

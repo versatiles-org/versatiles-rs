@@ -31,9 +31,9 @@ env:
   TAG: ${{ inputs.tag }}
 
 jobs:
-  # Checksums and provenance for every file, once. `gh` is on every Linux
-  # runner, which the Windows ARM64 image does not promise, so the platform
-  # jobs below check their checksum only.
+  # Checksums and provenance for every file in the release, in one place —
+  # including the ones no platform job below downloads. Each platform job also
+  # checks the checksum and provenance of its own file.
   verify:
     name: "Verify checksums and provenance"
     runs-on: ubuntu-latest
@@ -91,6 +91,7 @@ jobs:
       - name: Run the released binary
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           SMOKE_DEB: ${{ matrix.deb }}
         run: ./scripts/smoke-test-release.sh "$TAG" "${{ matrix.asset }}"
 
