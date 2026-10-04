@@ -54,7 +54,7 @@
   "license": "MIT",
   "author": "Michael Kreil <versatiles@michael-kreil.de>",
   "engines": {
-    "node": ">= 16"
+    "node": ">= 22"
   },
   "scripts": {
     "artifacts": "napi artifacts",

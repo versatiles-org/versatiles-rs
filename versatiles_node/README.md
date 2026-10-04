@@ -532,7 +532,7 @@ npx tsx examples/<filename>.ts
 
 ### Requirements
 
-- Node.js >= 16
+- Node.js >= 22
 - Rust toolchain (for building from source)
 
 ### Build Process

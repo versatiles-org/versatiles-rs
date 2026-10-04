@@ -911,7 +911,7 @@ VersaTiles is built with Rust and includes Node.js bindings (NAPI-RS).
 **Required:**
 
 - Rust 1.95+ ([installation](https://www.rust-lang.org/tools/install))
-- Node.js 20+ (for Node.js bindings)
+- Node.js 22.12+ (for Node.js bindings)
 
 **Optional:**
 

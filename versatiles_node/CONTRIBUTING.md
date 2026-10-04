@@ -6,7 +6,7 @@ Thank you for your interest in contributing to the VersaTiles Node.js bindings!
 
 ### Prerequisites
 
-- Node.js >= 16
+- Node.js >= 22.12 (the build and test tools need it; the published package needs >= 22)
 - Rust toolchain (stable)
 - Cargo
 

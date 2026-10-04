@@ -310,7 +310,7 @@ Re-publish missing packages manually (see Manual npm Publish section above).
 
 - cargo-release: `cargo install cargo-release`
 - GitHub CLI: `brew install gh` or `apt install gh`
-- Node.js >= 16
+- Node.js >= 22.12
 
 ## Reference
 
