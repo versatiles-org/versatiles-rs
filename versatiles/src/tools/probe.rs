@@ -10,7 +10,7 @@ use versatiles_container::{
 	ContentsReport, LayerSizeEntry, ProbeReport, TileSizeReport, TileSource, TilesRuntime, VectorContentsReport,
 	probe::sampling::parse_sample, probe_report,
 };
-use versatiles_core::{ProbeDepth, utils::PrettyPrint};
+use versatiles_core::{ProbeDepth, io::location_for_display, utils::PrettyPrint};
 use versatiles_geometry::vector_tile::LayerStats;
 
 #[derive(clap::Args, Debug)]
@@ -39,7 +39,7 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
-	log::info!("probe {:?}", arguments.filename);
+	log::info!("probe {:?}", location_for_display(&arguments.filename));
 
 	let sample = parse_sample(arguments.sample)?;
 	let reader = runtime.reader_from_str(&arguments.filename).await?;
@@ -51,7 +51,11 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		3..=255 => ProbeDepth::TileContents,
 	};
 
-	log::debug!("probing {:?} at depth {:?}", arguments.filename, level);
+	log::debug!(
+		"probing {:?} at depth {:?}",
+		location_for_display(&arguments.filename),
+		level
+	);
 	probe(&*reader, level, runtime, sample).await?;
 
 	Ok(())

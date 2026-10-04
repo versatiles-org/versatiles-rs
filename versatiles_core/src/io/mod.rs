@@ -17,9 +17,10 @@
 //! }
 //! ```
 
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 
 use anyhow::{Result, ensure};
+use regex::Regex;
 
 /// The VersaTiles half of the `User-Agent` header, fixed at compile time.
 ///
@@ -132,6 +133,22 @@ pub fn url_for_display(url: &reqwest::Url) -> String {
 		return url.to_string();
 	}
 	url.to_string()
+}
+
+/// A location exactly as the user typed it, with the password of every URL in
+/// it removed.
+///
+/// [`url_for_display`] needs a parsed URL, but a CLI argument is printed long
+/// before it becomes one — and it need not be one: `[osm]sftp://u:pw@host/x`,
+/// a JSON source, an inline VPL pipeline naming several URLs. So this works on
+/// the text, dropping `:password` from any `scheme://user:password@` in it and
+/// leaving everything else as written, the username included.
+#[must_use]
+pub fn location_for_display(text: &str) -> String {
+	static USERINFO: LazyLock<Regex> = LazyLock::new(|| {
+		Regex::new(r#"([A-Za-z][A-Za-z0-9+.\-]*://[^\s/?#@:\[\]"']*):[^\s/?#@"']*@"#).expect("valid regex")
+	});
+	USERINFO.replace_all(text, "$1@").into_owned()
 }
 
 /// Whether `text` is a non-empty RFC 9110 token, the only thing a product
@@ -287,6 +304,55 @@ mod url_display_tests {
 		] {
 			let url = reqwest::Url::parse(input).unwrap();
 			assert_eq!(url_for_display(&url), input);
+		}
+	}
+
+	/// The forms a location takes on the command line before anything parses it.
+	#[test]
+	fn a_location_loses_every_password_and_nothing_else() {
+		for (input, expected) in [
+			("sftp://alice:hunter2@example.org/x", "sftp://alice@example.org/x"),
+			(
+				"https://alice:hunter2@example.org:8443/a.pmtiles",
+				"https://alice@example.org:8443/a.pmtiles",
+			),
+			(
+				"[osm]sftp://alice:hunter2@example.org/x",
+				"[osm]sftp://alice@example.org/x",
+			),
+			(
+				"sftp://alice:hunter2@example.org/x[osm,versatiles]",
+				"sftp://alice@example.org/x[osm,versatiles]",
+			),
+			(
+				r#"{"location":"https://alice:hunter2@example.org/a"}"#,
+				r#"{"location":"https://alice@example.org/a"}"#,
+			),
+			(
+				"[,vpl](from_stacked [ from_container filename=\"sftp://a:hunter2@h/x\", from_container filename=\"https://b:hunter2@h/y\" ])",
+				"[,vpl](from_stacked [ from_container filename=\"sftp://a@h/x\", from_container filename=\"https://b@h/y\" ])",
+			),
+			// Percent-encoded characters are part of the password, not its end.
+			("sftp://alice:p%40ss%3Aword@example.org/x", "sftp://alice@example.org/x"),
+			("sftp://alice:@example.org/x", "sftp://alice@example.org/x"),
+		] {
+			let shown = location_for_display(input);
+			assert_eq!(shown, expected);
+			assert!(!shown.contains("hunter2"), "password leaked: {shown}");
+		}
+	}
+
+	#[test]
+	fn a_location_without_a_password_is_unchanged() {
+		for input in [
+			"tiles.versatiles",
+			"/data/a:b@c.versatiles",
+			"C:\\tiles\\world.mbtiles",
+			"sftp://alice@example.org/x",
+			"https://example.org/a?user=x:y@z",
+			"[osm]https://example.org/a.pmtiles",
+		] {
+			assert_eq!(location_for_display(input), input);
 		}
 	}
 }

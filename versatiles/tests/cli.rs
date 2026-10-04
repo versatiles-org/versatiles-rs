@@ -1,6 +1,6 @@
 //! End-to-end tests that run the built binary as a command.
 //!
-//! One test target rather than four; see the note in `serve.rs`.
+//! One test target rather than several; see the note in `serve.rs`.
 
 #![cfg(feature = "cli")]
 #![expect(
@@ -19,6 +19,8 @@ mod command;
 mod convert;
 #[path = "cli/convert_integrity.rs"]
 mod convert_integrity;
+#[path = "cli/credentials.rs"]
+mod credentials;
 #[path = "cli/help.rs"]
 mod help;
 #[path = "cli/reduce.rs"]

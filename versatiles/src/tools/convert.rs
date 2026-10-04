@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 use versatiles_container::{
 	DataLocation, DataSource, TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str,
 };
-use versatiles_core::{GeoBBox, GeoCrop, TileCompression, TileFormat, TilePyramid};
+use versatiles_core::{GeoBBox, GeoCrop, TileCompression, TileFormat, TilePyramid, io::location_for_display};
 use versatiles_derive::context;
 use versatiles_pipeline::{check_pipeline, vpl::parse_vpl};
 
@@ -156,7 +156,11 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
-	log::info!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
+	log::info!(
+		"convert from {:?} to {:?}",
+		location_for_display(&arguments.input_file),
+		location_for_display(&arguments.output_file)
+	);
 
 	// Conversion must fail loudly on any silently-dropped tile: a truncated
 	// output would be indistinguishable from a successful conversion.
@@ -172,7 +176,10 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		return dry_run(arguments);
 	}
 
-	log::trace!("convert: opening source '{}'", arguments.input_file);
+	log::trace!(
+		"convert: opening source '{}'",
+		location_for_display(&arguments.input_file)
+	);
 	let open_start = Instant::now();
 	let reader = runtime.reader_from_str(&arguments.input_file).await?;
 	log::trace!("convert: source opened in {:.2}s", open_start.elapsed().as_secs_f32());
@@ -198,7 +205,10 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		format_effort,
 	};
 
-	log::trace!("convert: starting tile stream to '{}'", arguments.output_file);
+	log::trace!(
+		"convert: starting tile stream to '{}'",
+		location_for_display(&arguments.output_file)
+	);
 	let stream_start = Instant::now();
 	convert_tiles_container_to_str(reader, parameters, &arguments.output_file, runtime.clone()).await?;
 	log::trace!(
@@ -258,7 +268,7 @@ fn tile_pyramid(arguments: &Subcommand) -> Result<(Option<TilePyramid>, Option<G
 /// Only a VPL source can be checked statically; for a plain container there is
 /// nothing to validate short of opening it, which is exactly what `--dry-run`
 /// promises not to do.
-#[context("Checking '{}'", arguments.input_file)]
+#[context("Checking '{}'", location_for_display(&arguments.input_file))]
 fn dry_run(arguments: &Subcommand) -> Result<()> {
 	let source = DataSource::parse(&arguments.input_file)?;
 

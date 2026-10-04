@@ -19,6 +19,7 @@ use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 use versatiles_container::{TileSource, TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str};
+use versatiles_core::io::location_for_display;
 use versatiles_derive::context;
 use versatiles_pipeline::{PipelineReader, VPLNode, VPLPipeline};
 
@@ -57,7 +58,11 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		bail!("an output file is required unless --print is given");
 	};
 
-	log::info!("reduce {:?} to {output_file:?}", arguments.input_file);
+	log::info!(
+		"reduce {:?} to {:?}",
+		location_for_display(&arguments.input_file),
+		location_for_display(output_file)
+	);
 
 	// Same reasoning as `convert`: a tile dropped by a read error would make the reduced output
 	// indistinguishable from a correct one, and the whole point is that the output is trustworthy.

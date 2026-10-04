@@ -38,7 +38,9 @@ use std::{
 use anyhow::{Context, Result, anyhow, bail};
 #[cfg(test)]
 use assert_fs::NamedTempFile;
-use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp, DataWriterTrait, url_for_display};
+use versatiles_core::io::{
+	DataReader, DataReaderBlob, DataReaderHttp, DataWriterTrait, location_for_display, url_for_display,
+};
 #[cfg(feature = "sftp")]
 use versatiles_core::io::{DataReaderSftp, DataWriterSftp, sftp_utils};
 #[cfg(test)]
@@ -156,7 +158,7 @@ impl ContainerRegistry {
 	}
 
 	/// Open a reader for a path or URL given as a string.
-	#[context("Failed to get reader from string '{data_source}'")]
+	#[context("Failed to get reader from string '{}'", location_for_display(data_source))]
 	pub async fn reader_from_str(&self, data_source: &str, runtime: TilesRuntime) -> Result<SharedTileSource> {
 		self.reader(DataSource::parse(data_source)?, runtime).await
 	}
