@@ -34,7 +34,7 @@ repository = "https://github.com/versatiles-org/versatiles-rs"
 # a compile error inside a dependency rather than cargo's "requires rustc"
 # message.
 rust-version = "1.95"
-version = "5.0.0-rc.2"
+version = "5.0.0"
 exclude = [
 	".githooks/",
 	".github/",
@@ -243,10 +243,10 @@ pretty_assertions = "1.4.1"
 rstest = { version = "0.27.0", default-features = false }
 tempfile = "3.27.0"
 
-versatiles = { version = "5.0.0-rc.2", path = "versatiles", default-features = false }
-versatiles_container = { version = "5.0.0-rc.2", path = "versatiles_container", default-features = false }
-versatiles_core = { version = "5.0.0-rc.2", path = "versatiles_core", default-features = false }
-versatiles_derive = { version = "5.0.0-rc.2", path = "versatiles_derive", default-features = false }
-versatiles_geometry = { version = "5.0.0-rc.2", path = "versatiles_geometry", default-features = false }
-versatiles_image = { version = "5.0.0-rc.2", path = "versatiles_image", default-features = false }
-versatiles_pipeline = { version = "5.0.0-rc.2", path = "versatiles_pipeline", default-features = false }
+versatiles = { version = "5.0.0", path = "versatiles", default-features = false }
+versatiles_container = { version = "5.0.0", path = "versatiles_container", default-features = false }
+versatiles_core = { version = "5.0.0", path = "versatiles_core", default-features = false }
+versatiles_derive = { version = "5.0.0", path = "versatiles_derive", default-features = false }
+versatiles_geometry = { version = "5.0.0", path = "versatiles_geometry", default-features = false }
+versatiles_image = { version = "5.0.0", path = "versatiles_image", default-features = false }
+versatiles_pipeline = { version = "5.0.0", path = "versatiles_pipeline", default-features = false }
