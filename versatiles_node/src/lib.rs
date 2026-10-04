@@ -18,7 +18,7 @@
 //!
 //! - [`TileSource`]: Read tiles from various container formats
 //! - [`TileServer`]: HTTP server for serving tiles and static content
-//! - [`Progress`]: Progress monitoring for conversion operations
+//! - [`ProgressData`]: What the `onProgress` callback of a conversion receives
 //! - [`ConvertOptions`]: Configuration for tile conversion
 //! - [`layer_stats_of`]: Per-layer byte breakdown of a vector tile
 //!
@@ -61,7 +61,7 @@ mod vpl;
 
 pub use convert::convert;
 pub use layer_stats::{LayerStats, layer_stats_of};
-pub use progress::{Progress, ProgressData};
+pub use progress::ProgressData;
 pub use server::TileServer;
 pub use tile_source::TileSource;
 pub use types::{ConvertOptions, ServerOptions, SourceMetadata, TileCoord};

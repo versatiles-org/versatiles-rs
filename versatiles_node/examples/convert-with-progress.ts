@@ -3,9 +3,9 @@
 /**
  * Convert tiles with progress monitoring
  *
- * This example demonstrates how to use the Progress API to monitor
- * tile conversion operations in real-time, including progress updates,
- * step changes, warnings, and errors.
+ * This example demonstrates how to use the `onProgress` and `onMessage`
+ * callbacks to monitor tile conversion operations in real-time, including
+ * progress updates, step changes, warnings, and errors.
  */
 
 import { convert, type ProgressData } from '@versatiles/versatiles-rs';
