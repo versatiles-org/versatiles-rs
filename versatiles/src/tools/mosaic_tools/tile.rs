@@ -296,7 +296,7 @@ mod tests {
 		let pipeline = build_pipeline(&default_args());
 		let overview = &pipeline.pipeline[1];
 		assert!(overview.properties.is_empty());
-		assert!(overview.sources.is_empty());
+		assert_eq!(overview.sources, Vec::<VPLPipeline>::new());
 	}
 
 	#[test]
@@ -352,7 +352,7 @@ mod tests {
 	fn all_nodes_have_empty_sources() {
 		let pipeline = build_pipeline(&default_args());
 		for node in &pipeline.pipeline {
-			assert!(node.sources.is_empty());
+			assert_eq!(node.sources, Vec::<VPLPipeline>::new());
 		}
 	}
 }

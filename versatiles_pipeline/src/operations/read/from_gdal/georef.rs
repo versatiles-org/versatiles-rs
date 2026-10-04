@@ -284,10 +284,6 @@ fn parse_numbers<const N: usize>(field: &str, text: &str) -> Result<[f64; N]> {
 }
 
 #[cfg(test)]
-#[expect(
-	clippy::float_cmp,
-	reason = "the geotransforms below are set and read back without arithmetic, so they compare exactly"
-)]
 mod tests {
 	use super::*;
 

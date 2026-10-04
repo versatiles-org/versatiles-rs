@@ -8,7 +8,7 @@ fn e2e_convert_requires_input_and_output() {
 	let o = versatiles_output("convert");
 	assert!(!o.success);
 	assert_eq!(o.code, 2);
-	assert!(o.stdout.is_empty());
+	assert_eq!(o.stdout, "");
 	assert_contains!(
 		&o.stderr,
 		&format!("Usage: {BINARY_NAME} convert [OPTIONS] <INPUT_FILE> <OUTPUT_FILE>")

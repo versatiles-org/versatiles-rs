@@ -813,7 +813,7 @@ mod tests {
 		let bbox = TileBBox::from_min_and_max(20, 0, 0, 3, 3)?;
 		let sizes: Vec<(TileCoord, u32)> = reader.tile_size_stream(bbox).await?.to_vec().await;
 
-		assert!(sizes.is_empty());
+		assert_eq!(sizes, []);
 
 		Ok(())
 	}

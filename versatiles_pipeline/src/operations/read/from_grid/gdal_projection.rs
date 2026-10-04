@@ -250,7 +250,7 @@ mod tests {
 		let rd = GdalProjection::new(28992)?;
 		let mut nothing: Vec<Coord<f64>> = Vec::new();
 		rd.to_mercator_many(&mut nothing);
-		assert!(nothing.is_empty());
+		assert_eq!(nothing, []);
 		Ok(())
 	}
 

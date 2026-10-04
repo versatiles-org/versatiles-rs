@@ -956,7 +956,7 @@ mod tests {
 		let feature = raw_polygon_feature(&[collinear]);
 		let geom = feature.to_geometry()?;
 		match geom {
-			Geometry::MultiPolygon(mp) => assert!(mp.0.is_empty()),
+			Geometry::MultiPolygon(mp) => assert_eq!(mp.0, []),
 			other => panic!("expected MultiPolygon, got {other:?}"),
 		}
 		Ok(())
@@ -1032,7 +1032,7 @@ mod tests {
 		let feature = raw_polygon_feature(&[collinear]);
 		let geom = feature.to_geometry_lenient()?;
 		match geom {
-			Geometry::MultiPolygon(mp) => assert!(mp.0.is_empty()),
+			Geometry::MultiPolygon(mp) => assert_eq!(mp.0, []),
 			other => panic!("expected MultiPolygon, got {other:?}"),
 		}
 		Ok(())

@@ -211,7 +211,7 @@ mod tests {
 		// serde_json::Error implements Into<anyhow::Error> via From.
 		let parse_err: serde_json::Error = serde_json::from_str::<i32>("not json").unwrap_err();
 		let napi_err = to_napi(parse_err);
-		assert!(!napi_err.reason.is_empty());
+		assert_ne!(napi_err.reason, "");
 	}
 
 	#[test]

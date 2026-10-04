@@ -164,7 +164,6 @@ where
 #[cfg(test)]
 #[expect(
 	clippy::cast_possible_truncation,
-	clippy::float_cmp,
 	reason = "test images use literal pixel values and exact expected values"
 )]
 mod tests {

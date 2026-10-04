@@ -323,7 +323,7 @@ mod tests {
 		let mut writer = ValueWriterBlob::new_le();
 		let mut prev = (0i64, 0i64);
 		for ring in rings {
-			assert!(!ring.is_empty());
+			assert_ne!(*ring, []);
 			let (fx, fy) = ring[0];
 			let (ix, iy) = (i64::from(fx), i64::from(fy));
 			writer.write_varint((1 << 3) | 0x1).unwrap(); // MoveTo count=1
@@ -368,7 +368,7 @@ mod tests {
 		let outer = vec![(0, 0), (4, 0), (4, 4), (0, 4)];
 		let feature = raw_polygon_feature(&[outer]);
 		let tile = tile_with_layer(layer_with_features("l", vec![feature]));
-		assert!(validate_tile(&tile).is_empty());
+		assert_eq!(validate_tile(&tile), []);
 	}
 
 	#[test]
@@ -450,7 +450,7 @@ mod tests {
 			geom_data: Blob::new_empty(),
 		};
 		let tile = tile_with_layer(layer_with_features("l", vec![feature]));
-		assert!(validate_tile(&tile).is_empty());
+		assert_eq!(validate_tile(&tile), []);
 	}
 
 	#[test]

@@ -204,10 +204,6 @@ mod tests {
 	}
 
 	#[test]
-	#[expect(
-		clippy::float_cmp,
-		reason = "`jitter` is compared against the exact literal default it was set to"
-	)]
 	fn global_policy_uses_test_defaults() {
 		let p = policy();
 		assert_eq!(p.max_retries, DEFAULT_MAX_RETRIES);

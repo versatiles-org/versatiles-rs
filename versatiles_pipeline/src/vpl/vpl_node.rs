@@ -589,7 +589,7 @@ mod tests {
 		let node: VPLNode = "test_node".into();
 		assert_eq!(node.name, "test_node");
 		assert!(node.properties.is_empty());
-		assert!(node.sources.is_empty());
+		assert_eq!(node.sources, []);
 	}
 
 	#[test]
@@ -597,7 +597,7 @@ mod tests {
 		let node: VPLNode = ("test_node", ("key", "value")).into();
 		assert_eq!(node.name, "test_node");
 		assert_eq!(node.properties.get("key").unwrap(), &vec!["value".to_string()]);
-		assert!(node.sources.is_empty());
+		assert_eq!(node.sources, []);
 	}
 
 	#[test]
@@ -606,7 +606,7 @@ mod tests {
 		assert_eq!(node.name, "test_node");
 		assert_eq!(node.properties.get("key1").unwrap(), &vec!["value1".to_string()]);
 		assert_eq!(node.properties.get("key2").unwrap(), &vec!["value2".to_string()]);
-		assert!(node.sources.is_empty());
+		assert_eq!(node.sources, []);
 	}
 
 	#[test]

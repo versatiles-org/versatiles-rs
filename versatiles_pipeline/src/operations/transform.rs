@@ -247,7 +247,7 @@ mod tests {
 			.await?
 			.to_vec()
 			.await;
-		assert!(tiles.is_empty());
+		assert_eq!(tiles, []);
 		Ok(())
 	}
 

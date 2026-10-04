@@ -709,7 +709,7 @@ mod tests {
 	async fn pyramid_levels_are_ascending_and_non_empty() -> Result<()> {
 		let report = berlin_report(ProbeDepth::Shallow).await?;
 
-		assert!(!report.pyramid.is_empty());
+		assert_ne!(report.pyramid, []);
 		for pair in report.pyramid.windows(2) {
 			assert!(pair[0].level < pair[1].level, "levels must ascend");
 		}

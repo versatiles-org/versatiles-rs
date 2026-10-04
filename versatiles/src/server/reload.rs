@@ -215,7 +215,7 @@ mod tests {
 
 		// Dropped from the config, so dropped from the server.
 		handle.apply_tile_source_diff(&[]).await;
-		assert!(loaded_names(&handle).is_empty());
+		assert_eq!(loaded_names(&handle), Vec::<String>::new());
 	}
 
 	#[tokio::test]
@@ -280,12 +280,12 @@ mod tests {
 
 		let handle = handle(PathBuf::from("unused"));
 		handle.apply_tile_source_diff(&[config.clone()]).await;
-		assert!(loaded_names(&handle).is_empty());
+		assert_eq!(loaded_names(&handle), Vec::<String>::new());
 
 		// And on the next reload it is not mistaken for a source to remove
 		// either — the removal pass skips it for the same reason.
 		handle.apply_tile_source_diff(&[]).await;
-		assert!(loaded_names(&handle).is_empty());
+		assert_eq!(loaded_names(&handle), Vec::<String>::new());
 	}
 
 	#[tokio::test]
@@ -363,7 +363,7 @@ mod tests {
 		// Rewriting the file and reloading again picks the change up.
 		std::fs::write(&config_path, "tiles: []\n")?;
 		handle.reload().await?;
-		assert!(loaded_names(&handle).is_empty());
+		assert_eq!(loaded_names(&handle), Vec::<String>::new());
 
 		Ok(())
 	}

@@ -416,7 +416,7 @@ mod tests {
 	async fn test_read_empty_csv_file() -> Result<()> {
 		let file_path = make_temp_csv("name,age,city")?;
 		let data = CsvReader::new(file_path.path(), runtime()).read().await?;
-		assert!(data.is_empty());
+		assert_eq!(data, []);
 		Ok(())
 	}
 

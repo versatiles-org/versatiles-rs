@@ -763,7 +763,7 @@ mod tests {
 			.unwrap();
 
 		assert_eq!(count.load(Ordering::SeqCst), 0, "already-done tile should be skipped");
-		assert!(translucent.is_empty());
+		assert_eq!(translucent, Vec::<TileCoord>::new());
 	}
 
 	#[tokio::test]
@@ -797,7 +797,7 @@ mod tests {
 			.unwrap();
 
 		assert_eq!(count.load(Ordering::SeqCst), 0);
-		assert!(translucent.is_empty());
+		assert_eq!(translucent, Vec::<TileCoord>::new());
 	}
 
 	// ─── scan_sources / composite_batches / composite_one_batch ───

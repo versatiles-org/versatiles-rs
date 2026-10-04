@@ -191,13 +191,12 @@ impl Operation {
 				}
 				coord_src = coord_src.to_level_decreased()?;
 			}
-		} else {
-			// No climbing: single attempt at the calculated source coordinate
-			if let Some(image) = self.try_fetch_tile(coord_src).await? {
-				return Ok(Some((coord_src, image)));
-			}
-			Ok(None)
 		}
+		// No climbing: single attempt at the calculated source coordinate
+		if let Some(image) = self.try_fetch_tile(coord_src).await? {
+			return Ok(Some((coord_src, image)));
+		}
+		Ok(None)
 	}
 
 	/// Attempts to fetch a tile at the given coordinate, checking cache first.

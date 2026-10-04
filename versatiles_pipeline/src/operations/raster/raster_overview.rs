@@ -500,7 +500,7 @@ mod tests {
 		let bbox_lvl5 = TileBBox::from_min_and_size(5, 0, 0, 2, 2)?;
 		let result = op.core.compose_from_children(bbox_lvl5, None).await?;
 		let items: Vec<_> = result.into_iter().filter(|(_, img)| img.is_some()).collect();
-		assert!(!items.is_empty());
+		assert_ne!(items, []);
 
 		for (coord, img_opt) in items {
 			assert_eq!(coord.level, 5);
@@ -771,7 +771,7 @@ mod tests {
 		let metadata = op.metadata().clone();
 		let base_bbox = metadata.tile_pyramid().unwrap().level_ref(4).to_bbox();
 		let base_tiles = op.tile_stream(base_bbox).await?.to_vec().await;
-		assert!(!base_tiles.is_empty());
+		assert_ne!(base_tiles, []);
 
 		// Build level 3 from cache
 		let lvl3_bbox = metadata.tile_pyramid().unwrap().level_ref(3).to_bbox();

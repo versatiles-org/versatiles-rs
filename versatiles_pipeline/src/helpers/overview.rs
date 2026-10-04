@@ -87,6 +87,10 @@ impl ReadBudget {
 	/// cached block as free, and the cache may drop it before the build gets
 	/// there.
 	fn take(&self, tiles: u64, bbox: TileBBox) -> Result<()> {
+		// `allow`, not `expect`: the deprecation arrived after the 1.94 MSRV, where
+		// it is not there to fulfil an expectation. Switch to `try_update` once the
+		// MSRV reaches 1.95.
+		#[allow(deprecated, reason = "`try_update`, its replacement, is not stable before 1.95")]
 		let left = self
 			.remaining
 			.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |left| left.checked_sub(tiles));
@@ -737,7 +741,7 @@ mod tests {
 		let core = make_core(5)?;
 		let bbox = TileBBox::new_full(5)?;
 		let coords = core.tile_coord_stream(bbox).await?.to_vec().await;
-		assert!(!coords.is_empty());
+		assert_ne!(coords, []);
 		Ok(())
 	}
 
@@ -787,7 +791,7 @@ mod tests {
 
 		// The same request through the sibling method, which already guarded it.
 		let coords = core.tile_coord_stream(far_away).await?.to_vec().await;
-		assert!(coords.is_empty());
+		assert_eq!(coords, []);
 
 		Ok(())
 	}
@@ -975,7 +979,7 @@ mod tests {
 		let core = make_core(5)?;
 		let bbox = TileBBox::new_full(4)?;
 		let coords = core.tile_coord_stream(bbox).await?.to_vec().await;
-		assert!(!coords.is_empty());
+		assert_ne!(coords, []);
 		Ok(())
 	}
 }

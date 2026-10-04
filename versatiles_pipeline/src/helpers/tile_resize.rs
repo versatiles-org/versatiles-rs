@@ -374,7 +374,7 @@ mod tests {
 		let core = TileResizeCore::new(Box::new(make_source_512()), 256, scale_down_fn())?;
 		let bbox = TileBBox::new_full(1)?;
 		let coords = core.tile_coord_stream(bbox).await?.to_vec().await;
-		assert!(!coords.is_empty());
+		assert_ne!(coords, []);
 		assert!(coords.iter().all(|(c, _)| c.level == 1));
 		Ok(())
 	}
@@ -384,7 +384,7 @@ mod tests {
 		let core = TileResizeCore::new(Box::new(make_source_256()), 512, scale_down_fn())?;
 		let bbox = TileBBox::new_full(0)?;
 		let coords = core.tile_coord_stream(bbox).await?.to_vec().await;
-		assert!(!coords.is_empty());
+		assert_ne!(coords, []);
 		assert!(coords.iter().all(|(c, _)| c.level == 0));
 		Ok(())
 	}
@@ -394,7 +394,7 @@ mod tests {
 		let core = TileResizeCore::new(Box::new(make_source_512()), 256, scale_down_fn())?;
 		let bbox = TileBBox::from_min_and_max(20, 1000, 1000, 1000, 1000)?;
 		let coords = core.tile_coord_stream(bbox).await?.to_vec().await;
-		assert!(coords.is_empty());
+		assert_eq!(coords, []);
 		Ok(())
 	}
 }

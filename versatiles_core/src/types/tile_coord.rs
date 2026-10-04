@@ -487,7 +487,6 @@ impl PartialOrd for TileCoord {
 #[expect(
 	clippy::cast_possible_truncation,
 	clippy::cast_sign_loss,
-	clippy::float_cmp,
 	reason = "test vectors use literal coordinates and exact expected values"
 )]
 mod tests {

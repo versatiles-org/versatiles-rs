@@ -123,7 +123,7 @@ mod tests {
 		let mut writer = ValueWriterBlob::new_le();
 		let mut prev = (0i64, 0i64);
 		for ring in rings {
-			assert!(!ring.is_empty());
+			assert_ne!(*ring, []);
 			let (fx, fy) = ring[0];
 			let (ix, iy) = (i64::from(fx), i64::from(fy));
 			writer.write_varint((1 << 3) | 0x1).unwrap();
@@ -186,7 +186,7 @@ mod tests {
 
 		let repaired = repair_tile(tile, false)?;
 		assert_eq!(repaired.layers[0].extent, Some(4096));
-		assert!(validate_tile(&repaired).is_empty());
+		assert_eq!(validate_tile(&repaired), []);
 		Ok(())
 	}
 
@@ -198,7 +198,7 @@ mod tests {
 
 		let repaired = repair_tile(tile, false)?;
 		assert_eq!(repaired.layers[0].version, Some(1));
-		assert!(validate_tile(&repaired).is_empty());
+		assert_eq!(validate_tile(&repaired), []);
 		Ok(())
 	}
 
@@ -211,7 +211,7 @@ mod tests {
 		let repaired = repair_tile(tile, false)?;
 		assert_eq!(repaired.layers.len(), 1);
 		assert_eq!(repaired.layers[0].name, "roads");
-		assert!(validate_tile(&repaired).is_empty());
+		assert_eq!(validate_tile(&repaired), []);
 		Ok(())
 	}
 

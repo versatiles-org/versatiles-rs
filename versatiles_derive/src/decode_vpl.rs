@@ -2233,8 +2233,8 @@ mod tests {
 	#[test]
 	fn split_summary_handles_empty_docs() {
 		let (summary, details) = super::split_summary("");
-		assert!(summary.is_empty());
-		assert!(details.is_empty());
+		assert_eq!(summary, "");
+		assert_eq!(details, "");
 	}
 
 	#[test]

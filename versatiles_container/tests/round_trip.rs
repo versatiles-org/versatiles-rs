@@ -3,11 +3,6 @@
 //! These tests verify that tiles can be written to and read from various formats
 //! without data loss or corruption.
 
-#![expect(
-	clippy::float_cmp,
-	reason = "tile coordinates and bounds round-trip exactly, so they are compared exactly"
-)]
-
 use anyhow::Result;
 use rstest::rstest;
 use tempfile::TempDir;
@@ -27,7 +22,7 @@ async fn read_mbtiles_source() -> Result<()> {
 
 	// Verify tilejson is present
 	let tilejson = reader.tilejson();
-	assert!(!tilejson.stringify().is_empty());
+	assert_ne!(tilejson.stringify(), "");
 
 	Ok(())
 }
@@ -197,7 +192,7 @@ async fn metadata_consistency_after_conversion() -> Result<()> {
 	// Basic metadata checks
 	assert!(reader.tilejson().zoom_min().is_some());
 	assert!(reader.tilejson().zoom_max().is_some());
-	assert!(!metadata.tile_format().as_extension().is_empty());
+	assert_ne!(metadata.tile_format().as_extension(), "");
 
 	Ok(())
 }
@@ -582,7 +577,7 @@ async fn a_failed_mbtiles_overwrite_keeps_the_previous_output() -> Result<()> {
 	)
 	.await?;
 	let before = std::fs::read(&output_path)?;
-	assert!(!before.is_empty());
+	assert_ne!(before, b"");
 
 	// Now overwrite it from a run that records a read error.
 	let second = TilesRuntime::builder()

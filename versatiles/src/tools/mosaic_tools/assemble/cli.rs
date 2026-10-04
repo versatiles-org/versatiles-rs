@@ -297,7 +297,7 @@ https://example.com/tiles/004.versatiles
 	fn test_parse_input_list_empty() {
 		let content = "\n# only comments\n  \n";
 		let paths = parse_input_list(content);
-		assert!(paths.is_empty());
+		assert_eq!(paths, Vec::<String>::new());
 	}
 
 	#[test]
@@ -520,6 +520,6 @@ https://example.com/tiles/004.versatiles
 
 		let args = vec![list_path.to_string_lossy().into_owned()];
 		let result = resolve_inputs(&args).unwrap();
-		assert!(result.is_empty());
+		assert_eq!(result, Vec::<String>::new());
 	}
 }

@@ -324,7 +324,7 @@ mod tests {
 		let result_stream = reader.tile_stream(bbox).await?;
 		let result = result_stream.to_vec().await;
 
-		assert!(!result.is_empty());
+		assert_ne!(result, []);
 
 		Ok(())
 	}

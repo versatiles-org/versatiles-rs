@@ -8,7 +8,7 @@ fn e2e_command() {
 	let o = versatiles_output("");
 	assert!(!o.success);
 	assert_eq!(o.code, 2);
-	assert!(o.stdout.is_empty());
+	assert_eq!(o.stdout, "");
 	assert!(o.stderr.contains(&format!("Usage: {BINARY_NAME} [OPTIONS] <COMMAND>")));
 }
 
@@ -28,6 +28,6 @@ fn e2e_subcommand(#[case] sub_command: &str, #[case] usage: &str) {
 	let o = versatiles_output(sub_command);
 	assert!(!o.success);
 	assert_eq!(o.code, 2);
-	assert!(o.stdout.is_empty());
+	assert_eq!(o.stdout, "");
 	assert_contains!(o.stderr, &format!("Usage: {BINARY_NAME} {sub_command} {usage}"));
 }

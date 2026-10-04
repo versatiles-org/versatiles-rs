@@ -459,7 +459,7 @@ mod tests {
 	fn cst_reports_errors_the_same_way_as_the_pipeline_parser() {
 		let parsed: Value = serde_json::from_str(&parse_vpl_cst("node ][".to_string())).unwrap();
 		assert!(!parsed["ok"].as_bool().unwrap());
-		assert!(!parsed["error"]["message"].as_str().unwrap().is_empty());
+		assert_ne!(parsed["error"]["message"].as_str().unwrap(), "");
 		assert!(parsed["error"]["trace"].as_str().unwrap().contains("at line 1"));
 	}
 

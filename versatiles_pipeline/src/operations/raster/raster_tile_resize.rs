@@ -290,7 +290,7 @@ mod tests {
 
 		let bbox = TileBBox::from_min_and_max(20, 1000, 1000, 1000, 1000)?;
 		let tiles: Vec<_> = op.tile_stream(bbox).await?.to_vec().await;
-		assert!(tiles.is_empty());
+		assert_eq!(tiles, []);
 		Ok(())
 	}
 }

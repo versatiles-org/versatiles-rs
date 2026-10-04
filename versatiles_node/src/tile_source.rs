@@ -708,8 +708,8 @@ mod tests {
 		let metadata = reader.metadata();
 
 		// Verify metadata has expected fields
-		assert!(!metadata.tile_format.is_empty());
-		assert!(!metadata.tile_compression.is_empty());
+		assert_ne!(metadata.tile_format, "");
+		assert_ne!(metadata.tile_compression, "");
 		assert!(metadata.min_zoom <= metadata.max_zoom);
 	}
 
@@ -763,7 +763,7 @@ mod tests {
 
 		// Should be a container type
 		assert_eq!(source_type.kind(), "container");
-		assert!(!source_type.name().is_empty());
+		assert_ne!(source_type.name(), "");
 		assert!(source_type.uri().is_some());
 	}
 
@@ -831,8 +831,8 @@ mod tests {
 		let metadata1 = reader1.metadata();
 		let metadata2 = reader2.metadata();
 
-		assert!(!metadata1.tile_format.is_empty());
-		assert!(!metadata2.tile_format.is_empty());
+		assert_ne!(metadata1.tile_format, "");
+		assert_ne!(metadata2.tile_format, "");
 	}
 
 	#[tokio::test]
@@ -1118,7 +1118,7 @@ mod tests {
 		let source = TileSource::from_pipeline(steps_json.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
-		assert!(!source.metadata().tile_format.is_empty());
+		assert_ne!(source.metadata().tile_format, "");
 	}
 
 	#[tokio::test]
@@ -1178,7 +1178,7 @@ mod tests {
 		let source = TileSource::from_pipeline(steps_json.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
-		assert!(!source.metadata().tile_format.is_empty());
+		assert_ne!(source.metadata().tile_format, "");
 	}
 
 	// ── SourceType getters across all three kinds ────────────────────────
@@ -1190,7 +1190,7 @@ mod tests {
 			.unwrap();
 		let st = reader.source_type();
 		assert_eq!(st.kind(), "container");
-		assert!(!st.name().is_empty());
+		assert_ne!(st.name(), "");
 		assert!(st.uri().is_some(), "container should expose its file path");
 		assert!(st.input().is_none(), "container has no input");
 		assert!(st.inputs().is_none(), "container has no inputs");
@@ -1205,7 +1205,7 @@ mod tests {
 			.unwrap();
 		let st = source.source_type();
 		assert_eq!(st.kind(), "processor");
-		assert!(!st.name().is_empty());
+		assert_ne!(st.name(), "");
 		assert!(st.uri().is_none(), "processor has no URI");
 		assert!(st.input().is_some(), "processor must expose its input");
 		assert!(st.inputs().is_none(), "processor has a single input, not inputs");

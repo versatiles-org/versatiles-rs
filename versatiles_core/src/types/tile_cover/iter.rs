@@ -8,7 +8,6 @@ impl TileCover {
 	///
 	/// - `Bbox` variant: iterates in row-major (raster scan) order.
 	/// - `Tree` variant: iterates in depth-first quadtree order.
-	#[must_use]
 	pub fn iter_coords(&self) -> Box<dyn Iterator<Item = TileCoord> + '_> {
 		match self {
 			TileCover::Bbox(b) => Box::new(b.iter_coords()),

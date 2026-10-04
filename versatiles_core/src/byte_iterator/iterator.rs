@@ -253,7 +253,7 @@ mod tests {
 				}
 				// The message is best-effort; not panicking is the point.
 				let error = iter.format_error("probe");
-				assert!(!error.to_string().is_empty());
+				assert_ne!(error.to_string(), "");
 			}
 		}
 	}

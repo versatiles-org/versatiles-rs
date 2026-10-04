@@ -163,7 +163,7 @@ mod tests {
 	fn a_straight_projection_adds_nothing() {
 		let a = coord! { x: 0.0, y: 0.0 };
 		let b = coord! { x: 1_000_000.0, y: 0.0 };
-		assert!(interior(a, b, &WebMercator, 0.1).is_empty());
+		assert_eq!(interior(a, b, &WebMercator, 0.1), []);
 		assert!(!deviates(
 			a,
 			b,
@@ -176,7 +176,7 @@ mod tests {
 		// Meridians and parallels are straight lines in mercator too.
 		let a = coord! { x: 10.0, y: 50.0 };
 		let b = coord! { x: 11.0, y: 50.0 };
-		assert!(interior(a, b, &Wgs84, 0.1).is_empty());
+		assert_eq!(interior(a, b, &Wgs84, 0.1), []);
 	}
 
 	#[test]
@@ -185,7 +185,7 @@ mod tests {
 		// A 100 km edge far from the projection's origin curves noticeably.
 		let a = coord! { x: 2_500_000.0, y: 1_500_000.0 };
 		let b = coord! { x: 2_600_000.0, y: 1_500_000.0 };
-		assert!(!interior(a, b, &laea, 1.0).is_empty());
+		assert_ne!(interior(a, b, &laea, 1.0), []);
 		assert!(deviates(a, b, laea.to_mercator(a), laea.to_mercator(b), &laea, 1.0));
 		// A tighter tolerance asks for more.
 		assert!(interior(a, b, &laea, 0.01).len() > interior(a, b, &laea, 1.0).len());

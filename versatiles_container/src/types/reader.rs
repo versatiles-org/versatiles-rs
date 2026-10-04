@@ -43,7 +43,6 @@ pub trait TilesReader: Send {
 	///
 	/// # Errors
 	/// Returns an error if the file cannot be opened or the container is invalid.
-	#[must_use]
 	async fn open_path(path: &Path, runtime: TilesRuntime) -> Result<SharedTileSource> {
 		Self::open_reader(DataReaderFile::open(path)?, runtime).await
 	}
@@ -55,7 +54,6 @@ pub trait TilesReader: Send {
 	///
 	/// # Errors
 	/// Returns an error if the format does not support generic readers, or if I/O fails.
-	#[must_use]
 	async fn open_reader(_reader: DataReader, _runtime: TilesRuntime) -> Result<SharedTileSource> {
 		bail!("this format does not support reading from a generic data reader")
 	}

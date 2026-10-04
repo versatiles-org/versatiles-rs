@@ -961,7 +961,7 @@ mod tests {
 	#[serial_test::serial]
 	fn no_default_keys_are_offered_from_an_empty_home() {
 		let _home = IsolatedHome::set();
-		assert!(default_key_files().unwrap().is_empty());
+		assert_eq!(default_key_files().unwrap(), Vec::<PathBuf>::new());
 	}
 
 	#[test]
@@ -987,7 +987,7 @@ mod tests {
 		)
 		.unwrap();
 
-		assert!(config_identity_files("example").unwrap().is_empty());
+		assert_eq!(config_identity_files("example").unwrap(), Vec::<PathBuf>::new());
 	}
 
 	#[tokio::test(flavor = "current_thread")]

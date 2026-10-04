@@ -510,7 +510,6 @@ impl<T: Copy + Into<f64>> TryFrom<&[T; 4]> for GeoBBox {
 #[cfg(test)]
 #[expect(
 	clippy::cast_possible_truncation,
-	clippy::float_cmp,
 	reason = "test vectors use literal coordinates and exact expected values"
 )]
 mod tests {

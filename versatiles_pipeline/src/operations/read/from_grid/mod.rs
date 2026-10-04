@@ -1104,7 +1104,7 @@ mod tests {
 		let coords = op.tile_coord_stream(bbox).await?.to_vec().await;
 		let tiles = op.tile_stream(bbox).await?.to_vec().await;
 
-		assert!(!coords.is_empty());
+		assert_ne!(coords, []);
 		assert_eq!(coords.len(), tiles.len(), "the two streams must agree");
 		Ok(())
 	}

@@ -286,7 +286,7 @@ mod tests {
 
 		assert_eq!(error.message, "expected '\"', got end of input");
 		assert_eq!(error.span, input.len()..input.len());
-		assert!(input[error.span.clone()].is_empty());
+		assert_eq!(&input[error.span.clone()], "");
 	}
 
 	/// The whole point of the exercise: the rendered trace draws its caret two columns right of

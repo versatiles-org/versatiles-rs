@@ -23,7 +23,6 @@ impl TileBBox {
 
 	/// Consumes the bounding box and returns a `Send` iterator over all tile coordinates in
 	/// row-major order.  Prefer [`iter_coords`](Self::iter_coords) when ownership is not needed.
-	#[must_use]
 	pub fn into_iter_coords(self) -> Box<dyn Iterator<Item = TileCoord> + Send> {
 		if self.is_empty() {
 			return Box::new(std::iter::empty());
@@ -43,7 +42,6 @@ impl TileBBox {
 	/// `size` must be a power of two.
 	/// Each cell covers at most `size × size`.
 	/// Empty cells are omitted.
-	#[must_use]
 	pub fn iter_grid(&self, size: u32) -> Box<dyn Iterator<Item = TileBBox> + '_> {
 		assert!(size.is_power_of_two(), "size must be a power of two");
 

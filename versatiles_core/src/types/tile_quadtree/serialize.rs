@@ -77,7 +77,7 @@ fn write_node(node: &Node, out: &mut Vec<u8>, byte: &mut u8, bit_pos: &mut u8) {
 		}
 	}
 	if let Node::Partial(children) = node {
-		for child in children.iter() {
+		for child in children {
 			write_node(child, out, byte, bit_pos);
 		}
 	}

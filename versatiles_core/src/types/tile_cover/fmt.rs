@@ -78,7 +78,7 @@ mod tests {
 	#[case::tree_variant(TileCover::from(TileQuadtree::new_full(3).unwrap()), Some("zoom=3"))]
 	fn display_cases(#[case] c: TileCover, #[case] must_contain: Option<&str>) {
 		let s = format!("{c}");
-		assert!(!s.is_empty());
+		assert_ne!(s, "");
 		if let Some(substr) = must_contain {
 			assert!(s.contains(substr), "expected {substr:?} in {s:?}");
 		}

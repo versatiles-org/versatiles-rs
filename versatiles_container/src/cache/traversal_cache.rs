@@ -342,9 +342,9 @@ mod tests {
 
 		// Initially empty — returns empty stream
 		let empty: Vec<String> = cache.take_stream(0)?.collect().await;
-		assert!(empty.is_empty());
+		assert_eq!(empty, Vec::<String>::new());
 		let empty: Vec<String> = cache.take_stream(1)?.collect().await;
-		assert!(empty.is_empty());
+		assert_eq!(empty, Vec::<String>::new());
 
 		// Append via stream to index 0
 		cache
@@ -368,7 +368,7 @@ mod tests {
 
 		// After take_stream, index is empty
 		let empty: Vec<String> = cache.take_stream(0)?.collect().await;
-		assert!(empty.is_empty());
+		assert_eq!(empty, Vec::<String>::new());
 
 		// Other index still has data
 		let collected1: Vec<String> = cache.take_stream(1)?.collect().await;
@@ -376,7 +376,7 @@ mod tests {
 
 		// Non-existent index returns empty stream
 		let empty: Vec<String> = cache.take_stream(99)?.collect().await;
-		assert!(empty.is_empty());
+		assert_eq!(empty, Vec::<String>::new());
 
 		Ok(())
 	}

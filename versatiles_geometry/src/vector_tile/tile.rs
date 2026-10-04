@@ -181,7 +181,7 @@ mod tests {
 	#[test]
 	fn empty_blob_decodes_to_empty_tile() {
 		let tile = VectorTile::from_blob(&Blob::new_empty()).unwrap();
-		assert!(tile.layers.is_empty());
+		assert_eq!(tile.layers, []);
 	}
 
 	#[test]

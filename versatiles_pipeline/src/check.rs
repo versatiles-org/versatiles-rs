@@ -269,8 +269,14 @@ mod tests {
 
 	#[test]
 	fn a_valid_pipeline_has_no_problems() {
-		assert!(problems("from_debug format=png | filter level_max=5").is_empty());
-		assert!(problems("from_stacked [ from_debug format=png, from_debug format=png ]").is_empty());
+		assert_eq!(
+			problems("from_debug format=png | filter level_max=5"),
+			Vec::<String>::new()
+		);
+		assert_eq!(
+			problems("from_stacked [ from_debug format=png, from_debug format=png ]"),
+			Vec::<String>::new()
+		);
 	}
 
 	#[test]
@@ -312,10 +318,10 @@ mod tests {
 	/// worse than reporting nothing.
 	#[test]
 	fn accepted_aliases_are_never_reported() {
-		assert!(problems("from_debug format=pbf").is_empty());
-		assert!(problems("from_debug format=jpeg").is_empty());
+		assert_eq!(problems("from_debug format=pbf"), Vec::<String>::new());
+		assert_eq!(problems("from_debug format=jpeg"), Vec::<String>::new());
 		// The parsers normalise case and surrounding space, so `check` does too.
-		assert!(problems("from_debug format=PNG").is_empty());
+		assert_eq!(problems("from_debug format=PNG"), Vec::<String>::new());
 	}
 
 	/// `MaxTileBytes` parses through `TryFrom<&str>` without a closed variant
@@ -329,8 +335,14 @@ mod tests {
 				 expected a byte count (e.g. 2097152) or 'none' to disable the cap"
 			]
 		);
-		assert!(problems("from_geo filename=a.geojson max_tile_bytes=none").is_empty());
-		assert!(problems("from_geo filename=a.geojson max_tile_bytes=4096").is_empty());
+		assert_eq!(
+			problems("from_geo filename=a.geojson max_tile_bytes=none"),
+			Vec::<String>::new()
+		);
+		assert_eq!(
+			problems("from_geo filename=a.geojson max_tile_bytes=4096"),
+			Vec::<String>::new()
+		);
 	}
 
 	/// Every value of a list is judged, not just the first.
@@ -566,7 +578,7 @@ mod tests {
 			problems("from_h3 resolution=99"),
 			["'from_h3' does not accept 'resolution=99': H3Resolution must be between 0 and 15, but is 99"]
 		);
-		assert!(problems("from_h3 resolution=7").is_empty());
+		assert_eq!(problems("from_h3 resolution=7"), Vec::<String>::new());
 	}
 
 	/// The three bounded numbers whose bound lived in a doc comment and nowhere
@@ -617,7 +629,10 @@ mod tests {
 			problems("from_debug format=png | meta_update center=[13.4,52.5,99]"),
 			["'meta_update' does not accept 'center=[13.4,52.5,99]': center[2] (zoom) must be <= 30"]
 		);
-		assert!(problems("from_debug format=png | meta_update center=[13.4,52.5,12]").is_empty());
+		assert_eq!(
+			problems("from_debug format=png | meta_update center=[13.4,52.5,12]"),
+			Vec::<String>::new()
+		);
 	}
 
 	/// The case #255 is about, with the corners transposed rather than the CRS
@@ -640,14 +655,20 @@ mod tests {
 			problems("from_debug format=png | filter bbox=[0,0,10]"),
 			["'filter' does not accept 'bbox=[0,0,10]': expected 4 values [west, south, east, north], got 3"]
 		);
-		assert!(problems("from_debug format=png | filter bbox=[13.3,52.4,13.5,52.6]").is_empty());
+		assert_eq!(
+			problems("from_debug format=png | filter bbox=[13.3,52.4,13.5,52.6]"),
+			Vec::<String>::new()
+		);
 	}
 
 	/// A list-typed parameter takes any number of values and judges none of
 	/// them, so it carries no validator at all.
 	#[test]
 	fn a_string_list_takes_any_number_of_values() {
-		assert!(problems("from_debug format=png | vector_filter_features layer=[a,b,c] expr=true").is_empty());
+		assert_eq!(
+			problems("from_debug format=png | vector_filter_features layer=[a,b,c] expr=true"),
+			Vec::<String>::new()
+		);
 	}
 
 	#[test]
@@ -795,8 +816,8 @@ mod tests {
 			problems("from_color color=red"),
 			["'from_color' does not accept 'color=[red]': Invalid hex color 'red': invalid digit found in string"]
 		);
-		assert!(problems("from_color color=FF5733").is_empty());
-		assert!(problems("from_color color=FF573380").is_empty());
+		assert_eq!(problems("from_color color=FF5733"), Vec::<String>::new());
+		assert_eq!(problems("from_color color=FF573380"), Vec::<String>::new());
 	}
 
 	/// The tightening #260 asked for. `from_gdal_raster` and `from_gdal_dem`
@@ -876,8 +897,14 @@ mod tests {
 			]
 		);
 
-		assert!(problems("from_debug format=png | raster_format quality=\"70,14:50,15:20\"").is_empty());
-		assert!(problems("from_csv filename=a.csv lon_column=x lat_column=y delimiter=\";\"").is_empty());
+		assert_eq!(
+			problems("from_debug format=png | raster_format quality=\"70,14:50,15:20\""),
+			Vec::<String>::new()
+		);
+		assert_eq!(
+			problems("from_csv filename=a.csv lon_column=x lat_column=y delimiter=\";\""),
+			Vec::<String>::new()
+		);
 	}
 
 	/// Every way of writing a tab means a tab, for both parameters. It used to

@@ -98,7 +98,7 @@ async fn republishing_replaces_and_leaves_no_leftovers() -> Result<()> {
 	convert_to(&destination, 2, false).await?;
 	let second = server.read_file("/out.versatiles").await;
 
-	assert!(!second.is_empty());
+	assert_ne!(second, b"");
 	assert_ne!(second, first, "the tileset should have been replaced");
 	assert!(
 		server.read_file("/out.versatiles.old").await.is_empty(),

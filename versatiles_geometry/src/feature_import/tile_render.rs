@@ -393,7 +393,7 @@ mod tests {
 	#[test]
 	fn point_outside_dropped() {
 		let g = Geometry::Point(Point::new(2.0, 2.0));
-		assert!(clip_geometry(g, [0.0, 0.0, 1.0, 1.0]).is_empty());
+		assert_eq!(clip_geometry(g, [0.0, 0.0, 1.0, 1.0]), []);
 	}
 
 	#[test]

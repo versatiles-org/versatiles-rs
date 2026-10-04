@@ -209,7 +209,7 @@ async fn should_parallel_filter_map_blob_correctly() {
 async fn should_construct_empty_stream() {
 	let empty = TileStream::<Blob>::empty();
 	let collected = empty.to_vec().await;
-	assert!(collected.is_empty());
+	assert_eq!(collected, []);
 }
 
 #[tokio::test]

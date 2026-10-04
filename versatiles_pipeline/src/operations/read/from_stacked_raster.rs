@@ -1019,7 +1019,7 @@ mod tests {
 		let tiles: Vec<_> = result.tile_stream(bbox).await?.to_vec().await;
 
 		// Should return empty stream
-		assert!(tiles.is_empty());
+		assert_eq!(tiles, []);
 		Ok(())
 	}
 
@@ -1056,7 +1056,7 @@ mod tests {
 		let tiles: Vec<_> = result.tile_stream(bbox).await?.to_vec().await;
 
 		// Should return empty stream since all sources are overscaled at this level
-		assert!(tiles.is_empty());
+		assert_eq!(tiles, []);
 		Ok(())
 	}
 
@@ -1111,7 +1111,7 @@ mod tests {
 		let tiles: Vec<_> = result.tile_stream(bbox).await?.to_vec().await;
 
 		// Should return tiles (blended from first native + second overscaled)
-		assert!(!tiles.is_empty());
+		assert_ne!(tiles, []);
 		Ok(())
 	}
 
@@ -1133,7 +1133,7 @@ mod tests {
 
 		// Should still return tiles (the splitting is transparent to the caller)
 		// The exact count depends on the source data overlap
-		assert!(!tiles.is_empty());
+		assert_ne!(tiles, []);
 		Ok(())
 	}
 
