@@ -27,15 +27,17 @@ Run any of them as `./scripts/<name>` from anywhere in the repository.
 
 ## Test
 
-| Script                                             | Purpose                                                                      |
-| -------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [`test-unix.sh`](#test-unixsh)                     | Developer test script: format, lint, and test the Rust workspace on Unix     |
-| [`test-windows.ps1`](#test-windowsps1)             | Run Rust quality checks on Windows (PowerShell equivalent of `test-unix.sh`) |
-| [`test-coverage.sh`](#test-coveragesh)             | Generate code coverage reports with `cargo llvm-cov`                         |
-| [`test-timing.sh`](#test-timingsh)                 | Measure and analyse per-test runtimes to identify slow tests                 |
-| `perf-benchmarks.sh`                               | Run all unit tests with per-test timing via libtest's `--report-time` flag   |
-| `bench-lossless.sh`                                | Run lossless compression benchmarks for WebP and PNG image formats           |
-| [`selftest-versatiles.sh`](#selftest-versatilessh) | Smoke-test the versatiles binary with a convert and serve command            |
+| Script                                             | Purpose                                                                                                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`test-unix.sh`](#test-unixsh)                     | Developer test script: format, lint, and test the Rust workspace on Unix                                                                   |
+| [`test-windows.ps1`](#test-windowsps1)             | Run Rust quality checks on Windows (PowerShell equivalent of `test-unix.sh`)                                                               |
+| [`test-coverage.sh`](#test-coveragesh)             | Generate code coverage reports with `cargo llvm-cov`                                                                                       |
+| [`test-timing.sh`](#test-timingsh)                 | Measure and analyse per-test runtimes to identify slow tests                                                                               |
+| `perf-benchmarks.sh`                               | Run all unit tests with per-test timing via libtest's `--report-time` flag                                                                 |
+| `bench-lossless.sh`                                | Run lossless compression benchmarks for WebP and PNG image formats                                                                         |
+| [`selftest-versatiles.sh`](#selftest-versatilessh) | Smoke-test the versatiles binary with a convert and serve command                                                                          |
+| `smoke-test-release.sh`                            | Download a published release archive (and `.deb`), check its checksum and provenance, and run it: probe, convert, serve with HTTP requests |
+| `smoke-test-npm.mjs`                               | Run the published npm package from an empty project: both entry points, read, convert, serve                                               |
 
 ## Install
 

@@ -168,6 +168,16 @@ Pushing the tag triggers GitHub Actions which will:
 
 ### 3. Verify
 
+Run the release smoke test, which downloads every published file and runs it
+on the platform it is for — the CLI archives, the `.deb` packages and the npm
+package on all eight platforms:
+
+```bash
+gh workflow run release-smoke-test.yml -f tag=vX.Y.Z
+```
+
+For a quick check by hand:
+
 ```bash
 # Check npm
 npm view @versatiles/versatiles-rs

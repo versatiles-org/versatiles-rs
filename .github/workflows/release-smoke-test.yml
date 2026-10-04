@@ -1,0 +1,145 @@
+# Smoke-test a published release: every file, on the platform it is for.
+#
+# CI tests the code and the release workflow builds the artifacts, but nothing
+# else runs what was actually uploaded — the archive a user downloads, the npm
+# package npm resolves for their machine. That is what this does, so a release
+# candidate can be judged on the files that would become the release. It is
+# also the only place the Windows ARM64 binary runs at all: the release builds
+# it on an x64 runner, where it cannot be executed.
+#
+# Run it by hand after a release has been published:
+#   gh workflow run release-smoke-test.yml -f tag=v5.0.0-rc.2
+#
+# The scripts come from the branch the workflow runs on, the files under test
+# from the release; the testdata is the same in both.
+
+name: Release smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to test, e.g. v5.0.0-rc.2"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  attestations: read
+
+env:
+  TAG: ${{ inputs.tag }}
+
+jobs:
+  # Checksums and provenance for every file, once. `gh` is on every Linux
+  # runner, which the Windows ARM64 image does not promise, so the platform
+  # jobs below check their checksum only.
+  verify:
+    name: "Verify checksums and provenance"
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Validate the tag
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$TAG' is not a version tag like v5.0.0 or v5.0.0-rc.2"
+            exit 1
+          fi
+
+      - name: Download every release file
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir release
+
+      - name: Check every checksum
+        working-directory: release
+        run: |
+          shopt -s nullglob
+          sums=(*.sha256)
+          [ ${#sums[@]} -gt 0 ] || { echo "::error::no .sha256 files in $TAG"; exit 1; }
+          for sum in "${sums[@]}"; do sha256sum -c "$sum"; done
+
+      - name: Check the provenance of every artifact
+        working-directory: release
+        run: |
+          shopt -s nullglob
+          for file in *.tar.gz *.deb; do
+            echo "::group::$file"
+            gh attestation verify "$file" --repo "$GITHUB_REPOSITORY"
+            echo "::endgroup::"
+          done
+
+  cli:
+    name: "CLI: ${{ matrix.asset }}"
+    needs: verify
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { asset: versatiles-linux-gnu-x86_64, runner: ubuntu-latest, deb: 1 }
+          - { asset: versatiles-linux-gnu-aarch64, runner: ubuntu-24.04-arm, deb: 1 }
+          - { asset: versatiles-linux-musl-x86_64, runner: ubuntu-latest, deb: 0 }
+          - { asset: versatiles-linux-musl-aarch64, runner: ubuntu-24.04-arm, deb: 0 }
+          - { asset: versatiles-macos-x86_64, runner: macos-26-intel, deb: 0 }
+          - { asset: versatiles-macos-aarch64, runner: macos-latest, deb: 0 }
+          - { asset: versatiles-windows-x86_64, runner: windows-latest, deb: 0 }
+          - { asset: versatiles-windows-aarch64, runner: windows-11-arm, deb: 0 }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Run the released binary
+        shell: bash
+        env:
+          SMOKE_DEB: ${{ matrix.deb }}
+        run: ./scripts/smoke-test-release.sh "$TAG" "${{ matrix.asset }}"
+
+  npm:
+    name: "npm: ${{ matrix.platform }}"
+    needs: verify
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux-x64-gnu, runner: ubuntu-latest }
+          - { platform: linux-arm64-gnu, runner: ubuntu-24.04-arm }
+          - { platform: linux-x64-musl, runner: ubuntu-latest, alpine: true }
+          - { platform: linux-arm64-musl, runner: ubuntu-24.04-arm, alpine: true }
+          - { platform: darwin-x64, runner: macos-26-intel }
+          - { platform: darwin-arm64, runner: macos-latest }
+          - { platform: win32-x64-msvc, runner: windows-latest }
+          - { platform: win32-arm64-msvc, runner: windows-11-arm }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Node.js
+        if: ${{ !matrix.alpine }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "22"
+
+      # Installed into an empty project, the way a user installs it: npm picks
+      # the platform package for this machine, which is what is being tested.
+      - name: Install and run the published package
+        if: ${{ !matrix.alpine }}
+        shell: bash
+        run: |
+          version="${TAG#v}"
+          mkdir smoke && cd smoke
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund "@versatiles/versatiles-rs@$version"
+          node ../scripts/smoke-test-npm.mjs "$version" ../testdata
+
+      # musl: the runners are glibc, so npm would pick the gnu package there.
+      # Alpine is where the musl package is the one that gets installed.
+      - name: Install and run the published package (Alpine)
+        if: ${{ matrix.alpine }}
+        run: |
+          docker run --rm -e VERSION="${TAG#v}" -v "$PWD:/repo:ro" node:22-alpine sh -euc '
+            mkdir /tmp/smoke && cd /tmp/smoke
+            npm init -y >/dev/null
+            npm install --no-audit --no-fund "@versatiles/versatiles-rs@$VERSION"
+            node /repo/scripts/smoke-test-npm.mjs "$VERSION" /repo/testdata
+          '
