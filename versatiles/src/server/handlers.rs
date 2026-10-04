@@ -4,6 +4,9 @@
 //! - `serve_static` serves files from a list of `StaticSource`s.
 //! - `ok_json` is a tiny helper used by the API routes.
 //!
+//! Tile and static responses carry a weak `ETag`, and a request whose
+//! `If-None-Match` names it is answered with `304 Not Modified` (#279).
+//!
 //! Note: CORS headers are handled exclusively by the `CorsLayer`. Don't set
 //! `Access-Control-Allow-Origin` here; that avoids header drift.
 
@@ -12,7 +15,7 @@ use std::{fmt::Write, sync::Arc};
 use axum::{
 	body::Body,
 	extract::State,
-	http::{HeaderMap, Uri, header},
+	http::{HeaderMap, HeaderValue, Uri, header},
 	response::Response,
 };
 use versatiles_core::{
@@ -79,7 +82,7 @@ pub async fn serve_tile_from_source(
 	match response {
 		Ok(Some(result)) => {
 			log::debug!("send response for tile request: {path}");
-			ok_data(result, target, cache_control).await
+			ok_data(result, target, cache_control, headers.get(header::IF_NONE_MATCH)).await
 		}
 		Ok(None) => {
 			log::debug!("send 404 for tile request: {path}");
@@ -115,7 +118,7 @@ pub async fn serve_static(uri: Uri, headers: HeaderMap, State(state): State<Stat
 	for source in sources.iter() {
 		if let Some(result) = source.get_data(&url, &target).await {
 			log::debug!("send response to static request: {url}");
-			return ok_data(result, target, &state.cache_control).await;
+			return ok_data(result, target, &state.cache_control, headers.get(header::IF_NONE_MATCH)).await;
 		}
 	}
 	log::debug!("send 404 to static request: {url}");
@@ -155,7 +158,52 @@ pub fn error_500() -> Response<Body> {
 	error_with(500, "Internal Server Error")
 }
 
-async fn ok_data(result: SourceResponse, mut target: TargetCompression, cache_control: &str) -> Response<Body> {
+/// A weak validator for a response, from the bytes as its source stores them.
+///
+/// Weak, because one tag stands for every encoding the server may send them
+/// in: a gzip and a brotli response carry the same tag, which a strong
+/// validator forbids. Caches keep the variants apart through
+/// `Vary: accept-encoding` anyway. Taking the stored bytes rather than the
+/// sent ones is what lets a match be answered before recompressing.
+fn etag(blob: &Blob) -> String {
+	format!("W/\"{:032x}\"", xxhash_rust::xxh3::xxh3_128(blob.as_slice()))
+}
+
+/// Whether an `If-None-Match` header names `etag`.
+///
+/// `If-None-Match` uses the weak comparison, so a `W/` prefix on either side
+/// is ignored. `*` matches any current representation, which a response being
+/// built always is.
+fn if_none_match(header: Option<&HeaderValue>, etag: &str) -> bool {
+	let Some(value) = header.and_then(|value| value.to_str().ok()) else {
+		return false;
+	};
+	let opaque = |tag: &str| tag.trim().trim_start_matches("W/").to_string();
+	let etag = opaque(etag);
+	value.split(',').any(|tag| tag.trim() == "*" || opaque(tag) == etag)
+}
+
+async fn ok_data(
+	result: SourceResponse,
+	mut target: TargetCompression,
+	cache_control: &str,
+	if_none_match_header: Option<&HeaderValue>,
+) -> Response<Body> {
+	let etag = etag(&result.blob);
+
+	// The client holds these bytes already. Say so before spending any time on
+	// recompression, and send the headers a 200 would have used to describe
+	// how long the copy stays fresh.
+	if if_none_match(if_none_match_header, &etag) {
+		return Response::builder()
+			.status(304)
+			.header(header::ETAG, etag)
+			.header(header::CACHE_CONTROL, cache_control)
+			.header(header::VARY, "accept-encoding")
+			.body(Body::empty())
+			.expect("failed to build 304 response");
+	}
+
 	// Binary images are effectively incompressible; avoid recompression.
 	if matches!(
 		result.mime.as_str(),
@@ -168,6 +216,7 @@ async fn ok_data(result: SourceResponse, mut target: TargetCompression, cache_co
 		.status(200)
 		.header(header::CONTENT_TYPE, &result.mime)
 		.header(header::CACHE_CONTROL, cache_control)
+		.header(header::ETAG, etag)
 		.header(header::VARY, "accept-encoding");
 
 	log::trace!(
@@ -240,6 +289,7 @@ pub async fn ok_json(message: &str) -> Response<Body> {
 		// API responses keep the historical header; making them configurable is
 		// a separate question from the tile cache lifetime.
 		DEFAULT_CACHE_CONTROL,
+		None,
 	)
 	.await
 }
@@ -278,7 +328,7 @@ mod tests {
 				mime: "application/json".into(),
 			};
 
-			let resp = super::ok_data(src, TargetCompression::from_none(), cache_control).await;
+			let resp = super::ok_data(src, TargetCompression::from_none(), cache_control, None).await;
 
 			assert_eq!(
 				resp.headers().get(header::CACHE_CONTROL).unwrap(),
@@ -299,7 +349,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Gzip);
 
-		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL).await;
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL, None).await;
 		assert_eq!(resp.status(), 200);
 		let headers = resp.headers();
 
@@ -312,6 +362,81 @@ mod tests {
 
 		// Expect gzip because requester allowed it and source was uncompressed text
 		assert_eq!(headers.get(header::CONTENT_ENCODING).unwrap(), "gzip");
+	}
+
+	fn text_source(text: &str) -> SourceResponse {
+		SourceResponse {
+			blob: Blob::from(text),
+			compression: TileCompression::Uncompressed,
+			mime: "text/plain".into(),
+		}
+	}
+
+	/// The `ETag` of a 200 for `text`, as a client would store it.
+	async fn etag_of(text: &str, target: TargetCompression) -> HeaderValue {
+		let resp = super::ok_data(text_source(text), target, DEFAULT_CACHE_CONTROL, None).await;
+		assert_eq!(resp.status(), 200);
+		resp.headers().get(header::ETAG).expect("a 200 carries an ETag").clone()
+	}
+
+	#[tokio::test]
+	async fn etag_is_weak_and_follows_the_content() {
+		let tag = etag_of("tile", TargetCompression::from_none()).await;
+		assert!(tag.to_str().unwrap().starts_with("W/\""), "{tag:?}");
+		assert_eq!(tag, etag_of("tile", TargetCompression::from_none()).await);
+		assert_ne!(tag, etag_of("tile, changed", TargetCompression::from_none()).await);
+
+		// One tag for every encoding of the same bytes — which is why it is weak.
+		let mut gzip = TargetCompression::from_none();
+		gzip.insert(TileCompression::Gzip);
+		assert_eq!(tag, etag_of("tile", gzip).await);
+	}
+
+	#[tokio::test]
+	async fn a_matching_if_none_match_gets_a_bare_304() {
+		let tag = etag_of("tile", TargetCompression::from_none()).await;
+		let opaque = tag.to_str().unwrap().trim_start_matches("W/").to_string();
+
+		for header in [
+			tag.to_str().unwrap().to_string(),
+			// Weak comparison: the `W/` does not have to be repeated.
+			opaque.clone(),
+			format!("\"other\", {opaque}"),
+			"*".to_string(),
+		] {
+			let value = HeaderValue::from_str(&header).unwrap();
+			let resp = super::ok_data(
+				text_source("tile"),
+				TargetCompression::from_none(),
+				"no-cache",
+				Some(&value),
+			)
+			.await;
+			assert_eq!(resp.status(), 304, "If-None-Match: {header}");
+
+			let headers = resp.headers();
+			assert_eq!(headers.get(header::ETAG), Some(&tag));
+			assert_eq!(headers.get(header::CACHE_CONTROL).unwrap(), "no-cache");
+			assert_eq!(headers.get(header::VARY).unwrap(), "accept-encoding");
+			assert!(headers.get(header::CONTENT_ENCODING).is_none());
+			let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+			assert!(body.is_empty(), "a 304 has no body");
+		}
+	}
+
+	#[tokio::test]
+	async fn a_stale_if_none_match_gets_the_content() {
+		let stale = etag_of("old tile", TargetCompression::from_none()).await;
+		let resp = super::ok_data(
+			text_source("new tile"),
+			TargetCompression::from_none(),
+			DEFAULT_CACHE_CONTROL,
+			Some(&stale),
+		)
+		.await;
+		assert_eq!(resp.status(), 200);
+		let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+		assert_eq!(&body[..], b"new tile");
 	}
 
 	#[test]
@@ -359,7 +484,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Brotli);
 
-		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL).await;
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL, None).await;
 		assert_eq!(resp.status(), 200);
 		let headers = resp.headers();
 
@@ -401,7 +526,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Brotli);
 
-		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL).await;
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL, None).await;
 		assert_eq!(resp.status(), 200);
 		let headers = resp.headers();
 
@@ -420,7 +545,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Gzip);
 
-		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL).await;
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL, None).await;
 		assert_eq!(resp.status(), 200);
 		// No content-encoding for incompressible images
 		assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
@@ -436,7 +561,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Gzip);
 
-		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL).await;
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL, None).await;
 		assert_eq!(resp.status(), 200);
 		assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
 	}
@@ -451,7 +576,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Brotli);
 
-		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL).await;
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL, None).await;
 		assert_eq!(resp.status(), 200);
 		assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
 	}

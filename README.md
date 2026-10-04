@@ -479,6 +479,12 @@ a file the operator never put there, and the path is only checked as text.
 Symlinks that stay inside the folder work either way — their target is being
 served anyway. Pass `--follow-symlinks` to serve a tree of links deliberately.
 
+Tiles and static files are sent with an `ETag`, so a client or cache whose copy
+has expired can revalidate it with `If-None-Match` and get an empty
+`304 Not Modified` while the data is unchanged. The tag is weak: it is derived
+from the stored bytes, so it is the same for every content encoding and changes
+whenever the data does.
+
 **Custom tile IDs:**
 
 Assign custom IDs to tile sources using bracket or hash syntax:

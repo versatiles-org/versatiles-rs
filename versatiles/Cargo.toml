@@ -64,6 +64,9 @@ tower-http = { version = "0.7.1", optional = true, features = [
 	"cors",
 	"set-header",
 ] }
+xxhash-rust = { version = "0.8.19", default-features = false, features = [
+	"xxh3",
+], optional = true }
 
 versatiles_container = { workspace = true }
 versatiles_core = { workspace = true }
@@ -107,6 +110,7 @@ server = [
 	"dep:tokio",
 	"dep:tower",
 	"dep:tower-http",
+	"dep:xxhash-rust",
 ]
 cli = [
 	"dep:clap",
