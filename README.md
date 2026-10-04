@@ -95,7 +95,7 @@ Find more details on [Nix search](https://search.nixos.org/packages?show=versati
 Pull the latest [Docker image](https://github.com/versatiles-org/versatiles-docker) for easy deployment:
 
 ```sh
-docker pull versatiles-org/versatiles
+docker pull versatiles/versatiles
 ```
 
 ### npm (Node.js)
@@ -277,8 +277,9 @@ Commands:
   probe    Show information about a tile container
   reduce   Reduce a tileset to what a style actually draws
   serve    Serve tiles via HTTP
-  dev      Developer tools (unstable)
   help     Show detailed help
+  mosaic   Tile and assemble image mosaics
+  dev      Some unstable developer tools
 ```
 
 #### convert - Convert Between Tile Formats
@@ -293,18 +294,18 @@ versatiles convert input.mbtiles output.versatiles
 
 **Advanced options:**
 
-| Option                     | Description                                       | Example                                  |
-| -------------------------- | ------------------------------------------------- | ---------------------------------------- |
-| `--min-zoom`, `--max-zoom` | Filter zoom levels                                | `--min-zoom=5 --max-zoom=12`             |
-| `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max)  | `--bbox=13.0,52.3,13.8,52.7`             |
-| `--bbox-border`            | Add border tiles around bbox                      | `--bbox-border=3`                        |
-| `--compress`               | Set compression (gzip, brotli, zstd)              | `--compress=brotli`                      |
-| `--tile-format`            | Convert tile format (png, jpg, webp, avif, pbf)   | `--tile-format=webp`                     |
-| `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)              | `--swap-xy`                              |
-| `--flip-y`                 | Flip tiles vertically                             | `--flip-y`                               |
-| `--dry-run`                | Check the pipeline and exit, reading no tiles     | `--dry-run`                              |
-| `--writer-option`          | Format-specific output option (repeatable)        | `--writer-option=allow_unclustered=true` |
-| `--force`                  | Replace a destination directory that is not empty | `--force`                                |
+| Option                     | Description                                                                        | Example                                  |
+| -------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------- |
+| `--min-zoom`, `--max-zoom` | Filter zoom levels                                                                 | `--min-zoom=5 --max-zoom=12`             |
+| `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max)                                   | `--bbox=13.0,52.3,13.8,52.7`             |
+| `--bbox-border`            | Add border tiles around bbox                                                       | `--bbox-border=3`                        |
+| `--compress`               | Set compression (uncompressed, gzip, brotli, zstd)                                 | `--compress=brotli`                      |
+| `--tile-format`            | Re-encode raster tiles (avif, jpg, png, webp), optionally with `,quality[,effort]` | `--tile-format=webp,80`                  |
+| `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)                                               | `--swap-xy`                              |
+| `--flip-y`                 | Flip tiles vertically                                                              | `--flip-y`                               |
+| `--dry-run`                | Check the pipeline and exit, reading no tiles                                      | `--dry-run`                              |
+| `--writer-option`          | Format-specific output option (repeatable)                                         | `--writer-option=allow_unclustered=true` |
+| `--force`                  | Replace a destination directory that is not empty                                  | `--force`                                |
 
 **How the output is written.** A conversion builds its output beside the destination, under a `.<name>.tmp` name, and moves it into place as the last step. The destination therefore only ever holds a complete container: a conversion that fails part-way leaves whatever was there before exactly as it was, and leaves nothing new behind. (A crash leaves the `.tmp` behind; the next run to that destination clears it.) Writing to a _new_ path costs no extra disk — the bytes live under one name and the move is free — but overwriting an existing output holds both copies until the move completes.
 
@@ -466,8 +467,17 @@ versatiles serve tiles.versatiles
 | `--minimal-recompression` | Fast serving (less compression)                        | false   |
 | `--disable-api`           | Disable `/api` endpoints                               | false   |
 | `--follow-symlinks`       | Let a symlink in a static folder point outside it      | false   |
-| `--cache-control`         | `Cache-Control` header sent with every tile            | -       |
+| `--cache-control`         | `Cache-Control` header for tiles and static files      | 4 weeks |
 | `--auto-shutdown`         | Shut down automatically after N milliseconds           | -       |
+
+`--cache-control` defaults to `public, max-age=2419200, no-transform`: four
+weeks, right for a public tile server. Set something shorter when the tiles
+behind a URL change.
+
+`--minimal-recompression`, `--disable-api` and `--follow-symlinks` can be given
+on their own or with `true`/`false`; left out, the configuration file decides.
+Put a bare switch after the tile sources or before another option — a tile
+source directly after it would be read as its value.
 
 With `--port 0` the server binds a free port chosen by the operating system and
 prints it to stdout as `VERSATILES_PORT=<port>` before serving, so a wrapper
@@ -487,7 +497,7 @@ whenever the data does.
 
 **Custom tile IDs:**
 
-Assign custom IDs to tile sources using bracket or hash syntax:
+Assign custom IDs to tile sources using bracket syntax:
 
 ```sh
 # Bracket prefix: [id]source
@@ -495,12 +505,11 @@ versatiles serve [osm]tiles.versatiles
 
 # Bracket suffix: source[id]
 versatiles serve tiles.versatiles[osm]
-
-# Hash syntax: source#id
-versatiles serve tiles.versatiles#osm
 ```
 
-Access tiles at: `http://localhost:8080/{id}/{z}/{x}/{y}.{ext}`
+Access tiles at `http://localhost:8080/tiles/{id}/{z}/{x}/{y}` (an extension
+such as `.pbf` may be appended) and the TileJSON at
+`http://localhost:8080/tiles/{id}/tiles.json`.
 
 **Static content serving:**
 
@@ -519,9 +528,12 @@ versatiles serve \
   tiles.versatiles
 ```
 
-**Supported static formats:** `.tar`, `.tar.gz`, `.tar.br`, directories
+**Supported static formats:** `.tar`, `.tar.gz`, `.tar.br`, `.tar.zst`, directories
 
 **Remote serving:**
+
+`.versatiles` and `.pmtiles` containers can be served from `https://`, `http://`
+or `sftp://` URLs; `.mbtiles`, `.tar` and directories have to be local.
 
 ```sh
 # Serve remote tiles directly
@@ -752,7 +764,7 @@ tiles:
     src: "./pipeline.vpl"
 ```
 
-Access tiles at: `http://localhost:8080/{name}/{z}/{x}/{y}.{ext}`
+Access tiles at: `http://localhost:8080/tiles/{name}/{z}/{x}/{y}`
 
 **Static Content** - Serve styles, fonts, and sprites:
 
@@ -767,7 +779,7 @@ static:
     prefix: "/assets"
 ```
 
-Supported formats: directories, `.tar`, `.tar.gz`, `.tar.br`
+Supported formats: directories, `.tar`, `.tar.gz`, `.tar.br`, `.tar.zst`
 
 ### Complete Example
 
@@ -1161,6 +1173,7 @@ flowchart TB
     versatiles_node --> versatiles
     versatiles_node --> versatiles_container
     versatiles_node --> versatiles_core
+    versatiles_node --> versatiles_geometry
     versatiles_pipeline --> versatiles_container
     versatiles_pipeline --> versatiles_core
     versatiles_pipeline --> versatiles_derive
