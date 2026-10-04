@@ -7,9 +7,14 @@
 # to GITHUB_STEP_SUMMARY for use in subsequent CI steps.
 #
 # Grouping/filtering is configured in cliff.toml (grouped by Conventional-Commit
-# type, noise dropped). A "Full changelog" compare link is appended. The result is
-# a starting point: the release stays a DRAFT so a maintainer can add a summary /
-# highlights / breaking notes before publishing.
+# type, noise dropped). A "Full changelog" compare link is appended.
+#
+# Hand-written notes — a summary, upgrade instructions — go in
+# .github/release-notes/<version>.md and are put in front of the generated ones.
+# The file is named after the version without its prerelease suffix, so
+# v5.0.0.md introduces v5.0.0-rc.2 as well as v5.0.0. It has to be committed
+# before the tag: the release workflow publishes the draft on its own once the
+# builds succeed, so there is no reliable moment to edit it by hand.
 #
 # Requires `git-cliff` on PATH (installed by the Release workflow's prepare job) and
 # a full-history checkout (fetch-depth: 0) so the tag range is available locally.
@@ -82,7 +87,17 @@ fi
 #
 # With no predecessor — a first release — there is no range to bound and no two
 # points to compare, so walk the whole history and drop the link.
+HANDWRITTEN=".github/release-notes/${NEW_TAG%%-*}.md"
 {
+  # The generated groups are `###` headings, so give them a `##` parent of
+  # their own; otherwise they read as part of the hand-written notes' last section.
+  if [ -f "$HANDWRITTEN" ]; then
+    cat "$HANDWRITTEN"
+    echo
+    echo "## Changes"
+    echo
+  fi
+
   # `--strip all` drops the (empty) header/footer; the sed removes any leading
   # blank lines git-cliff emits before the first group.
   if [ -n "$OLD_TAG" ]; then

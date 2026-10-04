@@ -47,6 +47,13 @@ footer = ""
 trim = true
 
 [git]
+# Prerelease tags (anything with a hyphen, per semver) do not split the notes.
+# The release script spans from the previous *stable* tag, so the notes for
+# 5.0.0 also cover the commits behind 5.0.0-rc.1; without this, git-cliff gives
+# each tag in that range its own section, and with `--strip all` removing the
+# section headers that read as "Features" and "Bug Fixes" twice.
+ignore_tags = "-"
+
 # Keep non-conventional commits (e.g. a plain "Update dependencies") under
 # "Other Changes" rather than dropping them (git-cliff drops them by default).
 filter_unconventional = false

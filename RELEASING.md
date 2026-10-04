@@ -14,6 +14,13 @@ Releases are cut from `dev` — the script refuses to run on any other branch. I
 requires a clean working tree and that `origin/main` is an ancestor of `dev`; if `main`
 has commits `dev` does not, sync first with `git merge --ff-only origin/main`.
 
+The release notes are generated from the commit messages. For anything they
+cannot say — a summary, upgrade instructions for a major release — commit
+`.github/release-notes/vX.Y.Z.md` beforehand. It is put in front of the
+generated notes for vX.Y.Z and for its prereleases (vX.Y.Z-rc.N). Commit it
+before tagging: the workflow publishes the release on its own once the builds
+succeed, so there is no reliable moment to edit the draft by hand.
+
 ### 2. Create Release
 
 You can either provide the release type as an argument, or run the script without arguments for an interactive menu.
