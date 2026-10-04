@@ -15,7 +15,8 @@ pub struct Subcommand {
 	/// One or more tile containers to serve (path, URL, or data source expression).
 	///
 	/// Supported formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory.
-	/// Only VersaTiles containers can be served from remote URLs (http/https).
+	/// Remote URLs (https, http, sftp) work for *.versatiles and *.pmtiles;
+	/// *.mbtiles, *.tar and directories have to be local.
 	/// The URL path (/tiles/{id}/) is derived from the source name:
 	///    e.g. "ukraine.versatiles" -> "/tiles/ukraine/..."
 	/// Override the name using bracket notation:
@@ -44,16 +45,19 @@ pub struct Subcommand {
 	#[arg(short = 's', long = "static", verbatim_doc_comment, display_order = 1)]
 	pub static_content: Vec<String>,
 
+	// The three switches below are `Option<bool>` so that leaving one out
+	// keeps whatever the config file says. A bare `--follow-symlinks` means
+	// `true`; `--follow-symlinks false` still overrides a config that set it.
 	/// Shutdown server automatically after x milliseconds.
 	#[arg(long, display_order = 4)]
 	pub auto_shutdown: Option<u64>,
 
 	/// use minimal recompression to reduce server response time
-	#[arg(long, display_order = 2)]
+	#[arg(long, num_args = 0..=1, default_missing_value = "true", display_order = 2)]
 	pub minimal_recompression: Option<bool>,
 
 	/// disable API
-	#[arg(long, display_order = 4)]
+	#[arg(long, num_args = 0..=1, default_missing_value = "true", display_order = 4)]
 	pub disable_api: Option<bool>,
 
 	/// serve files that symlinks in a static folder point to outside that folder
@@ -62,7 +66,13 @@ pub struct Subcommand {
 	/// pointing out of it is refused, so a folder cannot hand out files the
 	/// operator did not put there. Turn it on to serve a tree that deliberately
 	/// links elsewhere.
-	#[arg(long, verbatim_doc_comment, display_order = 4)]
+	#[arg(
+		long,
+		num_args = 0..=1,
+		default_missing_value = "true",
+		verbatim_doc_comment,
+		display_order = 4
+	)]
 	pub follow_symlinks: Option<bool>,
 
 	/// Cache-Control header sent with every tile, e.g. "no-cache"
@@ -164,6 +174,75 @@ mod tests {
 	use anyhow::Result;
 
 	use crate::tests::run_command;
+
+	/// The switches as a `serve` command line sets them; `None` means "keep the config".
+	fn switches(args: &[&str]) -> Result<[Option<bool>; 3]> {
+		use clap::Parser;
+
+		let argv = ["versatiles", "serve"].iter().chain(args).copied();
+		let crate::Commands::Serve(serve) = crate::Cli::try_parse_from(argv)?.command else {
+			unreachable!("parsed a `serve` command line");
+		};
+		Ok([serve.minimal_recompression, serve.disable_api, serve.follow_symlinks])
+	}
+
+	#[test]
+	fn a_switch_works_bare_with_a_value_or_left_out() -> Result<()> {
+		let all = |value| [value; 3];
+		assert_eq!(switches(&["a.versatiles"])?, all(None));
+		assert_eq!(
+			switches(&[
+				"a.versatiles",
+				"--minimal-recompression",
+				"--disable-api",
+				"--follow-symlinks"
+			])?,
+			all(Some(true))
+		);
+		assert_eq!(
+			switches(&[
+				"--minimal-recompression",
+				"--disable-api",
+				"--follow-symlinks",
+				"-s",
+				"public"
+			])?,
+			all(Some(true))
+		);
+		assert_eq!(
+			switches(&[
+				"--minimal-recompression",
+				"true",
+				"--disable-api=true",
+				"--follow-symlinks",
+				"true",
+				"a.versatiles"
+			])?,
+			all(Some(true))
+		);
+		assert_eq!(
+			switches(&[
+				"--minimal-recompression",
+				"false",
+				"--disable-api",
+				"false",
+				"--follow-symlinks=false",
+				"a.versatiles"
+			])?,
+			all(Some(false))
+		);
+		Ok(())
+	}
+
+	/// A bare switch directly before a tile source reads the source as its
+	/// value. That is refused, loudly, rather than guessed at.
+	#[test]
+	fn a_bare_switch_does_not_swallow_a_tile_source() {
+		let error = switches(&["--follow-symlinks", "a.versatiles"])
+			.unwrap_err()
+			.to_string();
+		assert!(error.contains("invalid value 'a.versatiles'"), "{error}");
+	}
 
 	#[test]
 	fn test_local() -> Result<()> {
