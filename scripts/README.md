@@ -69,11 +69,11 @@ Run any of them as `./scripts/<name>` from anywhere in the repository.
 
 ## CI / Workflow
 
-| Script                                               | Purpose                                                                                                                                                |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `workflow-create-release.sh`                         | Fetches the last two version tags, assembles a changelog from the commits between them, and creates a draft pre-release. For use inside GitHub Actions |
-| [`workflow-pack-upload.sh`](#workflow-pack-uploadsh) | CI script: package a compiled binary as `.tar.gz` and upload it to a GitHub release                                                                    |
-| `workflow-pack-upload.ps1`                           | PowerShell equivalent of `workflow-pack-upload.sh` for Windows CI runners                                                                              |
+| Script                                               | Purpose                                                                                                                                                                       |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workflow-create-release.sh`                         | Takes the newest version tag and the previous stable one, assembles a changelog from the commits between them, and creates a draft pre-release. For use inside GitHub Actions |
+| [`workflow-pack-upload.sh`](#workflow-pack-uploadsh) | CI script: package a compiled binary as `.tar.gz` and upload it to a GitHub release                                                                                           |
+| `workflow-pack-upload.ps1`                           | PowerShell equivalent of `workflow-pack-upload.sh` for Windows CI runners                                                                                                     |
 
 ## Usage notes
 
@@ -135,7 +135,8 @@ Defaults to `versatiles` on `PATH`. Used inside Docker image builds to verify th
 ./scripts/install-gdal.sh [--testing]
 ```
 
-`--testing` installs GDAL from the Debian testing repository (Debian and Ubuntu only).
+`--testing` installs GDAL from the Debian testing repository (Debian stable only;
+on Ubuntu it is ignored with a warning).
 
 ### `install-unix.sh`
 
@@ -147,10 +148,12 @@ curl -Ls "https://github.com/versatiles-org/versatiles-rs/releases/latest/downlo
 
 ```sh
 ./scripts/release-package.sh              # interactive menu
-./scripts/release-package.sh patch        # patch / minor / major / alpha / beta / rc / dev
+./scripts/release-package.sh patch        # patch / minor / major / release / alpha / beta / rc / retry
+./scripts/release-package.sh 3.0.0-rc.1   # or an explicit version
 ```
 
-After running, push with `git push origin main --follow-tags` to trigger the CI release workflow.
+The script pushes `dev`, waits for CI, fast-forwards `main` and pushes the tag
+itself; there is nothing left to push afterwards. See [RELEASING.md](../RELEASING.md).
 
 ### `clean-target.sh`
 

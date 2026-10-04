@@ -57,13 +57,17 @@ You can either provide the release type as an argument, or run the script withou
 
 ##### Prerelease Versions
 
+The `alpha`, `beta` and `rc` keywords start a prerelease of the next **patch**
+version. To start one for a minor or major version, give the version explicitly
+(see below) and use the keywords from there on.
+
 **Alpha releases** (early development, unstable):
 
 ```bash
-# First alpha from 2.3.1 → 2.4.0-alpha.1
+# First alpha from 2.3.1 → 2.3.2-alpha.1
 ./scripts/release-package.sh alpha
 
-# Increment alpha → 2.4.0-alpha.2
+# Increment alpha → 2.3.2-alpha.2
 ./scripts/release-package.sh alpha
 ```
 
@@ -87,14 +91,16 @@ You can either provide the release type as an argument, or run the script withou
 ./scripts/release-package.sh rc
 ```
 
-**Dev releases** (daily builds, experiments):
+**Explicit versions** — anything semver, as long as it is newer than the current
+version. This is how a minor or major prerelease starts, and the only way to cut
+a dev release:
 
 ```bash
-# Create dev release: 2.3.1 → 2.4.0-dev.1
-./scripts/release-package.sh dev
+# Start the 3.0.0 release candidates: 2.3.1 → 3.0.0-rc.1
+./scripts/release-package.sh 3.0.0-rc.1
 
-# Increment dev → 2.4.0-dev.2
-./scripts/release-package.sh dev
+# A dev release (there is no `dev` keyword)
+./scripts/release-package.sh 2.4.0-dev.1
 ```
 
 **Graduating to stable**:
@@ -125,13 +131,17 @@ if the release actually finished — detected via a finalized GitHub release.
 
 This script will:
 
-- Sync versions between Cargo.toml and package.json
-- Run tests
-- Execute cargo-release (updates Cargo.toml, creates the release commit)
-- Update package.json and amend the commit to include it
+- Check the branch, a clean tree, `gh auth status`, and that `origin/main` is an
+  ancestor of `dev`
+- Regenerate the auto-built READMEs, committing them as a separate signed
+  `docs:` commit if they changed
+- Run `./scripts/check.sh`
+- Set the new version in the Cargo manifests, `Cargo.lock`, `package.json` and
+  `package-lock.json` (`cargo release version` only edits files)
+- Create the signed release commit (`git commit -S`)
 - Push `dev` and wait for CI to pass on that exact commit
 - Fast-forward `main` to dev's tip (`git push origin dev:main`)
-- Tag the green commit and push the tag
+- Create a signed tag (`git tag -s`) on the green commit and push it
 
 There is no separate push step: the script does all of it, in that order, because
 branch protection on `main` requires the tip to carry a green `CI Success` check and
@@ -139,13 +149,15 @@ the `v*` tag ruleset should only fire once the commit is known good.
 
 Pushing the tag triggers GitHub Actions which will:
 
+- Refuse to run unless `CI Success` passed on the tagged commit
 - Validate version synchronization
 - Build CLI binaries for 8 platforms (Linux gnu/musl x64/arm64, macOS x64/arm64, Windows x64/arm64)
 - Build NAPI-RS bindings for Node.js (8 platform-specific .node files)
 - Upload CLI binaries to GitHub release
 - Package NAPI bindings using NAPI-RS
 - Publish to npmjs.com (main package + 8 platform-specific packages)
-- Trigger Docker and Homebrew workflows
+- Publish the crates to crates.io (stable releases only)
+- Trigger Docker and Homebrew workflows (stable releases only)
 
 ### 3. Verify
 
@@ -184,10 +196,10 @@ When you publish a prerelease version:
 - CLI binaries available for download
 - Does not update "latest" release badge
 
-### Docker & Homebrew
+### Docker, Homebrew & crates.io
 
 - **Skipped for all prereleases**
-- Only triggered on stable releases
+- Only published or triggered on stable releases
 
 ### Version Examples
 
@@ -225,7 +237,7 @@ npm run artifacts
 
 # Publish
 npm login
-for pkg in npm/*.tgz; do
+for pkg in npm/*/*.tgz; do
   npm publish "$pkg" --access public
 done
 npm run prepublishOnly
@@ -242,7 +254,7 @@ npm publish --access public
 - **Alpha** (x.y.z-alpha.N): Early development, unstable API
 - **Beta** (x.y.z-beta.N): Feature complete, testing phase
 - **RC** (x.y.z-rc.N): Release candidate, final testing
-- **Dev** (x.y.z-dev.N): Daily builds, experimental features
+- **Dev** (x.y.z-dev.N): Daily builds, experimental features (explicit version only)
 
 We follow Semantic Versioning 2.0.0 with prerelease identifiers.
 
@@ -250,7 +262,7 @@ We follow Semantic Versioning 2.0.0 with prerelease identifiers.
 
 ```text
 2.3.1 (stable)
-  ↓ alpha
+  ↓ 2.4.0-alpha.1 (explicit version, to start a minor prerelease)
 2.4.0-alpha.1
   ↓ alpha (increment)
 2.4.0-alpha.2
@@ -258,7 +270,7 @@ We follow Semantic Versioning 2.0.0 with prerelease identifiers.
 2.4.0-beta.1
   ↓ rc (graduate)
 2.4.0-rc.1
-  ↓ patch (graduate to stable)
+  ↓ release (graduate to stable; `patch` does the same here)
 2.4.0 (stable)
 ```
 
@@ -304,12 +316,18 @@ Re-publish missing packages manually (see Manual npm Publish section above).
 
 ### GitHub Secrets Required
 
-- `NPM_TOKEN`: Automation token from npmjs.com with publish permissions to @versatiles scope
+npm publishing uses trusted publishing (OIDC) and needs no token; the rest do:
+
+- `NPM_TOKEN`: Fallback automation token for npm, with publish permissions to the @versatiles scope
+- `CRATES_IO_TOKEN`: Publishes the crates to crates.io
+- `PAT_TOKEN`: Triggers the Docker and Homebrew workflows in their own repositories
+- `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`: Docker Hub login for the Linux build containers
 
 ### Local Tools Required
 
 - cargo-release: `cargo install cargo-release`
-- GitHub CLI: `brew install gh` or `apt install gh`
+- GitHub CLI: `brew install gh` or `apt install gh`, logged in (`gh auth login`)
+- A git signing key (GPG or SSH): the release commit and tag are signed
 - Node.js >= 22.12
 
 ## Reference

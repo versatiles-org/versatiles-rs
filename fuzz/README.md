@@ -73,8 +73,11 @@ stay readable and survive a format change.
 
 On a schedule, not per-PR. A few minutes per target finds shallow bugs; a
 per-PR run finds nothing new on most PRs and slows every one of them down. The
-corpus is what makes successive runs cumulative, so a scheduled job should
-carry `fuzz/corpus/<target>/` between runs rather than start cold each time.
+corpus is what makes successive runs cumulative.
+
+That is what the `Linux: Fuzz` job in `.github/workflows/ci.yml` does: it runs
+all four targets weekly (or on manual dispatch) and carries
+`fuzz/corpus/<target>/` between runs in the Actions cache.
 
 `corpus/` and `artifacts/` are not committed.
 

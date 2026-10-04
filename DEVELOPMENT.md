@@ -12,9 +12,11 @@ Run all checks (Rust + Node.js):
 
 This runs:
 
-- Rust: `cargo check`, `cargo fmt-check`, `cargo clippy`, `cargo test`, `cargo doc`,
-  `cargo deny check` (skipped if cargo-deny is not installed)
-- Node.js: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`
+- Rust: `cargo fmt-all` (formats in place — it does not just check), `cargo check`,
+  `cargo clippy`, `cargo test`, `cargo doc`, `cargo deny check` (skipped if
+  cargo-deny is not installed)
+- Node.js: `npm run build:debug`, `npm run typecheck`, `npm run lint`, `npm test`,
+  `npm run test:examples`, `npm run format:check`
 - Markdown: `markdownlint-cli2`, `prettier --check`
 
 ## Rust Commands
@@ -63,8 +65,8 @@ cargo doc --no-deps
 # Build and open documentation
 cargo doc --no-deps --open
 
-# Check for documentation warnings
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --features gdal
+# Check for documentation warnings, as CI does
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --features gdal,versatiles_container/test
 ```
 
 ## Node.js Commands
@@ -120,7 +122,7 @@ npm run build
 npm test
 
 # Run specific test file
-npx tsx --test src/server.test.ts
+npx vitest run src/server.test.ts
 ```
 
 ### Examples
@@ -130,10 +132,13 @@ npx tsx --test src/server.test.ts
 npm run build:debug
 
 # Run examples
-node examples/probe.js
-node examples/convert.js
-node examples/serve.js
-node examples/read-tiles.js
+npx tsx examples/probe.ts
+npx tsx examples/convert.ts
+npx tsx examples/serve.ts
+npx tsx examples/read-tiles.ts
+
+# Or all of them, as CI does
+npm run test:examples
 ```
 
 ## Pre-commit Hooks
@@ -182,8 +187,8 @@ lefthook run pre-push
 # Skip all hooks for one commit
 LEFTHOOK=0 git commit -m "message"
 
-# Skip specific hook
-lefthook run pre-commit --exclude rust-fmt
+# Skip specific hook (by its name in lefthook.yml)
+LEFTHOOK_EXCLUDE=rust-fmt git commit -m "message"
 ```
 
 ## Common Workflows
@@ -343,23 +348,24 @@ npm install
 `.github/workflows/ci.yml` runs these jobs; `CI Success` depends on all of them
 and is the status branch protection requires.
 
-| Job                      | What it checks                                            |
-| ------------------------ | --------------------------------------------------------- |
-| Markdown Lint            | markdownlint over every `*.md`                            |
-| Linux: Format            | `cargo fmt-check`                                         |
-| Linux: Dependencies      | `cargo deny check` — advisories, licences, sources        |
-| Linux: MSRV              | workspace compiles on the declared `rust-version`         |
-| Linux: Docs              | `cargo doc` with `-D warnings`, gdal feature              |
-| Linux: Node.js           | typecheck, lint, format, native build, Node tests         |
-| Linux: Coverage          | `cargo llvm-cov`, uploaded to Codecov                     |
-| Linux: Features (checks) | `cargo check` for no-default-features, cli, server        |
-| Linux: Features (matrix) | clippy and tests for default, gdal, all-features          |
-| Linux musl: Test         | test suite natively on musl (four release targets use it) |
-| Linux ARM: Test          | test suite on aarch64                                     |
-| Windows: Test            | test suite on x86_64 Windows                              |
-| Windows ARM: Test        | test suite on aarch64 Windows                             |
-| Windows: Node.js         | Node bindings on Windows                                  |
-| macOS: GDAL              | test suite on macOS with GDAL                             |
+| Job                      | What it checks                                                         |
+| ------------------------ | ---------------------------------------------------------------------- |
+| Markdown Lint            | markdownlint over every `*.md`                                         |
+| Linux: Format            | `cargo fmt-check`                                                      |
+| Linux: Dependencies      | `cargo deny check` — advisories, licences, sources                     |
+| Linux: MSRV              | workspace compiles on the declared `rust-version`                      |
+| Linux: Docs              | `cargo doc` with `-D warnings`, gdal feature                           |
+| Linux: Node.js           | typecheck, lint, format, native build, Node tests                      |
+| Linux: Coverage          | `cargo llvm-cov`, uploaded to Codecov                                  |
+| Linux: Features (checks) | `cargo check` for no-default-features, cli, server                     |
+| Linux: Features (matrix) | tests for default, gdal, all-features; clippy on all-features          |
+| Linux musl: Test         | test suite natively on musl (four release targets use it)              |
+| Linux ARM: Test          | test suite on aarch64                                                  |
+| Windows: Test            | test suite on x86_64 Windows                                           |
+| Windows ARM: Test        | test suite on aarch64 Windows                                          |
+| Windows: Node.js         | Node bindings on Windows                                               |
+| macOS: GDAL              | test suite on macOS with GDAL                                          |
+| Linux: Fuzz              | the four fuzz targets, weekly or on manual dispatch; skipped otherwise |
 
 Two things are worth knowing about the dependency job: it is the only check that
 looks at _published_ vulnerabilities rather than at this repository's code, and
