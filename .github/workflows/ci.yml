@@ -357,14 +357,13 @@ jobs:
   # ============================================================================
   # Linux: Feature Checks
   # ============================================================================
-  # The feature combinations that are only compiled, never run. One job rather
-  # than three: they differ by a single feature flag, so most of what they build
-  # is identical, and sharing a target directory means the second and third
-  # checks reuse the first one's artifacts instead of each starting from
-  # nothing. It also means one cache entry rather than three, which matters —
-  # the repository is at GitHub's 10 GB cache ceiling.
-  #
-  # Kept as separate steps so the timings stay legible per feature set.
+  # The feature combinations that are only linted, never run: every crate with
+  # no features and with each feature alone. One job rather than one per
+  # combination: they differ by a single feature flag, so most of what they
+  # build is identical, and sharing a target directory means each run reuses
+  # the previous one's artifacts instead of starting from nothing. It also
+  # means one cache entry, which matters — the repository is at GitHub's 10 GB
+  # cache ceiling.
   linux-feature-checks:
     name: "Linux: Features (checks)"
     runs-on: ubuntu-latest
@@ -389,14 +388,26 @@ jobs:
           cache-bin: false
           save-if: false
 
-      - name: Check no default features
-        run: cargo check --workspace --all-targets --no-default-features
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2
+        with:
+          tool: cargo-hack
 
-      - name: Check cli only
-        run: cargo check --workspace --all-targets --no-default-features --features cli
-
-      - name: Check server only
-        run: cargo check --workspace --all-targets --no-default-features --features server
+      # Every crate on its own, once with no features and once per feature.
+      #
+      # A workspace build cannot see these combinations: cargo enables a feature
+      # on a crate when any member of the build asks for it, and
+      # `versatiles_node` always asks for `versatiles_container/sftp` — so no
+      # workspace build ever compiled that crate without SFTP, and three
+      # functions that only await on the SFTP path went unflagged. A crates.io
+      # user depending on `versatiles_container` alone gets exactly that build.
+      #
+      # clippy rather than check, and `-D warnings`, because what breaks under
+      # a narrower feature set is usually a warning, not an error: code only one
+      # feature uses becomes dead without it. `gdal` and `bindgen` need GDAL on
+      # the runner; the feature matrix below covers them.
+      - name: Lint each crate with each feature alone
+        run: cargo hack clippy --workspace --each-feature --exclude-features gdal,bindgen --all-targets -- -D warnings
 
   # ============================================================================
   # Linux: Feature Matrix

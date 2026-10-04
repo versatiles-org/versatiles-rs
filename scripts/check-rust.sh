@@ -2,7 +2,8 @@
 # Run all Rust quality checks across the workspace.
 #
 # Steps (in order): rustfmt, cargo check (no-default-features, server, cli,
-# server+cli, default, all-features), clippy with -D warnings, tests with all
+# server+cli, default, all-features), clippy with -D warnings (whole workspace,
+# then each crate with each feature alone via cargo-hack), tests with all
 # features, doc build with -D warnings and the gdal feature, and the cargo-deny
 # dependency policy.
 #
@@ -71,6 +72,22 @@ result=$(cargo clippy --color=always --workspace --all-features --all-targets --
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo clippy"
    exit 1
+fi
+
+# Each crate on its own, with no features and with each feature alone. The
+# workspace builds above cannot produce these: cargo enables a feature on a
+# crate when any member asks for it. Mirrors "Linux: Features (checks)" in CI.
+#
+# Skipped rather than failed when cargo-hack is missing, as cargo-deny is below.
+if command -v cargo-hack >/dev/null 2>&1; then
+   echo "cargo hack clippy --each-feature"
+   result=$(cargo hack clippy --color=always --workspace --each-feature --exclude-features gdal,bindgen --all-targets -- -D warnings 2>&1)
+   if [ $? -ne 0 ]; then
+      echo -e "$result\nERROR DURING: cargo hack clippy"
+      exit 1
+   fi
+else
+   echo "cargo hack clippy (skipped: not installed — cargo install cargo-hack)"
 fi
 
 # echo "cargo test"

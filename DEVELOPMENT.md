@@ -348,24 +348,24 @@ npm install
 `.github/workflows/ci.yml` runs these jobs; `CI Success` depends on all of them
 and is the status branch protection requires.
 
-| Job                      | What it checks                                                         |
-| ------------------------ | ---------------------------------------------------------------------- |
-| Markdown Lint            | markdownlint over every `*.md`                                         |
-| Linux: Format            | `cargo fmt-check`                                                      |
-| Linux: Dependencies      | `cargo deny check` — advisories, licences, sources                     |
-| Linux: MSRV              | workspace compiles on the declared `rust-version`                      |
-| Linux: Docs              | `cargo doc` with `-D warnings`, gdal feature                           |
-| Linux: Node.js           | typecheck, lint, format, native build, Node tests                      |
-| Linux: Coverage          | `cargo llvm-cov`, uploaded to Codecov                                  |
-| Linux: Features (checks) | `cargo check` for no-default-features, cli, server                     |
-| Linux: Features (matrix) | tests for default, gdal, all-features; clippy on all-features          |
-| Linux musl: Test         | test suite natively on musl (four release targets use it)              |
-| Linux ARM: Test          | test suite on aarch64                                                  |
-| Windows: Test            | test suite on x86_64 Windows                                           |
-| Windows ARM: Test        | test suite on aarch64 Windows                                          |
-| Windows: Node.js         | Node bindings on Windows                                               |
-| macOS: GDAL              | test suite on macOS with GDAL                                          |
-| Linux: Fuzz              | the four fuzz targets, weekly or on manual dispatch; skipped otherwise |
+| Job                      | What it checks                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------- |
+| Markdown Lint            | markdownlint over every `*.md`                                                                 |
+| Linux: Format            | `cargo fmt-check`                                                                              |
+| Linux: Dependencies      | `cargo deny check` — advisories, licences, sources                                             |
+| Linux: MSRV              | workspace compiles on the declared `rust-version`                                              |
+| Linux: Docs              | `cargo doc` with `-D warnings`, gdal feature                                                   |
+| Linux: Node.js           | typecheck, lint, format, native build, Node tests                                              |
+| Linux: Coverage          | `cargo llvm-cov`, uploaded to Codecov                                                          |
+| Linux: Features (checks) | clippy `-D warnings` on each crate with no features and with each feature alone (`cargo hack`) |
+| Linux: Features (matrix) | tests for default, gdal, all-features; clippy on all-features                                  |
+| Linux musl: Test         | test suite natively on musl (four release targets use it)                                      |
+| Linux ARM: Test          | test suite on aarch64                                                                          |
+| Windows: Test            | test suite on x86_64 Windows                                                                   |
+| Windows ARM: Test        | test suite on aarch64 Windows                                                                  |
+| Windows: Node.js         | Node bindings on Windows                                                                       |
+| macOS: GDAL              | test suite on macOS with GDAL                                                                  |
+| Linux: Fuzz              | the four fuzz targets, weekly or on manual dispatch; skipped otherwise                         |
 
 Two things are worth knowing about the dependency job: it is the only check that
 looks at _published_ vulnerabilities rather than at this repository's code, and
