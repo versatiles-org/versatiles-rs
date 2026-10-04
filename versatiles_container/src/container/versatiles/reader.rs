@@ -81,6 +81,11 @@ use crate::{
 /// indices are cached (least-recently-used) to accelerate repeated random access.
 pub struct VersaTilesReader {
 	block_index: BlockIndex,
+	/// Read only by the `cli` probe, which reports what the header says.
+	#[cfg_attr(
+		not(feature = "cli"),
+		expect(dead_code, reason = "only the `cli` probe reads the header")
+	)]
 	header: FileHeader,
 	metadata: TileSourceMetadata,
 	reader: Arc<DataReader>,

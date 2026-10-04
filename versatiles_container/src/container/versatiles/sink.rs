@@ -122,6 +122,14 @@ impl VersaTilesSink {
 	}
 
 	/// Create the appropriate DataWriter for the destination.
+	#[cfg_attr(
+		not(feature = "sftp"),
+		expect(
+			clippy::unused_async,
+			clippy::unused_async_trait_impl,
+			reason = "awaits only on the `sftp://` path, which needs the `sftp` feature"
+		)
+	)]
 	async fn create_writer(&self) -> Result<Box<dyn DataWriterTrait>> {
 		if self.destination.starts_with("sftp://") {
 			#[cfg(feature = "sftp")]

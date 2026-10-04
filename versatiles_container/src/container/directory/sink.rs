@@ -26,6 +26,14 @@ enum Backend {
 }
 
 impl Backend {
+	#[cfg_attr(
+		not(feature = "sftp"),
+		expect(
+			clippy::unused_async,
+			clippy::unused_async_trait_impl,
+			reason = "awaits only on the `sftp://` path, which needs the `sftp` feature"
+		)
+	)]
 	async fn write_file(&self, rel_path: &str, data: &[u8]) -> Result<()> {
 		match self {
 			Self::Local { base_path } => {
@@ -64,6 +72,14 @@ pub struct DirectoryTileSink {
 
 impl DirectoryTileSink {
 	/// Open a directory tile sink from a destination string (local path or `sftp://` URL).
+	#[cfg_attr(
+		not(feature = "sftp"),
+		expect(
+			clippy::unused_async,
+			clippy::unused_async_trait_impl,
+			reason = "awaits only on the `sftp://` path, which needs the `sftp` feature"
+		)
+	)]
 	pub async fn open(
 		destination: &str,
 		tile_format: TileFormat,
