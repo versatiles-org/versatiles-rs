@@ -1,4 +1,35 @@
 # PowerShell script to install versatiles on Windows
+#
+# Installs the latest stable release. To install a particular release — a
+# release candidate, or an older version — pass its tag, or set
+# VERSATILES_VERSION:
+#
+#   & "$env:TEMP\install-windows.ps1" -Version v5.0.0-rc.2
+
+param(
+   # Release tag to install, e.g. "v5.0.0-rc.2"; the leading "v" is optional.
+   [string]$Version = $env:VERSATILES_VERSION
+)
+
+# The base URL of the release to download from. The tag ends up in a URL, so it
+# is checked against the shape of a version tag first.
+function Get-ReleaseUrl {
+   param ([string]$version)
+
+   if ([string]::IsNullOrWhiteSpace($version)) {
+      Write-Host "Installing the latest VersaTiles release" -ForegroundColor Green
+      return "https://github.com/versatiles-org/versatiles-rs/releases/latest/download"
+   }
+   if (-not $version.StartsWith("v")) {
+      $version = "v$version"
+   }
+   if ($version -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$') {
+      Write-Host "Not a version tag: $version (expected e.g. v5.0.0 or v5.0.0-rc.2)" -ForegroundColor Red
+      exit 1
+   }
+   Write-Host "Installing VersaTiles $version" -ForegroundColor Green
+   return "https://github.com/versatiles-org/versatiles-rs/releases/download/$version"
+}
 
 # Function to detect the system architecture
 function Detect-Architecture {
@@ -22,10 +53,11 @@ function Detect-Architecture {
 # Function to download and install the package
 function Install-Package {
    param (
-      [string]$architecture
+      [string]$architecture,
+      [string]$releaseUrl
    )
 
-   $packageUrl = "https://github.com/versatiles-org/versatiles-rs/releases/latest/download/versatiles-windows-$architecture.tar.gz"
+   $packageUrl = "$releaseUrl/versatiles-windows-$architecture.tar.gz"
    $checksumUrl = "$packageUrl.sha256"
    $downloadPath = "$env:TEMP\versatiles.tar.gz"
    $checksumPath = "$env:TEMP\versatiles.tar.gz.sha256"
@@ -89,5 +121,6 @@ function Install-Package {
 }
 
 # Main script execution
+$releaseUrl = Get-ReleaseUrl -version $Version
 $architecture = Detect-Architecture
-Install-Package -architecture $architecture
+Install-Package -architecture $architecture -releaseUrl $releaseUrl

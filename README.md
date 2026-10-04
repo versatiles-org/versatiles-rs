@@ -52,6 +52,8 @@ Install VersaTiles using the provided [installation script](https://github.com/v
 curl -Ls "https://github.com/versatiles-org/versatiles-rs/releases/latest/download/install-unix.sh" | sudo sh
 ```
 
+That installs the latest stable release. To install a particular one — say, a release candidate — append its tag: `… | sudo sh -s v5.0.0-rc.3`.
+
 ### MacOS
 
 Install VersaTiles via [Homebrew](https://docs.versatiles.org/guides/install_versatiles#homebrew-for-macos):

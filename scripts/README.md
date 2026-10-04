@@ -41,11 +41,11 @@ Run any of them as `./scripts/<name>` from anywhere in the repository.
 
 ## Install
 
-| Script                               | Purpose                                                                                        |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| [`install-gdal.sh`](#install-gdalsh) | Install GDAL development libraries via the system package manager                              |
-| [`install-unix.sh`](#install-unixsh) | Install the VersaTiles binary on Unix by downloading the correct precompiled release binary    |
-| `install-windows.ps1`                | Install the VersaTiles binary on Windows by downloading the correct precompiled release binary |
+| Script                                       | Purpose                                                                                        |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [`install-gdal.sh`](#install-gdalsh)         | Install GDAL development libraries via the system package manager                              |
+| [`install-unix.sh`](#install-unixsh)         | Install the VersaTiles binary on Unix by downloading the correct precompiled release binary    |
+| [`install-windows.ps1`](#install-windowsps1) | Install the VersaTiles binary on Windows by downloading the correct precompiled release binary |
 
 ## Release & Maintenance
 
@@ -144,6 +144,19 @@ on Ubuntu it is ignored with a warning).
 
 ```sh
 curl -Ls "https://github.com/versatiles-org/versatiles-rs/releases/latest/download/install-unix.sh" | sudo sh
+
+# A particular release instead of the latest stable one (or set VERSATILES_VERSION)
+curl -Ls "https://github.com/versatiles-org/versatiles-rs/releases/latest/download/install-unix.sh" | sudo sh -s v5.0.0-rc.3
+```
+
+### `install-windows.ps1`
+
+Installs the latest stable release, or the one given with `-Version`
+(or `VERSATILES_VERSION`):
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/versatiles-org/versatiles-rs/releases/latest/download/install-windows.ps1" -OutFile "$env:TEMP\install-windows.ps1"
+& "$env:TEMP\install-windows.ps1" -Version v5.0.0-rc.3
 ```
 
 ### `release-package.sh`

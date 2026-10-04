@@ -1,10 +1,42 @@
 #!/bin/sh
+#
+# Install the versatiles CLI into /usr/local/bin.
+#
+#   curl -Ls https://github.com/versatiles-org/versatiles-rs/releases/latest/download/install-unix.sh | sudo sh
+#
+# Installs the latest stable release. To install a particular release — a
+# release candidate, or an older version — pass its tag:
+#
+#   curl -Ls …/install-unix.sh | sudo sh -s v5.0.0-rc.2
+#
+# VERSATILES_VERSION works too, but `sudo` drops environment variables unless
+# they are given after it: `… | sudo VERSATILES_VERSION=v5.0.0-rc.2 sh`.
 
 # `-u` as well as `-e`: this script runs as root via `curl | sudo sh`, and an
 # unset variable expanding to nothing is how a path like "/usr/local/bin/$X"
 # quietly becomes something else. (`pipefail` is not POSIX, so it is not
 # available here — which is part of why the download below is no longer a pipe.)
 set -eu
+
+# Which release to install: the first argument, else VERSATILES_VERSION, else
+# the latest stable one. The tag ends up in a URL, so it is checked against the
+# shape of a version tag first; the leading "v" is optional.
+VERSION="${1:-${VERSATILES_VERSION:-}}"
+if [ -n "$VERSION" ]; then
+   case $VERSION in
+      v*) ;;
+      *) VERSION="v$VERSION" ;;
+   esac
+   if ! printf '%s\n' "$VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+      echo "Not a version tag: $VERSION (expected e.g. v5.0.0 or v5.0.0-rc.2)" >&2
+      exit 1
+   fi
+   RELEASE_URL="https://github.com/versatiles-org/versatiles-rs/releases/download/$VERSION"
+   echo "Installing VersaTiles $VERSION"
+else
+   RELEASE_URL="https://github.com/versatiles-org/versatiles-rs/releases/latest/download"
+   echo "Installing the latest VersaTiles release"
+fi
 
 # Detect architecture
 
@@ -49,7 +81,7 @@ echo "Detected OS: $OS"
 # beside it and only then extracted. A missing or mismatched checksum aborts —
 # the point is to refuse an archive we cannot account for, so there is no flag
 # to skip this.
-PACKAGE_URL="https://github.com/versatiles-org/versatiles-rs/releases/latest/download/versatiles-$OS-$ARCH.tar.gz"
+PACKAGE_URL="$RELEASE_URL/versatiles-$OS-$ARCH.tar.gz"
 CHECKSUM_URL="$PACKAGE_URL.sha256"
 
 WORKDIR=$(mktemp -d)
