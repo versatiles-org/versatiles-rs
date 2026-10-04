@@ -75,6 +75,7 @@
 //! therefore goes through the registry, not through [`open_tile_sink`].
 //!
 //! # Features
+//! - `sftp`: read and write containers over `sftp://` URLs.
 //! - `cli`: enables human‑readable probing of containers and tiles.
 //! - `test`: helpers for integration tests in downstream crates.
 //!
@@ -83,6 +84,13 @@
 //! - [`TileSource`], [`TilesWriter`]: object‑safe traits for IO
 //! - [`open_tile_sink`]: pick a [`TileSink`] from a destination path
 //! - [`TilesConvertReader`], [`convert_tiles_container`]: convenience conversion helpers
+
+// The README's examples are compiled and run with the other doctests, so they
+// cannot drift from the API unnoticed. They are not shown on docs.rs, whose front
+// page is the crate documentation above, with the links a README cannot carry.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;
 
 pub mod cache;
 /// Re‑exports in‑memory caches and helpers used by readers/writers.

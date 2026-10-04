@@ -14,7 +14,7 @@ This crate serves as the base dependency for all other VersaTiles components.
 ## Features
 
 - **Coordinate Types**: `TileCoord`, `TileBBox`, `TileCover`, `TilePyramid` for working with tile coordinates and bounding boxes
-- **Format Definitions**: Type-safe enums for tile formats (`TileFormat`), compressions (`TileCompression`), and precompressions
+- **Format Definitions**: Type-safe enums for tile formats (`TileFormat`), and compressions (`TileCompression`)
 - **Byte Utilities**: Efficient `ByteIterator` for reading blob data
 - **Traversal**: Tools for iterating through tile pyramids and bounding boxes
 - **I/O Utilities**: Helper traits and types for working with tile data streams
@@ -30,20 +30,22 @@ Or see [crates.io/crates/versatiles_core](https://crates.io/crates/versatiles_co
 ### Example
 
 ```rust
-use versatiles_core::{TileCoord, TileBBox, TilePyramid};
+use versatiles_core::{TileBBox, TileCoord, TilePyramid};
 
-// Create a tile coordinate (zoom, x, y)
-let coord = TileCoord::new(5, 16, 10)?;
+fn main() -> anyhow::Result<()> {
+    // A tile coordinate: zoom level, x, y
+    let coord = TileCoord::new(5, 16, 10)?;
+    println!("{coord:?} covers {:?}", coord.to_geo_bbox());
 
-// Create a bounding box at a specific zoom level
-let bbox = TileBBox::from_min_and_max(5, 10, 12, 15, 20)?;
+    // A bounding box of tiles at one zoom level
+    let bbox = TileBBox::from_min_and_max(5, 10, 12, 15, 20)?;
+    assert_eq!(bbox.count_tiles(), 54);
 
-// Create a multi-zoom pyramid covering all tiles up to zoom 8
-let pyramid = TilePyramid::new_full_up_to(8);
-
-// Convert to geographic coordinates
-let geo_bbox = bbox.to_geo_bbox();
-println!("Geographic bounds: {:?}", geo_bbox);
+    // A pyramid covering every tile up to zoom level 8
+    let pyramid = TilePyramid::new_full_up_to(8);
+    println!("{pyramid:?}");
+    Ok(())
+}
 ```
 
 ## API Documentation

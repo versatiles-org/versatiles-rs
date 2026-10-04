@@ -20,9 +20,9 @@
 //!
 //! ## Supported Formats
 //! - `*.versatiles`
-//! - `*.mbtiles` (requires `full` feature)
-//! - `*.pmtiles` (requires `full` feature)
-//! - `*.tar` (requires `full` feature)
+//! - `*.mbtiles`
+//! - `*.pmtiles`
+//! - `*.tar`
 //! - tiles stored in a local directory
 //!
 //! ## Usage Example
@@ -48,6 +48,13 @@
 //!     println!("Tiles have been successfully converted and saved to {output_path:?}");
 //! }
 //! ```
+
+// The README's examples are compiled with the other doctests, so they cannot
+// drift from the API unnoticed. They are not shown on docs.rs, whose front
+// page is the crate documentation above.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;
 
 pub mod config;
 /// Building the [`TilesRuntime`](versatiles_container::TilesRuntime) the CLI

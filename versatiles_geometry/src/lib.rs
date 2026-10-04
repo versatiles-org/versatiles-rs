@@ -1,7 +1,8 @@
 //! This crate provides geometric data structures and utilities for the VersaTiles ecosystem.
 //!
 //! It includes modules for:
-//! - `geo`: core geometry primitives and traits (e.g., `Point`, `Polygon`, etc.).
+//! - `geo`: features, properties and collections (`GeoFeature`, `GeoCollection`, …) built on
+//!   the `geo-types` primitives.
 //! - `geojson`: parsing and serialization for GeoJSON and NDGeoJSON.
 //! - `tile_outline`: helper for generating polygonal outlines from tile bounding boxes.
 //! - `vector_tile`: support for reading and writing Mapbox Vector Tile (MVT) protobuf data.
@@ -26,6 +27,13 @@
 //! assert_eq!(layer_stats(&parsed)?.len(), 1);
 //! # Ok::<(), anyhow::Error>(())
 //! ```
+
+// The README's examples are compiled and run with the other doctests, so they
+// cannot drift from the API unnoticed. They are not shown on docs.rs, whose front
+// page is the crate documentation above, with the links a README cannot carry.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;
 
 pub mod arc_graph;
 pub mod ext;

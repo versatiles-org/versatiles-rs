@@ -41,6 +41,13 @@
 //! assert_eq!(data.len(), 13);
 //! ```
 
+// The README's examples are compiled and run with the other doctests, so they
+// cannot drift from the API unnoticed. They are not shown on docs.rs, whose front
+// page is the crate documentation above, with the links a README cannot carry.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;
+
 pub mod byte_iterator;
 pub mod compression;
 /// Helpers for running work across threads.

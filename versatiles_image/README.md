@@ -31,22 +31,28 @@ Or see [crates.io/crates/versatiles_image](https://crates.io/crates/versatiles_i
 ### Example
 
 ```rust
-use versatiles_image::{DynamicImage, ImageFormat, ImageConvert};
+use versatiles_core::TileFormat;
+use versatiles_image::{
+    DynamicImage, DynamicImageTraitConvert, DynamicImageTraitOperation, GenericImageView, decode, encode,
+};
 
-// Load an image
-let img = DynamicImage::load_from_bytes(&image_data)?;
+fn main() -> anyhow::Result<()> {
+    let image = DynamicImage::new_rgb8(512, 512);
 
-// Convert format
-let png_data = img.encode_to_format(ImageFormat::PNG)?;
-let webp_data = img.encode_to_format(ImageFormat::WEBP)?;
+    // Encode and decode; `quality` and `effort` are ignored by codecs without them
+    let png = encode(&image, TileFormat::PNG, None, Some(6))?;
+    let webp = image.to_blob(TileFormat::WEBP, Some(80), None)?;
+    let decoded = decode(&png, TileFormat::PNG)?;
+    assert_eq!(decoded.dimensions(), (512, 512));
 
-// Transform
-let resized = img.resize(256, 256)?;
-let cropped = img.crop(0, 0, 128, 128)?;
+    // Transform: halve the size, then cut out a 128×128 corner
+    let half = decoded.scaled_down(2)?;
+    let corner = half.extract(0.0, 0.0, 128.0, 128.0, 128, 128)?;
+    assert_eq!(corner.dimensions(), (128, 128));
 
-// Get metadata
-let (width, height) = img.dimensions();
-println!("Image size: {}x{}", width, height);
+    println!("PNG {} bytes, WebP {} bytes", png.len(), webp.len());
+    Ok(())
+}
 ```
 
 ## API Documentation

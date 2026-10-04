@@ -27,6 +27,12 @@ This crate is designed for flexibility: readers are object-safe and can be wrapp
 - **Caching**: Built-in tile and metadata caching
 - **Progress Tracking**: Monitor conversion progress with event bus
 
+Cargo features:
+
+- `sftp`: read and write containers over `sftp://` URLs
+- `cli`: human-readable probing of containers and tiles
+- `test`: helpers for integration tests in downstream crates
+
 ## Usage
 
 ```sh
@@ -37,25 +43,26 @@ Or see [crates.io/crates/versatiles_container](https://crates.io/crates/versatil
 
 ### Example
 
-```rust
-use versatiles_container::*;
-use versatiles_core::*;
+```rust,no_run
+use std::{path::Path, sync::Arc};
+use versatiles_container::{TilesConvertReader, TilesConverterParameters, TilesRuntime};
+use versatiles_core::TilePyramid;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Open a source container via the registry
+    // Open a source container; the format is inferred from the extension
     let runtime = TilesRuntime::default();
-    let reader = runtime.get_reader_from_str("input.mbtiles").await?;
+    let reader = runtime.reader_from_str("input.mbtiles").await?;
 
-    // Optionally adapt the reader: limit to a tile pyramid
+    // Optionally adapt the reader: limit it to zoom levels 0–8
     let params = TilesConverterParameters {
         tile_pyramid: Some(TilePyramid::new_full_up_to(8)),
         ..Default::default()
     };
-    let reader = Box::new(TilesConvertReader::new_from_reader(reader, params)?);
+    let reader = Arc::new(TilesConvertReader::new_from_reader(reader, params).await?);
 
-    // Write to a target path; format is inferred from the extension
-    runtime.write_to_path(reader, "output.versatiles").await?;
+    // Write to a target path; the format is inferred from the extension
+    runtime.write_to_path(reader, Path::new("output.versatiles")).await?;
     Ok(())
 }
 ```

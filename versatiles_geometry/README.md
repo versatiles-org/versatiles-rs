@@ -13,7 +13,7 @@ This crate is essential for reading, transforming, and exporting geospatial vect
 
 ## Features
 
-- **Geometry Primitives**: Core geometric types including `Point`, `LineString`, `Polygon`, and `MultiPolygon`
+- **Geometry Primitives**: Built on the `geo-types` `Point`, `LineString`, `Polygon` and `MultiPolygon`, with features, properties and collections in `geo`
 - **GeoJSON Support**: Parse and serialize GeoJSON and newline-delimited GeoJSON (NDGeoJSON)
 - **Vector Tiles**: Read and write Mapbox Vector Tile (MVT) protobuf format, with full MVT 2.1 validation and repair
 - **MVT Validation**: `validate_tile` checks for missing `extent`/`version` fields, duplicate layer names, polygon winding issues, and degenerate rings
@@ -33,28 +33,30 @@ Or see [crates.io/crates/versatiles_geometry](https://crates.io/crates/versatile
 
 ```rust
 use versatiles_geometry::{
-    geo::{Point, Polygon},
-    geojson::GeoJson,
-    vector_tile::{VectorTile, validate_tile, repair_tile},
+    geojson::parse_geojson,
+    vector_tile::{VectorTile, VectorTileLayer, repair_tile, validate_tile},
 };
 
-// Create geometric primitives
-let point = Point::new(13.4, 52.5);
+fn main() -> anyhow::Result<()> {
+    // Parse GeoJSON into features
+    let collection = parse_geojson(
+        r#"{"type":"FeatureCollection","features":[
+            {"type":"Feature","geometry":{"type":"Point","coordinates":[13.4,52.5]},"properties":{}}
+        ]}"#,
+    )?;
+    assert_eq!(collection.features.len(), 1);
 
-// Parse GeoJSON
-let geojson_str = r#"{"type": "Point", "coordinates": [13.4, 52.5]}"#;
-let geojson = GeoJson::from_str(geojson_str)?;
+    // Encode a vector tile (MVT) and read it back
+    let tile = VectorTile::new(vec![VectorTileLayer::new_standard("places")]);
+    let blob = tile.to_blob()?;
+    let tile = VectorTile::from_blob(&blob)?;
 
-// Work with vector tiles (MVT)
-let mvt_data: Vec<u8> = /* ... */;
-let tile = VectorTile::from_bytes(&mvt_data)?;
-
-// Validate against MVT 2.1 spec
-let issues = validate_tile(&tile);
-if !issues.is_empty() {
-    // Repair: fix structural issues and polygon winding.
-    // Pass drop_offenders=true to also remove undecodable features.
-    let fixed = repair_tile(tile, false)?;
+    // Check it against the MVT 2.1 spec, and repair it if needed.
+    // `true` would also drop features that cannot be decoded.
+    if !validate_tile(&tile).is_empty() {
+        let _repaired = repair_tile(tile, false)?;
+    }
+    Ok(())
 }
 ```
 

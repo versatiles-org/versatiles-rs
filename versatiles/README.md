@@ -17,8 +17,11 @@ The CLI provides commands for:
 
 - **`convert`**: Convert between tile formats
 - **`probe`**: Inspect tile containers
+- **`reduce`**: Reduce a tileset to what a style actually draws
 - **`serve`**: Run an HTTP tile server
-- **`dev`**: Development server with hot reload
+- **`mosaic`**: Tile and assemble image mosaics
+- **`dev`**: Unstable developer tools
+- **`help`**: Detailed help on sources, pipelines and configuration
 
 ## As a Library
 
@@ -34,21 +37,16 @@ Or see [crates.io/crates/versatiles](https://crates.io/crates/versatiles) for ve
 
 ### Example
 
-```rust
-use versatiles::{
-    container::*,
-    core::*,
-};
+```rust,no_run
+use versatiles::container::TilesRuntime;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let runtime = TilesRuntime::default();
-    let reader = runtime.get_reader_from_str("input.pmtiles").await?;
+    let reader = runtime.reader_from_str("input.pmtiles").await?;
 
-    // Define the output filename
+    // Write the tiles to the output file; the format follows the extension
     let output_path = std::env::temp_dir().join("output.versatiles");
-
-    // Write the tiles to the output file
     runtime.write_to_path(reader, &output_path).await?;
 
     println!("Tiles converted successfully!");
