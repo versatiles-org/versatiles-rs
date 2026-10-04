@@ -55,8 +55,14 @@ filter_unconventional = false
 # message unparseable as a conventional commit, and git-cliff then falls back to
 # the raw subject — leaking the `type(scope):` prefix into the notes. Repair the
 # separation before parsing rather than rendering the prefix.
+#
+# The second entry marks a break that went out unmarked. Pushed history is not
+# rewritten, so the `!` is added here instead; match the whole subject so no
+# other commit is caught by it.
 commit_preprocessors = [
   { pattern = "^(\\w+(\\(.+?\\))?!?: [^\\n]+)\\n([^\\n])", replace = "${1}\n\n${3}" },
+  # 91256f0f made open-ended CORS patterns a startup error (#254).
+  { pattern = "^fix\\(cors\\): update allowed origins patterns to enforce scheme and prevent open-ended globs", replace = "fix(cors)!: update allowed origins patterns to enforce scheme and prevent open-ended globs" },
 ]
 
 commit_parsers = [
