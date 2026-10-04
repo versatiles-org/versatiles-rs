@@ -72,7 +72,7 @@ impl TileSource {
 	///
 	/// # Returns
 	///
-	/// A `ContainerReader` instance ready to read tiles
+	/// A `TileSource` ready to read tiles
 	///
 	/// # Errors
 	///
@@ -85,10 +85,10 @@ impl TileSource {
 	///
 	/// ```javascript
 	/// // Open local file
-	/// const reader = await ContainerReader.from_path('tiles.versatiles');
+	/// const source = await TileSource.fromPath('tiles.versatiles');
 	///
 	/// // Open remote file
-	/// const reader = await ContainerReader.from_path('https://example.com/tiles.pmtiles');
+	/// const source = await TileSource.fromPath('https://example.com/tiles.pmtiles');
 	///
 	/// // Open an SFTP file with a specific key
 	/// const reader = await TileSource.fromPath('sftp://host/tiles.pmtiles', {
@@ -247,9 +247,11 @@ impl TileSource {
 	/// - `total`: Total tile count
 	/// - `percentage`: Progress percentage (0-100)
 	/// - `speed`: Processing speed (tiles/second)
-	/// - `eta`: Estimated completion time (as JavaScript Date)
+	/// - `estimatedSecondsRemaining`: Seconds left, if it can be estimated yet
+	/// - `etaTimestamp`: Expected completion as milliseconds since the epoch, for `new Date(…)`
+	/// - `message`: The current step, if any
 	///
-	/// **onMessage callback** receives:
+	/// **onMessage callback** receives one object with:
 	/// - `type`: Message type ("step", "warning", or "error")
 	/// - `message`: The message text
 	///
@@ -291,7 +293,7 @@ impl TileSource {
 	///   (progress) => {
 	///     console.log(`${progress.percentage.toFixed(1)}% complete`);
 	///   },
-	///   (type, message) => {
+	///   ({ type, message }) => {
 	///     if (type === 'error') console.error(message);
 	///   }
 	/// );

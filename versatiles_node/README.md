@@ -217,14 +217,14 @@ Open a tile container.
 
 **Returns:** `Promise<TileSource>`
 
-#### `TileSource.openVpl(vpl, basePath?, options?)`
+#### `TileSource.fromVpl(vpl, dir?, options?)`
 
 Create a tile source from VPL (VersaTiles Pipeline Language).
 
 **Parameters:**
 
 - `vpl` (string): VPL query string
-- `basePath` (string, optional): Base path for resolving relative paths
+- `dir` (string, optional): Base directory for resolving relative paths in the VPL; defaults to the current working directory
 - `options` (SourceOptions, optional): Same as `TileSource.fromPath()`
 
 **Returns:** `Promise<TileSource>`
@@ -249,13 +249,24 @@ Get TileJSON metadata.
 
 ```typescript
 interface TileJSON {
-  tilejson: string;
-  tiles?: string[];
-  vector_layers?: VectorLayer[];
-  attribution?: string;
-  bounds?: [number, number, number, number];
-  center?: [number, number, number];
-  // ... and more
+  version: string;
+  minzoom: number;
+  maxzoom: number;
+  bounds?: number[]; // [west, south, east, north]
+  center?: number[]; // [longitude, latitude, zoom]
+  vectorLayers?: VectorLayer[];
+  tileType?: string; // "raster", "vector", …
+  tileFormat?: string; // e.g. "image/png", "application/x-protobuf"
+  tileSchema?: string;
+  tileSize?: number;
+}
+
+interface VectorLayer {
+  id: string;
+  fields: Record<string, string>;
+  description?: string;
+  minzoom?: number;
+  maxzoom?: number;
 }
 ```
 
@@ -336,7 +347,7 @@ Remove a tile source.
 
 - `name` (string): Source name to remove
 
-**Returns:** `Promise<void>`
+**Returns:** `Promise<boolean>` — `true` if a source with that name was removed
 
 #### `server.addStaticSource(path, urlPrefix?)`
 

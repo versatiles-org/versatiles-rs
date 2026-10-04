@@ -30,18 +30,17 @@ npm run build        # For release
 
 ```text
 versatiles_node/
-├── src/                 # Rust source code
-│   ├── lib.rs          # Main module
-│   ├── container.rs    # ContainerReader implementation
-│   ├── server.rs       # TileServer implementation
-│   ├── types.rs        # Type definitions
-│   └── utils.rs        # Utilities
-├── examples/           # JavaScript examples (not published to NPM)
-├── __test__/           # Tests (not published to NPM)
+├── src/                # Rust source and the *.test.ts tests, see src/README.md
+│   ├── tile_source.rs  # TileSource
+│   ├── server.rs       # TileServer
+│   ├── convert.rs      # convert()
+│   ├── types/          # Option objects, TileCoord, TileJSON, …
+│   └── …
+├── examples/           # TypeScript examples (not published to NPM)
+├── scripts/            # Build helpers, e.g. generate-vpl.ts
 ├── Cargo.toml          # Rust dependencies
-├── package.json        # NPM package configuration
+├── package.json        # NPM package configuration; `files` decides what is published
 ├── build.rs            # napi-rs build script
-├── .npmignore          # Files to exclude from NPM package
 └── README.md           # User documentation
 ```
 
@@ -80,26 +79,16 @@ This creates an optimized release build with:
 
 ## NPM Package Contents
 
-When published, the NPM package includes **only**:
+The `files` list in `package.json` decides what the main package contains:
 
-✅ **Included:**
-
-- `index.js` - Generated JavaScript bindings
+- `index.js`, `index.cjs` - Generated JavaScript bindings (ESM and CommonJS)
 - `index.d.ts` - TypeScript type definitions
-- `*.node` - Native binary for the platform
-- `package.json` - Package metadata
-- `README.md` - User documentation
+- `vpl.js`, `vpl.d.ts` - The typed VPL builder (`@versatiles/versatiles-rs/vpl`)
+- `package.json`, `README.md` - always included by npm
 
-❌ **Excluded** (via `.npmignore`):
-
-- `src/` - Rust source code
-- `examples/` - Example files
-- `__test__/` - Tests
-- `Cargo.toml`, `build.rs` - Build configuration
-- `target/` - Build artifacts
-- Development files
-
-Users download pre-built binaries for their platform via `optionalDependencies`.
+Everything else — Rust source, tests, examples, build files — stays out. The
+native `*.node` binary is not in the main package either: each platform has its
+own package, and users get the right one through `optionalDependencies`.
 
 ## Testing
 
@@ -110,29 +99,38 @@ Users download pre-built binaries for their platform via `optionalDependencies`.
 npm run build:debug
 
 # Run individual examples
-node examples/probe.js
-node examples/convert.js
-node examples/serve.js
-node examples/read-tiles.js
+npx tsx examples/probe.ts
+npx tsx examples/convert.ts
+npx tsx examples/serve.ts
+npx tsx examples/read-tiles.ts
+
+# Or run all of them, as CI does
+npm run test:examples
 ```
 
 ### Add Tests
 
-Tests are written in TypeScript and located in the `src/` directory:
+Tests are written in TypeScript, run with [vitest](https://vitest.dev), and
+located next to the code in `src/`:
 
 ```typescript
 // src/example.test.ts
-import { describe, test } from 'node:test';
-import assert from 'node:assert';
-import { ContainerReader } from '../index.js';
+import { describe, expect, test } from 'vitest';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { TileSource } from '../index.js';
+
+const TESTDATA = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../testdata');
 
 describe('Example', () => {
   test('should work', async () => {
-    const reader = await ContainerReader.fromPath('../testdata/berlin.mbtiles');
-    // ... assertions
+    const source = await TileSource.fromPath(path.join(TESTDATA, 'berlin.mbtiles'));
+    expect(source.tileJson().maxzoom).toBe(14);
   });
 });
 ```
+
+Run one file with `npx vitest run src/example.test.ts`.
 
 Run tests with:
 
@@ -167,7 +165,7 @@ npm test
 
 ### Modifying Types
 
-1. Update type definitions in `src/types.rs`
+1. Update type definitions in `src/types/`
 2. Ensure `#[napi(object)]` or `#[napi]` attributes are correct
 3. Rebuild to generate new TypeScript definitions
 4. Update documentation
@@ -182,12 +180,14 @@ Before submitting a pull request, run:
 npm run check
 ```
 
-This runs:
+This runs, in order:
 
+- `npm run build:debug` - Debug build of the native module and the VPL builder
 - `npm run typecheck` - TypeScript type checking
 - `npm run lint` - ESLint
-- `npm run format:check` - Prettier format validation
 - `npm test` - All tests
+- `npm run test:examples` - Every example in `examples/`
+- `npm run format:check` - Prettier format validation
 
 ### Auto-fixing Issues
 
@@ -235,7 +235,7 @@ Run `npm run format` to format all files automatically.
 ### Linting
 
 - **Tool**: ESLint with TypeScript support
-- **Config**: See `eslint.config.mjs`
+- **Config**: See `eslint.config.js`
 - **Auto-fix**: Run `npm run lint:fix`
 
 ### Rust
@@ -352,9 +352,10 @@ Before publishing a new version:
 - [ ] Run `npm run build` to verify Node.js build
 - [ ] Test on multiple platforms if possible
 - [ ] Update documentation if API changed
-- [ ] Tag release in git
-- [ ] GitHub Actions will build platform binaries
-- [ ] Publish to NPM: `npm publish --access public`
+- [ ] Cut the release with `scripts/release-package.sh` (see the root `RELEASING.md`)
+- [ ] GitHub Actions builds the platform binaries and publishes all packages to npm
+
+If the automated publish fails, `RELEASING.md` describes the manual fallback.
 
 ## Platform-Specific Builds
 
@@ -367,6 +368,7 @@ The package supports multiple platforms through separate packages:
 - `@versatiles/versatiles-rs-linux-x64-musl` (Alpine Linux x64)
 - `@versatiles/versatiles-rs-linux-arm64-musl` (Alpine Linux ARM64)
 - `@versatiles/versatiles-rs-win32-x64-msvc` (Windows x64)
+- `@versatiles/versatiles-rs-win32-arm64-msvc` (Windows ARM64)
 
 GitHub Actions builds these automatically on release.
 

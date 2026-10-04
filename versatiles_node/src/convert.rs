@@ -183,9 +183,11 @@ pub(crate) async fn convert_tiles_with_options(
 /// - `total`: Total tile count
 /// - `percentage`: Progress percentage (0-100)
 /// - `speed`: Processing speed (tiles/second)
-/// - `eta`: Estimated completion time (as JavaScript Date)
+/// - `estimatedSecondsRemaining`: Seconds left, if it can be estimated yet
+/// - `etaTimestamp`: Expected completion as milliseconds since the epoch, for `new Date(…)`
+/// - `message`: The current step, if any
 ///
-/// **onMessage callback** receives:
+/// **onMessage callback** receives one object with:
 /// - `type`: Message type ("step", "warning", or "error")
 /// - `message`: The message text
 ///
@@ -226,9 +228,9 @@ pub(crate) async fn convert_tiles_with_options(
 ///   (progress) => {
 ///     console.log(`${progress.percentage.toFixed(1)}% complete`);
 ///     console.log(`Speed: ${progress.speed.toFixed(0)} tiles/sec`);
-///     console.log(`ETA: ${new Date(progress.eta)}`);
+///     if (progress.etaTimestamp) console.log(`ETA: ${new Date(progress.etaTimestamp)}`);
 ///   },
-///   (type, message) => {
+///   ({ type, message }) => {
 ///     if (type === 'error') console.error(message);
 ///     else if (type === 'warning') console.warn(message);
 ///     else console.log(message);

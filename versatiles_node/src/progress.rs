@@ -56,16 +56,16 @@ pub struct ProgressData {
 	/// **Example:** `45.2` means approximately 45 seconds remaining
 	pub estimated_seconds_remaining: Option<f64>,
 
-	/// Estimated completion time as JavaScript Date
+	/// Estimated completion time
 	///
 	/// Timestamp in milliseconds since UNIX epoch (January 1, 1970).
-	/// Can be converted to a JavaScript Date object with `new Date(eta_timestamp)`.
+	/// Can be converted to a JavaScript Date object with `new Date(etaTimestamp)`.
 	/// Returns `null` if insufficient data to estimate.
 	///
 	/// **Example:**
 	/// ```javascript
-	/// if (progress.eta_timestamp) {
-	///   const completionTime = new Date(progress.eta_timestamp);
+	/// if (progress.etaTimestamp) {
+	///   const completionTime = new Date(progress.etaTimestamp);
 	///   console.log(`Expected completion: ${completionTime.toLocaleTimeString()}`);
 	/// }
 	/// ```
@@ -174,8 +174,8 @@ impl Default for Progress {
 impl Progress {
 	/// Register a progress event listener
 	///
-	/// The callback receives ProgressData with position, total, percentage, speed, eta, and message.
-	/// The eta field is a JavaScript Date object representing the estimated time of completion.
+	/// The callback receives ProgressData with position, total, percentage, speed,
+	/// estimatedSecondsRemaining, etaTimestamp (milliseconds since the epoch) and message.
 	#[napi(ts_args_type = "callback: (data: ProgressData) => void")]
 	pub fn on_progress(&self, callback: Function<'static>) -> Result<&Self> {
 		let tsfn: ProgressCallback = callback
@@ -191,8 +191,9 @@ impl Progress {
 
 	/// Register a message event listener for step, warning, and error messages
 	///
-	/// The callback receives (type, message) where type is 'step', 'warning', or 'error'
-	#[napi(ts_args_type = "callback: (type: string, message: string) => void")]
+	/// The callback receives one MessageData object, `{ type, message }`, where type is
+	/// 'step', 'warning', or 'error'
+	#[napi(ts_args_type = "callback: (data: MessageData) => void")]
 	pub fn on_message(&self, callback: Function<'static>) -> Result<&Self> {
 		let tsfn: MessageCallback = callback
 			.build_threadsafe_function::<MessageData>()

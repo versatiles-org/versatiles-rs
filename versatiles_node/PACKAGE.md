@@ -13,10 +13,13 @@ When you install `@versatiles/versatiles-rs`, you get:
 ├── index.js              # ESM JavaScript bindings
 ├── index.cjs             # CommonJS JavaScript bindings
 ├── index.d.ts            # TypeScript type definitions
-├── *.node                # Native binary (platform-specific)
+├── vpl.js, vpl.d.ts      # Typed VPL builder (`@versatiles/versatiles-rs/vpl`)
 ├── package.json          # Package metadata
 └── README.md             # Documentation
 ```
+
+The native binary (`*.node`) is not in this package. It comes from the
+platform package npm installs alongside it, see below.
 
 **Module Format:** The package supports both ESM (`import`) and CommonJS (`require`) through dual exports.
 
@@ -29,7 +32,7 @@ These files exist in the repository but are **not** published:
 ```text
 ✗ src/                    # Rust source code (~20 KB)
 ✗ examples/               # Example files (~30 KB)
-✗ __test__/               # Test files
+✗ src/*.test.ts           # Test files
 ✗ Cargo.toml              # Rust configuration
 ✗ build.rs                # Build script
 ✗ target/                 # Build artifacts (hundreds of MB)
@@ -37,7 +40,8 @@ These files exist in the repository but are **not** published:
 ✗ CONTRIBUTING.md         # Development docs
 ```
 
-This is controlled by [.npmignore](./.npmignore).
+This is controlled by the `files` list in [package.json](./package.json), which
+names exactly what is published.
 
 ## Platform-Specific Binaries
 
@@ -52,6 +56,7 @@ The package uses `optionalDependencies` for platform-specific binaries:
 | Linux x64 (musl)    | `@versatiles/versatiles-rs-linux-x64-musl`   | ~8 MB       |
 | Linux ARM64 (musl)  | `@versatiles/versatiles-rs-linux-arm64-musl` | ~8 MB       |
 | Windows x64         | `@versatiles/versatiles-rs-win32-x64-msvc`   | ~6 MB       |
+| Windows ARM64       | `@versatiles/versatiles-rs-win32-arm64-msvc` | ~6 MB       |
 
 ### How Platform Selection Works
 
@@ -112,7 +117,8 @@ GitHub Actions automatically:
 2. Creates platform-specific packages
 3. Publishes to NPM on git tags
 
-See `.github/workflows/node-bindings.yml` for configuration.
+See `.github/workflows/release.yml` for configuration: a `v*` tag, or a manual
+run with `publish_npm`, publishes all of them.
 
 ## Package Size Optimization
 
@@ -149,18 +155,21 @@ See `.github/workflows/node-bindings.yml` for configuration.
 
 ## File Size Breakdown
 
-Typical NPM package contents:
+The main package, as `npm pack --dry-run` lists it:
 
 ```text
-5.2 MB  versatiles.darwin-arm64.node    # Native binary
-  45 KB  index.js                        # ESM bindings
-  45 KB  index.cjs                       # CommonJS bindings
-  12 KB  index.d.ts                      # TS definitions
-   3 KB  package.json                    # Metadata
-  15 KB  README.md                       # Documentation
+ 31 KB  index.js                        # ESM bindings
+ 35 KB  index.cjs                       # CommonJS bindings
+ 50 KB  index.d.ts                      # TS definitions
+ 22 KB  vpl.js                          # VPL builder
+ 26 KB  vpl.d.ts                        # VPL builder types
+  4 KB  package.json                    # Metadata
+ 18 KB  README.md                       # Documentation
 ────────
-5.4 MB  Total
+~190 KB Total
 ```
+
+The platform package installed next to it adds the native binary, ~5-8 MB.
 
 ## Advanced: Creating Custom Builds
 
@@ -190,17 +199,16 @@ npm link @versatiles/versatiles-rs
 
 If the package seems too large:
 
-1. Check `.npmignore` is working: `npm pack --dry-run`
-2. Verify build artifacts excluded: `ls -lah target/` (should not exist in package)
-3. Check only one `.node` file included (not multiple platforms)
+1. List what would be published: `npm pack --dry-run`
+2. Anything unexpected there has to come from the `files` list in `package.json`
+3. Check only one platform package was installed (not several)
 
 ### Missing Files
 
 If files are missing after install:
 
-1. Check they're not in `.npmignore`
-2. Verify `package.json` `files` field (if present)
-3. Check platform-specific package was downloaded
+1. Check the file is listed in the `files` field of `package.json`
+2. Check platform-specific package was downloaded
 
 ### Platform Binary Not Found
 
@@ -216,4 +224,4 @@ If the native binary isn't loaded:
 - [napi-rs Documentation](https://napi.rs/)
 - [NPM optionalDependencies](https://docs.npmjs.com/cli/v9/configuring-npm/package-json#optionaldependencies)
 - [npm pack](https://docs.npmjs.com/cli/v9/commands/npm-pack)
-- [.npmignore](https://docs.npmjs.com/cli/v9/configuring-npm/npmignore)
+- [package.json `files`](https://docs.npmjs.com/cli/v9/configuring-npm/package-json#files)

@@ -32,7 +32,7 @@ npx tsx examples/convert.ts
 - Filtering by zoom level
 - Filtering by bounding box
 - Adding border tiles around a bounding box
-- Applying compression (gzip, brotli)
+- Applying gzip compression (`convert-with-progress.ts` uses brotli)
 - Coordinate transformations (flipY, swapXy)
 
 **Output:** Creates several `.versatiles` files in `/tmp/`
@@ -86,11 +86,12 @@ npx tsx examples/serve.ts
 - Multiple server configurations
 - Graceful shutdown
 
-**URLs available:**
+**URLs available** — the examples ask the operating system for a free port
+(`port: 0`) and print the URLs with the port they got:
 
-- Tiles: `http://127.0.0.1:8080/tiles/berlin/{z}/{x}/{y}`
-- TileJSON: `http://127.0.0.1:8080/tiles/berlin/meta.json`
-- Status: `http://127.0.0.1:8080/status`
+- Tiles: `http://127.0.0.1:<port>/tiles/berlin/{z}/{x}/{y}`
+- TileJSON: `http://127.0.0.1:<port>/tiles/berlin/meta.json`
+- Status: `http://127.0.0.1:<port>/status`
 
 **Note:** The example runs multiple server configurations sequentially, each for 1 second.
 
@@ -267,9 +268,11 @@ Rebuild the native bindings:
 npm run build:debug
 ```
 
-### Server port already in use
+### Choosing a fixed port
 
-The server examples run on port 8080. If it's already in use, you can modify the example files to use a different port.
+The server examples use `port: 0`, so the operating system picks a free port
+and they cannot collide with anything already running. To serve on a fixed
+port instead, change `port: 0` in the example to the port you want.
 
 ### TypeScript/ESM issues
 
