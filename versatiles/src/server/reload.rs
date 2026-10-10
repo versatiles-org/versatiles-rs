@@ -40,6 +40,12 @@ impl ReloadHandle {
 		Ok(())
 	}
 
+	/// Opens what is new or changed, swaps it in, and only then drops what is gone.
+	///
+	/// The order is the point (#283). A changed source is replaced by one
+	/// `insert`, so there is no moment at which its name is missing and its
+	/// requests are answered with a 404 — which a proxy in front would cache.
+	/// Requests in flight keep their `Arc` to the source they started with.
 	async fn apply_tile_source_diff(&self, new_configs: &[TileSourceConfig]) {
 		let old_configs = self.current_tile_configs.lock().unwrap().clone();
 
@@ -49,45 +55,64 @@ impl ReloadHandle {
 				.or_else(|| cfg.src.name().ok().map(ToString::to_string))
 		}
 
-		// Remove sources that disappeared or changed.
-		for old in &old_configs {
-			let Some(old_name) = config_name(old) else {
-				continue;
-			};
-			let matches = new_configs
-				.iter()
-				.any(|c| config_name(c).as_deref() == Some(&old_name) && c == old);
-			if !matches {
-				self.tile_sources.remove(&old_name);
-				log::info!("reload: removed tile source '{old_name}'");
-			}
-		}
+		// What the server holds once this reload is through. Not simply
+		// `new_configs`: a source that failed to open is left out, so that the
+		// next reload sees it as still to do and tries again.
+		let mut applied_configs: Vec<TileSourceConfig> = Vec::new();
 
-		// Add sources that are new or changed.
+		// Open sources that are new or changed, and swap each in as it is ready.
 		for new in new_configs {
 			let Some(new_name) = config_name(new) else {
 				log::warn!("reload: skipping tile source with no resolvable name");
 				continue;
 			};
-			let already_loaded = old_configs
-				.iter()
-				.any(|c| config_name(c).as_deref() == Some(&new_name) && c == new);
-			if already_loaded {
+			if old_configs.contains(new) {
+				applied_configs.push(new.clone());
 				continue;
 			}
-			match self.runtime.reader(new.src.clone()).await {
-				Ok(reader) => match ServerTileSource::from(reader, &new_name) {
-					Ok(source) => {
-						self.tile_sources.insert(new_name.clone(), Arc::new(source));
-						log::info!("reload: added tile source '{new_name}'");
+
+			let source = match self.runtime.reader(new.src.clone()).await {
+				Ok(reader) => ServerTileSource::from(reader, &new_name),
+				Err(e) => Err(e.context("opening the source")),
+			};
+			match source {
+				Ok(source) => {
+					let replaced = self.tile_sources.insert(new_name.clone(), Arc::new(source)).is_some();
+					let verb = if replaced { "replaced" } else { "added" };
+					log::info!("reload: {verb} tile source '{new_name}'");
+					applied_configs.push(new.clone());
+				}
+				Err(e) => {
+					// The config the running source was opened from stays on record,
+					// so the source keeps serving and still counts as changed.
+					let previous = old_configs
+						.iter()
+						.rev()
+						.find(|c| config_name(c).as_deref() == Some(&new_name));
+					if let Some(previous) = previous {
+						log::error!("reload: failed to replace tile source '{new_name}', keeping the previous one: {e:#}");
+						applied_configs.push(previous.clone());
+					} else {
+						log::error!("reload: failed to add tile source '{new_name}': {e:#}");
 					}
-					Err(e) => log::error!("reload: failed to build tile source '{new_name}': {e:#}"),
-				},
-				Err(e) => log::error!("reload: failed to open tile source '{new_name}': {e:#}"),
+				}
 			}
 		}
 
-		*self.current_tile_configs.lock().unwrap() = new_configs.to_vec();
+		// Drop sources whose name is no longer in the config. By name, not by
+		// config: a changed source has a new config under its old name, and was
+		// replaced above.
+		for old in &old_configs {
+			let Some(old_name) = config_name(old) else {
+				continue;
+			};
+			let still_wanted = new_configs.iter().any(|c| config_name(c).as_deref() == Some(&old_name));
+			if !still_wanted && self.tile_sources.remove(&old_name).is_some() {
+				log::info!("reload: removed tile source '{old_name}'");
+			}
+		}
+
+		*self.current_tile_configs.lock().unwrap() = applied_configs;
 	}
 
 	async fn apply_static_source_diff(&self, new_configs: &[StaticSourceConfig], follow_symlinks: bool) {
@@ -267,6 +292,89 @@ mod tests {
 		// The broken one is logged and skipped; a reload must not take the server
 		// down or discard the sources that did open.
 		assert_eq!(loaded_names(&handle), ["good"]);
+	}
+
+	/// #283: the old source used to be removed before the new one was opened,
+	/// so a failed open dropped the tileset.
+	#[tokio::test]
+	async fn a_changed_source_that_cannot_be_opened_keeps_the_old_one_serving() {
+		let handle = handle(PathBuf::from("unused"));
+
+		handle
+			.apply_tile_source_diff(&[tile_config(Some("tiles"), "../testdata/berlin.mbtiles")])
+			.await;
+		let before = Arc::clone(&handle.tile_sources.get("tiles").unwrap());
+
+		handle
+			.apply_tile_source_diff(&[tile_config(Some("tiles"), "../testdata/does_not_exist.mbtiles")])
+			.await;
+		let after = Arc::clone(&handle.tile_sources.get("tiles").unwrap());
+		assert!(Arc::ptr_eq(&before, &after), "the old source should still be serving");
+
+		// Going back to the config that is being served is not a change.
+		handle
+			.apply_tile_source_diff(&[tile_config(Some("tiles"), "../testdata/berlin.mbtiles")])
+			.await;
+		let reverted = Arc::clone(&handle.tile_sources.get("tiles").unwrap());
+		assert!(Arc::ptr_eq(&before, &reverted), "reverting must not reopen the source");
+	}
+
+	/// #283: a failed source used to be recorded as loaded, so every later
+	/// reload skipped it and the tileset stayed missing until a restart.
+	#[tokio::test]
+	async fn a_source_that_failed_to_open_is_retried_on_the_next_reload() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let late = dir.path().join("late.mbtiles");
+		let late_str = late.to_str().expect("temp path is valid UTF-8");
+		let handle = handle(PathBuf::from("unused"));
+
+		// A new source, and a change to a running one, both pointing at a file
+		// that is not there yet.
+		handle
+			.apply_tile_source_diff(&[tile_config(Some("changed"), "../testdata/berlin.mbtiles")])
+			.await;
+		let before = Arc::clone(&handle.tile_sources.get("changed").unwrap());
+		let config = [
+			tile_config(Some("changed"), late_str),
+			tile_config(Some("new"), late_str),
+		];
+		handle.apply_tile_source_diff(&config).await;
+		assert_eq!(loaded_names(&handle), ["changed"]);
+
+		// The file arrives; the same config is reloaded.
+		std::fs::copy("../testdata/berlin.mbtiles", &late)?;
+		handle.apply_tile_source_diff(&config).await;
+		assert_eq!(loaded_names(&handle), ["changed", "new"]);
+		let after = Arc::clone(&handle.tile_sources.get("changed").unwrap());
+		assert!(
+			!Arc::ptr_eq(&before, &after),
+			"the retry should have replaced the source"
+		);
+
+		Ok(())
+	}
+
+	/// A source the config never named — one added through the API — is not
+	/// the reload's to remove.
+	#[tokio::test]
+	async fn a_source_the_config_never_named_is_left_alone() -> Result<()> {
+		let handle = handle(PathBuf::from("unused"));
+		let reader = handle
+			.runtime
+			.reader(DataSource::parse("../testdata/berlin.mbtiles")?)
+			.await?;
+		handle.tile_sources.insert(
+			"manual".to_string(),
+			Arc::new(ServerTileSource::from(reader, "manual")?),
+		);
+
+		handle
+			.apply_tile_source_diff(&[tile_config(Some("berlin"), "../testdata/berlin.mbtiles")])
+			.await;
+		handle.apply_tile_source_diff(&[]).await;
+		assert_eq!(loaded_names(&handle), ["manual"]);
+
+		Ok(())
 	}
 
 	#[tokio::test]

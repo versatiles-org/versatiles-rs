@@ -570,7 +570,7 @@ When started with `-c`, the server reloads its configuration without downtime on
 kill -HUP $(pidof versatiles)
 ```
 
-Tile sources are updated incrementally (unchanged sources keep serving in-flight requests). Static sources are swapped atomically. In-flight requests always complete against the version they started with.
+Tile sources are updated incrementally: an unchanged source is left alone, and a changed one is opened first and then swapped in, so it stays available throughout. If a source cannot be opened, the previous one keeps serving, the error is logged, and the next reload tries again. Static sources are swapped atomically. In-flight requests always complete against the version they started with.
 
 #### dev - Developer Tools (Unstable)
 
