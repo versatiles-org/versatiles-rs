@@ -196,7 +196,11 @@ fn main() {
 	// still runs this one first, and this one restores the default action and
 	// re-raises, which ends the process before any request has been drained.
 	// A server draws no progress bar that would need clearing.
-	if !matches!(cli.command, Commands::Serve(_)) {
+	#[cfg(feature = "server")]
+	let serves = matches!(cli.command, Commands::Serve(_));
+	#[cfg(not(feature = "server"))]
+	let serves = false;
+	if !serves {
 		versatiles_container::install_terminal_reset_hooks();
 	}
 
