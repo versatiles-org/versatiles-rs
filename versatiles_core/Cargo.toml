@@ -42,7 +42,7 @@ reqwest.workspace = true
 # and the Windows CI jobs build it through reqwest anyway. The features are
 # listed explicitly rather than taken from russh's defaults, so a change there
 # cannot add a second backend unnoticed.
-russh = { version = "0.63", default-features = false, features = [
+russh = { version = "0.64", default-features = false, features = [
 	"aws-lc-rs",
 	"flate2",
 	"rsa",
@@ -51,7 +51,7 @@ russh-sftp = { version = "3.0", optional = true }
 socket2 = { version = "0.6", optional = true }
 ssh2-config = { version = "0.8", default-features = false, optional = true }
 tokio.workspace = true
-zstd = { version = "0.14.0", default-features = false }
+zstd = { version = "0.14.2", default-features = false }
 
 versatiles_derive.workspace = true
 
