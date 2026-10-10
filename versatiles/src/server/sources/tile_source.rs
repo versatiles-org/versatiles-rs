@@ -54,15 +54,18 @@ impl ServerTileSource {
 		let parts: Vec<String> = url.as_vec();
 
 		if parts.len() >= 3 {
-			// Parse the tile coordinates
-			let level = parts[0].parse::<u8>().context("value for z is not a number")?;
-			let x = parts[1].parse::<u32>().context("value for x is not a number")?;
-
-			let y: String = parts[2].chars().take_while(|c| c.is_numeric()).collect();
-			let y = y.parse::<u32>().context("value for y is not a number")?;
-
-			// Create a TileCoord instance
-			let coord = TileCoord::new(level, x, y)?;
+			// Coordinates that cannot exist are a request for a tile this source
+			// does not have, not a fault on our side (#280). Answered as "not
+			// found", like a zoom level above the source's maximum, and at debug
+			// level: a 500 with a WARN line per request let any client fill the
+			// log by asking for zoom 99.
+			let coord = match parse_tile_coord(&parts) {
+				Ok(coord) => coord,
+				Err(error) => {
+					log::debug!("no tile '{url}' in '{}': {error:#}", self.id);
+					return Ok(None);
+				}
+			};
 
 			log::debug!("get tile, prefix: {}, coord: {}", self.prefix, coord.to_json());
 
@@ -118,6 +121,21 @@ impl ServerTileSource {
 
 		Ok(tilejson.into())
 	}
+}
+
+/// Reads the tile coordinate from the first three segments of a path, `z/x/y`.
+///
+/// `y` may carry an extension (`12/2200/1343.pbf`), which is ignored.
+fn parse_tile_coord(parts: &[String]) -> Result<TileCoord> {
+	use anyhow::Context as _;
+
+	let level = parts[0].parse::<u8>().context("value for z is not a number")?;
+	let x = parts[1].parse::<u32>().context("value for x is not a number")?;
+
+	let y: String = parts[2].chars().take_while(|c| c.is_numeric()).collect();
+	let y = y.parse::<u32>().context("value for y is not a number")?;
+
+	TileCoord::new(level, x, y)
 }
 
 // Debug implementation for ServerTileSource
@@ -217,7 +235,7 @@ mod tests {
 		async fn check_status(container: &mut ServerTileSource, url: &str) -> u16 {
 			let response = get_response(container, url).await;
 			if response.is_err() {
-				return 400;
+				return 500;
 			}
 			if response.unwrap().is_none() { 404 } else { 200 }
 		}
@@ -239,10 +257,19 @@ mod tests {
 			assert_eq!(tile_json.number("maxzoom")?.unwrap() as u8, exp_maxzoom);
 		}
 
-		assert_eq!(check_status(c, "x/0/0.png").await, 400);
-		assert_eq!(check_status(c, "-1/0/0.png").await, 400);
-		assert_eq!(check_status(c, "0/0/-1.png").await, 400);
-		assert_eq!(check_status(c, "16/0/0.png").await, 404);
+		// A tile that cannot exist is "not found", whatever the reason (#280).
+		for url in [
+			"x/0/0.png",
+			"-1/0/0.png",
+			"0/0/-1.png",
+			"a/b/c",
+			"99/0/0",
+			"3/99/0",
+			"3/0/8.png",
+			"16/0/0.png",
+		] {
+			assert_eq!(check_status(c, url).await, 404, "{url}");
+		}
 
 		Ok(())
 	}

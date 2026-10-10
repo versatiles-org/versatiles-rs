@@ -595,6 +595,32 @@ mod tests {
 		Ok(())
 	}
 
+	/// #280: coordinates that cannot exist are a mistake in the request. They
+	/// used to be answered with a 500 and a WARN line each.
+	#[tokio::test]
+	async fn invalid_tile_coordinates_are_not_found_rather_than_a_server_error() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		let reader = MockReader::new_mock_profile(MRP::Pbf)?.into_shared();
+		server.add_tile_source("cheese".to_string(), reader).await?;
+		server.start().await?;
+		let port = server.port();
+
+		for path in ["99/0/0", "3/99/0", "3/0/99", "a/b/c", "3/-1/0", "3/1/x"] {
+			let response = reqwest::get(format!("http://{IP}:{port}/tiles/cheese/{path}"))
+				.await
+				.expect("request should complete");
+			assert_eq!(
+				response.status(),
+				StatusCode::NOT_FOUND,
+				"{path} should be 404, not a server error"
+			);
+		}
+
+		server.stop().await;
+
+		Ok(())
+	}
+
 	#[tokio::test]
 	#[should_panic(expected = "already exists")]
 	async fn same_prefix_twice() {
