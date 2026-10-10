@@ -25,5 +25,7 @@ mod conditional;
 mod config;
 #[path = "serve/cors.rs"]
 mod cors;
+#[path = "serve/shutdown.rs"]
+mod shutdown;
 #[path = "serve/static_files.rs"]
 mod static_files;

@@ -41,6 +41,13 @@ use versatiles_derive::context;
 use super::{cors, reload::ReloadHandle, routes, sources};
 use crate::config::{Config, StaticSourceConfig, TileSourceConfig};
 
+/// How long [`TileServer::stop`] waits for requests in flight to finish.
+///
+/// Well under the 10 s that Docker and Kubernetes' defaults leave between
+/// SIGTERM and SIGKILL (30 s for Kubernetes), so that the process still exits
+/// by itself when a request does not finish in time.
+const SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// Thin orchestration layer for the VersaTiles HTTP server.
 ///
 /// This type is intentionally small: it stores configuration and composes the
@@ -428,7 +435,7 @@ impl TileServer {
 
 		// Await the server task to finish, but don't hang forever.
 		if let Some(handle) = self.join.take() {
-			match tokio::time::timeout(std::time::Duration::from_secs(10), handle).await {
+			match tokio::time::timeout(SHUTDOWN_TIMEOUT, handle).await {
 				Ok(join_result) => {
 					if let Err(join_err) = join_result {
 						log::warn!("server task join error: {join_err}");

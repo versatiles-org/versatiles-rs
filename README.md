@@ -572,6 +572,10 @@ kill -HUP $(pidof versatiles)
 
 Tile sources are updated incrementally: an unchanged source is left alone, and a changed one is opened first and then swapped in, so it stays available throughout. If a source cannot be opened, the previous one keeps serving, the error is logged, and the next reload tries again. Static sources are swapped atomically. In-flight requests always complete against the version they started with.
 
+**Graceful shutdown:**
+
+On `SIGTERM` (sent by `docker stop`, systemd and Kubernetes) and `SIGINT` (Ctrl+C) the server stops accepting connections, finishes the requests it is answering, and exits. It waits up to 5 seconds for them; a second signal exits at once.
+
 #### dev - Developer Tools (Unstable)
 
 Experimental tools for tile analysis and debugging.

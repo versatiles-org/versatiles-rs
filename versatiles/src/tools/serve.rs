@@ -2,7 +2,10 @@ use std::{mem::swap, path::PathBuf};
 
 use anyhow::{Context, Result};
 use regex::Regex;
-use tokio::time::{Duration, sleep};
+use tokio::{
+	sync::mpsc::{UnboundedReceiver, unbounded_channel},
+	time::{Duration, sleep},
+};
 use versatiles::{
 	config::{Config, StaticSourceConfig, TileSourceConfig},
 	server::{TileServer, spawn_sighup_handler},
@@ -158,15 +161,84 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		spawn_sighup_handler(server.reload_handle(config_path.clone()));
 	}
 
-	if let Some(milliseconds) = arguments.auto_shutdown {
-		sleep(Duration::from_millis(milliseconds)).await;
-	} else {
-		loop {
-			sleep(Duration::from_secs(60)).await;
+	let mut signals = shutdown_signals()?;
+
+	tokio::select! {
+		() = auto_shutdown(arguments.auto_shutdown) => {}
+		Some(name) = signals.recv() => log::info!("received {name}, shutting down"),
+	}
+
+	// Stop accepting, and let the requests being answered finish (#282).
+	// SIGTERM is what `docker stop`, systemd and Kubernetes send, so exiting
+	// on the spot cut requests off on every deployment.
+	tokio::select! {
+		() = server.stop() => {}
+		// Ctrl+C twice still gets out of a terminal at once. Not by returning:
+		// dropping the runtime would wait for compression still running on
+		// the blocking pool.
+		Some(name) = signals.recv() => {
+			log::warn!("received {name} again, exiting without waiting for open requests");
+			std::process::exit(1);
 		}
 	}
 
 	Ok(())
+}
+
+/// Resolves after `milliseconds`, or never when there is no `--auto-shutdown`.
+async fn auto_shutdown(milliseconds: Option<u64>) {
+	match milliseconds {
+		Some(milliseconds) => sleep(Duration::from_millis(milliseconds)).await,
+		None => std::future::pending().await,
+	}
+}
+
+/// The names of the signals that ask the server to stop, as they arrive:
+/// SIGTERM and SIGINT (Ctrl+C).
+///
+/// Registered once and kept. A registration replaces the signal's default
+/// action for the rest of the process, so a second signal arrives here too
+/// and is no longer fatal by itself — `run` listens for it explicitly.
+#[cfg(unix)]
+fn shutdown_signals() -> Result<UnboundedReceiver<&'static str>> {
+	use tokio::signal::unix::{SignalKind, signal};
+
+	let mut sigterm = signal(SignalKind::terminate()).context("registering the SIGTERM handler")?;
+	let mut sigint = signal(SignalKind::interrupt()).context("registering the SIGINT handler")?;
+
+	let (tx, rx) = unbounded_channel();
+	tokio::spawn(async move {
+		loop {
+			let name = tokio::select! {
+				_ = sigterm.recv() => "SIGTERM",
+				_ = sigint.recv() => "SIGINT",
+			};
+			if tx.send(name).is_err() {
+				return;
+			}
+		}
+	});
+	Ok(rx)
+}
+
+// Each `cfg` arm is a separate item and needs its own docs; see
+// `spawn_sighup_handler`.
+/// The names of the signals that ask the server to stop, as they arrive:
+/// Ctrl+C, the only one this platform has.
+#[cfg(not(unix))]
+fn shutdown_signals() -> Result<UnboundedReceiver<&'static str>> {
+	let (tx, rx) = unbounded_channel();
+	tokio::spawn(async move {
+		// An error means no handler could be registered: nothing to wait for.
+		while tokio::signal::ctrl_c().await.is_ok() {
+			if tx.send("Ctrl+C").is_err() {
+				return;
+			}
+		}
+		// Keep the channel open, or `recv` would report a shutdown.
+		std::future::pending::<()>().await;
+	});
+	Ok(rx)
 }
 
 #[cfg(test)]
