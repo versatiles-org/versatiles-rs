@@ -25,6 +25,8 @@ mod conditional;
 mod config;
 #[path = "serve/cors.rs"]
 mod cors;
+#[path = "serve/empty_tiles.rs"]
+mod empty_tiles;
 #[path = "serve/shutdown.rs"]
 mod shutdown;
 #[path = "serve/static_files.rs"]

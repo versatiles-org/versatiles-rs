@@ -7,6 +7,6 @@ mod static_source_remote_folder;
 mod static_source_tar;
 mod tile_source;
 
-pub use response::SourceResponse;
+pub use response::{SourceResponse, TileResponse};
 pub use static_source::StaticSource;
 pub use tile_source::ServerTileSource;

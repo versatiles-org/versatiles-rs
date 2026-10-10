@@ -25,7 +25,7 @@ use versatiles_core::{
 
 use super::{
 	encoding::get_encoding,
-	sources::{ServerTileSource, SourceResponse, StaticSource},
+	sources::{ServerTileSource, SourceResponse, StaticSource, TileResponse},
 	utils::Url,
 };
 
@@ -80,11 +80,15 @@ pub async fn serve_tile_from_source(
 	let response = tile_source.get_data(&stripped_path).await;
 
 	match response {
-		Ok(Some(result)) => {
+		Ok(TileResponse::Data(result)) => {
 			log::debug!("send response for tile request: {path}");
 			ok_data(result, target, cache_control, headers.get(header::IF_NONE_MATCH)).await
 		}
-		Ok(None) => {
+		Ok(TileResponse::Empty) => {
+			log::debug!("send 204 for tile request: {path}");
+			empty_tile(cache_control)
+		}
+		Ok(TileResponse::NotFound) => {
 			log::debug!("send 404 for tile request: {path}");
 			error_404()
 		}
@@ -152,6 +156,22 @@ fn error_with(status: u16, message: &str) -> Response<Body> {
 
 pub fn error_404() -> Response<Body> {
 	error_with(404, "Not Found")
+}
+
+/// The answer for a vector tile that holds no data: `204 No Content` (#281).
+///
+/// What most tile servers answer, and the only answer that keeps a browser's
+/// console quiet: it prints a "Failed to load resource" line for every 404,
+/// and no map library can suppress that.
+///
+/// It carries the `Cache-Control` of a tile, because it is one: as stable as
+/// its neighbours, and worth as much to a cache in front of the server.
+fn empty_tile(cache_control: &str) -> Response<Body> {
+	Response::builder()
+		.status(204)
+		.header(header::CACHE_CONTROL, cache_control)
+		.body(Body::empty())
+		.expect("failed to build 204 response")
 }
 
 pub fn error_500() -> Response<Body> {
@@ -505,6 +525,17 @@ mod tests {
 		assert_eq!(resp.status(), 404);
 		let headers = resp.headers();
 		assert_eq!(headers.get(header::CONTENT_TYPE).unwrap(), "text/plain; charset=utf-8");
+	}
+
+	#[tokio::test]
+	async fn empty_tile_is_a_bare_204_with_the_tile_cache_control() {
+		let resp = empty_tile("public, max-age=60");
+		assert_eq!(resp.status(), 204);
+		let headers = resp.headers();
+		assert_eq!(headers.get(header::CACHE_CONTROL).unwrap(), "public, max-age=60");
+		assert!(headers.get(header::CONTENT_TYPE).is_none());
+		let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+		assert!(body.is_empty(), "a 204 has no body");
 	}
 
 	#[test]

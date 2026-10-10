@@ -476,6 +476,27 @@ versatiles serve tiles.versatiles
 weeks, right for a public tile server. Set something shorter when the tiles
 behind a URL change.
 
+**Tiles without data:**
+
+A tile inside a tile source's zoom range that holds no data (open sea, or
+outside the covered area) is answered by tile type:
+
+| Request                                         | Vector | Raster |
+| ----------------------------------------------- | ------ | ------ |
+| Tile inside the zoom range, with data           | 200    | 200    |
+| Tile inside the zoom range, without data        | 204    | 404    |
+| Zoom level outside the tile source's zoom range | 404    | 404    |
+| Coordinates that cannot exist, unknown source   | 404    | 404    |
+
+- A vector tile without data gets `204 No Content` and the `Cache-Control` of
+  a tile. A map shows the same either way, and unlike a 404 it leaves no
+  "Failed to load resource" line in the browser console.
+- A raster tile without data gets `404 Not Found`, because MapLibre GL JS
+  then shows the tile from a lower zoom level in its place; a 204 would be
+  drawn as a transparent tile. A raster source with gaps at its high zoom
+  levels keeps working that way. To fill such gaps on the server instead, see
+  `raster_overscale` in `versatiles help pipeline`.
+
 `--minimal-recompression`, `--disable-api` and `--follow-symlinks` can be given
 on their own or with `true`/`false`; left out, the configuration file decides.
 Put a bare switch after the tile sources or before another option — a tile

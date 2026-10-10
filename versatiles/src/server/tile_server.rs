@@ -628,6 +628,53 @@ mod tests {
 		Ok(())
 	}
 
+	/// #281: a vector tile without data is an empty tile, a raster tile
+	/// without data is a missing one — MapLibre replaces a raster 404 by the
+	/// tile from a lower zoom level and draws a 204 transparent.
+	///
+	/// The mock holds zoom 2 to 6, and at zoom 2 only x 0 to 2.
+	#[rstest]
+	#[case(MRP::Pbf, StatusCode::NO_CONTENT)]
+	#[case(MRP::Png, StatusCode::NOT_FOUND)]
+	#[tokio::test]
+	async fn a_tile_without_data_is_answered_by_tile_type(
+		#[case] profile: MRP,
+		#[case] expected: StatusCode,
+	) -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		let reader = MockReader::new_mock_profile(profile)?.into_shared();
+		server.add_tile_source("cheese".to_string(), reader).await?;
+		server.start().await?;
+		let port = server.port();
+		let get = async |coord: &str| {
+			reqwest::get(format!("http://{IP}:{port}/tiles/cheese/{coord}"))
+				.await
+				.expect("request should complete")
+		};
+
+		assert_eq!(get("2/0/1").await.status(), StatusCode::OK);
+
+		let response = get("2/3/0").await;
+		assert_eq!(response.status(), expected, "inside the zoom range, without data");
+		let cache_control = response.headers().get("cache-control").cloned();
+		if expected == StatusCode::NO_CONTENT {
+			// Cached like a tile, because it is one.
+			assert_eq!(cache_control.unwrap(), crate::server::handlers::DEFAULT_CACHE_CONTROL);
+			assert!(response.bytes().await?.is_empty(), "a 204 has no body");
+		} else {
+			assert_eq!(cache_control, None, "a 404 is not cached like a tile");
+		}
+
+		// Outside the zoom range there is nothing to be empty.
+		for coord in ["1/0/0", "7/0/0"] {
+			assert_eq!(get(coord).await.status(), StatusCode::NOT_FOUND, "{coord}");
+		}
+
+		server.stop().await;
+
+		Ok(())
+	}
+
 	#[tokio::test]
 	#[should_panic(expected = "already exists")]
 	async fn same_prefix_twice() {

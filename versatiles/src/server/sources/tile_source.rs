@@ -2,10 +2,10 @@ use std::fmt::Debug;
 
 use anyhow::Result;
 use versatiles_container::{SharedTileSource, TileSource};
-use versatiles_core::{Blob, TileCompression, TileCoord};
+use versatiles_core::{Blob, TileCompression, TileCoord, TileType};
 use versatiles_derive::context;
 
-use super::{super::utils::Url, SourceResponse};
+use super::{super::utils::Url, SourceResponse, TileResponse};
 
 // TileSource struct definition
 #[derive(Clone)]
@@ -15,6 +15,7 @@ pub struct ServerTileSource {
 	reader: SharedTileSource, // NO MORE MUTEX! 🚀
 	pub tile_mime: String,
 	pub compression: TileCompression,
+	tile_type: TileType,
 }
 
 impl ServerTileSource {
@@ -23,6 +24,7 @@ impl ServerTileSource {
 	pub fn from(reader: SharedTileSource, id: &str) -> Result<ServerTileSource> {
 		let metadata = reader.metadata();
 		let tile_mime = metadata.tile_format().as_mime_str().to_string();
+		let tile_type = metadata.tile_format().to_type();
 		let compression = *metadata.tile_compression();
 
 		Ok(ServerTileSource {
@@ -31,6 +33,7 @@ impl ServerTileSource {
 			reader,
 			tile_mime,
 			compression,
+			tile_type,
 		})
 	}
 
@@ -50,7 +53,7 @@ impl ServerTileSource {
 	// Tiles come back in this source's own compression; the caller negotiates
 	// against the client's `Accept-Encoding` afterwards, in `handlers::ok_data`.
 	#[context("getting tile data: url={url}")]
-	pub async fn get_data(&self, url: &Url) -> Result<Option<SourceResponse>> {
+	pub async fn get_data(&self, url: &Url) -> Result<TileResponse> {
 		let parts: Vec<String> = url.as_vec();
 
 		if parts.len() >= 3 {
@@ -63,7 +66,7 @@ impl ServerTileSource {
 				Ok(coord) => coord,
 				Err(error) => {
 					log::debug!("no tile '{url}' in '{}': {error:#}", self.id);
-					return Ok(None);
+					return Ok(TileResponse::NotFound);
 				}
 			};
 
@@ -77,21 +80,24 @@ impl ServerTileSource {
 			// the client's business but it is very much the operator's, and
 			// discarding it left a 404 as the only evidence that anything went
 			// wrong — indistinguishable from a hole in the data.
+			//
+			// Not as an empty tile, though (#281): that answer is cacheable for
+			// as long as a tile is, and a source that hiccuped once would stay
+			// blank in every cache in front of it.
 			if let Err(error) = &tile {
 				log::warn!("could not produce tile {} of '{}': {error:#}", coord.to_json(), self.id);
-				return Ok(None);
+				return Ok(TileResponse::NotFound);
 			}
 
-			// If tile data is not found, return a not found response
-			return if let Some(tile) = tile? {
-				Ok(SourceResponse::new_some(
-					tile.into_blob(&self.compression)?,
-					self.compression,
-					&self.tile_mime,
-				))
-			} else {
-				Ok(None)
-			};
+			return Ok(match tile? {
+				Some(tile) => TileResponse::Data(SourceResponse {
+					blob: tile.into_blob(&self.compression)?,
+					compression: self.compression,
+					mime: self.tile_mime.clone(),
+				}),
+				None if self.is_empty_tile(coord.level) => TileResponse::Empty,
+				None => TileResponse::NotFound,
+			});
 		} else if parts
 			.first()
 			.is_some_and(|name| name == "meta.json" || name == "tiles.json")
@@ -99,15 +105,52 @@ impl ServerTileSource {
 			// Get metadata
 			let tile_json = self.build_tile_json().await?;
 
-			return Ok(SourceResponse::new_some(
-				tile_json,
-				TileCompression::Uncompressed,
-				"application/json",
-			));
+			return Ok(TileResponse::Data(SourceResponse {
+				blob: tile_json,
+				compression: TileCompression::Uncompressed,
+				mime: "application/json".to_owned(),
+			}));
 		}
 
 		// If the request is unknown, return a not found response
-		Ok(None)
+		Ok(TileResponse::NotFound)
+	}
+
+	/// Whether a tile without data at `level` is an empty tile, to be answered
+	/// with `204`, rather than a missing one, answered with `404` (#281).
+	///
+	/// Only a vector tile, and only inside the zoom range. The type decides
+	/// because the clients treat the two differently:
+	///
+	/// - A vector tile looks the same to a map either way, so the 204 that
+	///   most tile servers send costs nothing and keeps the browser console
+	///   free of an error line per tile.
+	/// - A raster tile does not. MapLibre GL JS draws a 204 as a transparent
+	///   tile and replaces a 404 by the tile from a lower zoom level. A raster
+	///   source with gaps at its high zoom levels — worldwide imagery to zoom
+	///   10, aerial imagery to zoom 18 for some countries — depends on that
+	///   fallback, and would turn transparent over the rest of the world.
+	fn is_empty_tile(&self, level: u8) -> bool {
+		self.tile_type == TileType::Vector && self.covers_level(level)
+	}
+
+	/// Whether `level` is inside the zoom range this source announces.
+	///
+	/// The same range `build_tile_json` puts into the TileJSON: the tile
+	/// pyramid's if one is known, the source's own `minzoom`/`maxzoom`
+	/// otherwise. An end that nobody declared does not limit anything.
+	fn covers_level(&self, level: u8) -> bool {
+		let pyramid = self.reader.metadata().tile_pyramid();
+		let tilejson = self.reader.tilejson();
+		let level_min = pyramid
+			.as_ref()
+			.and_then(|p| p.level_min())
+			.or_else(|| tilejson.zoom_min());
+		let level_max = pyramid
+			.as_ref()
+			.and_then(|p| p.level_max())
+			.or_else(|| tilejson.zoom_max());
+		level_min.is_none_or(|min| level >= min) && level_max.is_none_or(|max| level <= max)
 	}
 
 	#[context("building tilejson for tile source id='{}'", self.id)]
@@ -222,22 +265,25 @@ mod tests {
 		#[case] coord: &str,
 		#[case] expected_tile_json: (&str, &str, [u8; 4], u8, u8),
 	) -> Result<()> {
-		async fn get_response(container: &mut ServerTileSource, url: &str) -> Result<Option<SourceResponse>> {
+		async fn get_response(container: &mut ServerTileSource, url: &str) -> Result<TileResponse> {
 			container.get_data(&Url::from(url)).await
 		}
 
 		async fn check_response(container: &mut ServerTileSource, url: &str, mime_type: &str) -> Result<Vec<u8>> {
-			let response = get_response(container, url).await?.unwrap();
+			let TileResponse::Data(response) = get_response(container, url).await? else {
+				panic!("expected data for {url}");
+			};
 			assert_eq!(response.mime, mime_type);
 			Ok(response.blob.into_vec())
 		}
 
 		async fn check_status(container: &mut ServerTileSource, url: &str) -> u16 {
-			let response = get_response(container, url).await;
-			if response.is_err() {
-				return 500;
+			match get_response(container, url).await {
+				Ok(TileResponse::Data(_)) => 200,
+				Ok(TileResponse::Empty) => 204,
+				Ok(TileResponse::NotFound) => 404,
+				Err(_) => 500,
 			}
-			if response.unwrap().is_none() { 404 } else { 200 }
 		}
 
 		let (exp_mime, exp_bounds, exp_header, exp_minzoom, exp_maxzoom) = expected_tile_json;
@@ -267,8 +313,14 @@ mod tests {
 			"3/99/0",
 			"3/0/8.png",
 			"16/0/0.png",
+			"15/17600/10745",
 		] {
 			assert_eq!(check_status(c, url).await, 404, "{url}");
+		}
+
+		// Inside the zoom range but outside Berlin: an empty tile (#281).
+		for url in ["12/0/0", "14/0/0.pbf", "1/1/1", "12/2200/1300"] {
+			assert_eq!(check_status(c, url).await, 204, "{url}");
 		}
 
 		Ok(())

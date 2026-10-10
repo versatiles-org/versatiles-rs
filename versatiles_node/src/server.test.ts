@@ -188,9 +188,15 @@ describe('TileServer', () => {
 			expect(headers['content-type']).toBeDefined();
 		});
 
-		it('should return 404 for non-existent tile', async () => {
-			// Request a tile far outside Berlin's bounds (Berlin is in Europe, this is in the Pacific)
-			await expect(httpGet(`${baseUrl}/tiles/berlin/10/0/0`)).rejects.toThrow(/HTTP 404/);
+		it('should return 204 for a tile without data', async () => {
+			// Inside the zoom range, far outside Berlin's bounds (Berlin is in Europe, this is in the Pacific)
+			const { statusCode, data } = await httpGet(`${baseUrl}/tiles/berlin/10/0/0`);
+			expect(statusCode).toBe(204);
+			expect(data).toBe('');
+		});
+
+		it('should return 404 for a zoom level the source does not have', async () => {
+			await expect(httpGet(`${baseUrl}/tiles/berlin/20/0/0`)).rejects.toThrow(/HTTP 404/);
 		});
 
 		it('should return 404 for non-existent source', async () => {
