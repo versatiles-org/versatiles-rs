@@ -101,7 +101,7 @@ pub struct Operation;
 
 impl Operation {
 	#[context("Building raster_overscale operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<FillOverscale> {
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<FillOverscale> {
 		// A parameter that is gone says so, and says what to do. The generic
 		// "does not have a parameter" would leave a pipeline that worked
 		// yesterday with a list of names and no way forward.
@@ -111,7 +111,7 @@ impl Operation {
 			}
 		}
 		let args = Args::from_vpl_node(&vpl_node)?;
-		FillOverscale::new(source, args.level_max.map(u8::from)).await
+		FillOverscale::new(source, args.level_max.map(u8::from), factory.runtime()).await
 	}
 }
 

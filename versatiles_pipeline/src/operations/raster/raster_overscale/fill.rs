@@ -17,11 +17,11 @@ use std::{
 	sync::{Arc, Mutex},
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, TryStreamExt, stream};
 use moka::future::Cache;
-use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use versatiles_core::{
 	ConcurrencyLimits, GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover, TileFormat, TileJSON, TilePyramid,
 	TileSchema, TileStream,
@@ -65,6 +65,10 @@ pub struct FillOverscale {
 	images: Cache<TileCoord, Option<Arc<DynamicImage>>>,
 	/// Where source tiles have content. `None` is a tile the source lacks.
 	masks: Cache<TileCoord, Option<Arc<Mask>>>,
+	/// Where a tile that could not be read or created inside a stream is
+	/// reported: a stream cannot carry the error, and a conversion has to fail
+	/// on it rather than write a container with holes.
+	runtime: TilesRuntime,
 }
 
 impl Debug for FillOverscale {
@@ -81,7 +85,7 @@ impl Debug for FillOverscale {
 
 impl FillOverscale {
 	/// `level_max` defaults to the source's highest level.
-	pub async fn new(source: Box<dyn TileSource>, level_max: Option<u8>) -> Result<Self> {
+	pub async fn new(source: Box<dyn TileSource>, level_max: Option<u8>, runtime: TilesRuntime) -> Result<Self> {
 		let source: SharedTileSource = Arc::from(source);
 		let native = source.tile_pyramid().await?;
 		let level_min = native.level_min().context("source pyramid is empty")?;
@@ -98,6 +102,7 @@ impl FillOverscale {
 			level_min,
 			level_max,
 			scaling,
+			runtime,
 			images: Cache::builder()
 				.max_capacity(512 * 1024 * 1024)
 				.weigher(|_, image: &Option<Arc<DynamicImage>>| {
@@ -115,6 +120,17 @@ impl FillOverscale {
 		// Bounds the source declares are where its data is. Without them, the
 		// pyramid has to say.
 		let bounds = operation.tilejson.bounds.or_else(|| operation.native.geo_extent());
+		// Bounds without an area select a tile or none, depending on whether
+		// they happen to lie on a tile edge. Either way they are not where the
+		// data is.
+		if let Some(bounds) = &bounds {
+			ensure!(
+				bounds.x_min < bounds.x_max && bounds.y_min < bounds.y_max,
+				"the bounds of the source, {:?}, have no area, so they do not say where tiles are to be created; \
+				 set them with `meta_update bounds=…` in front",
+				bounds.as_array()
+			);
+		}
 		let content = operation.content_of_lowest_levels().await?;
 		let fill = fill_region(&operation.native, &content, bounds.as_ref(), level_min, level_max)?;
 
@@ -459,7 +475,9 @@ impl FillOverscale {
 			match this.created_stream(bbox, &natives).await {
 				Ok(stream) => stream.inner,
 				Err(error) => {
-					log::error!("Error creating tiles in {bbox:?}: {error:#}");
+					this
+						.runtime
+						.record_error(&format!("raster_overscale creating tiles in {bbox:?}"), &error);
 					TileStream::empty().inner
 				}
 			}
@@ -491,11 +509,15 @@ impl FillOverscale {
 			.map(move |(source_coord, coords)| {
 				let this = this.clone();
 				async move {
+					let runtime = this.runtime.clone();
 					let image = match this.image(source_coord).await {
 						Ok(Some(image)) => image,
 						Ok(None) => return Vec::new(),
 						Err(error) => {
-							log::error!("Error reading tile {source_coord:?}: {error:#}");
+							this.runtime.record_error(
+								&format!("raster_overscale reading tile {}", source_coord.to_json()),
+								&error,
+							);
 							return Vec::new();
 						}
 					};
@@ -505,13 +527,21 @@ impl FillOverscale {
 							.filter_map(|coord| match this.scale(&image, source_coord, coord) {
 								Ok(tile) => Some((coord, tile)),
 								Err(error) => {
-									log::error!("Error creating tile {coord:?}: {error:#}");
+									this
+										.runtime
+										.record_error(&format!("raster_overscale creating tile {}", coord.to_json()), &error);
 									None
 								}
 							})
 							.collect::<Vec<_>>()
 					});
-					scaled.await.unwrap_or_default()
+					scaled.await.unwrap_or_else(|error| {
+						runtime.record_error(
+							&format!("raster_overscale creating tiles from {}", source_coord.to_json()),
+							&anyhow!("the task failed: {error}"),
+						);
+						Vec::new()
+					})
 				}
 			})
 			.buffer_unordered(ConcurrencyLimits::default().cpu_bound)
@@ -627,7 +657,9 @@ impl TileSource for FillOverscale {
 					match this.box_stream(cell).await {
 						Ok(stream) => stream.inner,
 						Err(error) => {
-							log::error!("Error reading tiles in {cell:?}: {error:#}");
+							this
+								.runtime
+								.record_error(&format!("raster_overscale reading tiles in {cell:?}"), &error);
 							TileStream::empty().inner
 						}
 					}
@@ -655,7 +687,9 @@ impl TileSource for FillOverscale {
 					match this.box_coords(cell).await {
 						Ok(coords) => coords,
 						Err(error) => {
-							log::error!("Error listing tiles in {cell:?}: {error:#}");
+							this
+								.runtime
+								.record_error(&format!("raster_overscale listing tiles in {cell:?}"), &error);
 							Vec::new()
 						}
 					}
@@ -830,7 +864,9 @@ mod tests {
 	}
 
 	async fn fill(source: TestSource, level_max: Option<u8>) -> FillOverscale {
-		FillOverscale::new(Box::new(source), level_max).await.unwrap()
+		FillOverscale::new(Box::new(source), level_max, TilesRuntime::new_silent())
+			.await
+			.unwrap()
 	}
 
 	async fn sorted_coords<T: Send + 'static>(stream: TileStream<'static, T>) -> Vec<(u8, u32, u32)> {
@@ -993,6 +1029,64 @@ mod tests {
 		Ok(())
 	}
 
+	/// O7: a source tile that cannot be read used to cost the tiles created
+	/// from it a line in the log, and the conversion still exited with 0.
+	#[tokio::test]
+	async fn a_source_tile_that_cannot_be_read_is_reported_to_the_runtime() -> Result<()> {
+		let mut source = TestSource::new(
+			TileFormat::PNG,
+			vec![
+				(coord(0, 0, 0), opaque(coord(0, 0, 0))),
+				(coord(1, 0, 0), opaque(coord(1, 0, 0))),
+			],
+			Some(world()),
+		);
+		let garbage = versatiles_core::Blob::from(b"not an image".to_vec());
+		source.tiles.insert(
+			coord(1, 0, 0),
+			Tile::from_blob(garbage, TileCompression::Uncompressed, TileFormat::PNG),
+		);
+
+		// What `convert` does: errors on record make it fail once the stream
+		// has drained.
+		let runtime = TilesRuntime::new_silent();
+		runtime.set_abort_on_error(true);
+		let op = FillOverscale::new(Box::new(source), Some(2), runtime.clone()).await?;
+
+		// Which tiles still arrive is not the point: the stream is not whole,
+		// and that is on record.
+		let tiles = op.tile_stream(TileBBox::new_full(2)?).await?.to_vec().await;
+		assert!(tiles.len() < 16);
+		assert!(runtime.error_count() > 0);
+		assert!(runtime.had_errors(), "a conversion has to fail on this");
+
+		// Asked for by itself, as the server does, such a tile is an error.
+		assert!(op.tile(&coord(2, 0, 0)).await.is_err());
+		assert!(op.tile(&coord(2, 3, 3)).await?.is_some());
+		Ok(())
+	}
+
+	/// Bounds without an area used to fail deep in the tile arithmetic when they
+	/// lay on a tile edge ("x_min (1) must be <= x_max (0)"), and to select a
+	/// single tile when they did not.
+	#[rstest::rstest]
+	#[case::a_point_on_a_tile_edge([0.0, 0.0, 0.0, 0.0])]
+	#[case::a_point_inside_a_tile([13.4, 52.5, 13.4, 52.5])]
+	#[case::a_line([13.0, 52.5, 14.0, 52.5])]
+	#[tokio::test]
+	async fn bounds_without_an_area_are_refused(#[case] bounds: [f64; 4]) {
+		let [x_min, y_min, x_max, y_max] = bounds;
+		let source = single_place(Some(GeoBBox::new(x_min, y_min, x_max, y_max).unwrap()));
+
+		let error = FillOverscale::new(Box::new(source), Some(5), TilesRuntime::new_silent())
+			.await
+			.err()
+			.unwrap();
+		let error = format!("{error:#}");
+		assert!(error.contains("have no area"), "{error}");
+		assert!(error.contains("meta_update bounds="), "{error}");
+	}
+
 	/// With bounds that say "the whole world", the transparency has to do it:
 	/// the tile at level 0 has content in one pixel, and that is where tiles
 	/// are created.
@@ -1132,7 +1226,7 @@ mod tests {
 			TileFormat::PNG,
 			Some(TilePyramid::new_full_up_to(2)),
 		)?;
-		let op = FillOverscale::new(Box::new(source), None).await?;
+		let op = FillOverscale::new(Box::new(source), None, TilesRuntime::new_silent()).await?;
 
 		let tiles = op.tile_stream(TileBBox::new_full(2)?).await?.to_vec().await;
 		assert_eq!(tiles.len(), 16);

@@ -85,7 +85,9 @@ use std::{collections::HashSet, sync::Arc, vec};
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{future::try_join_all, stream};
-use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_container::{
+	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal,
+};
 use versatiles_core::{TileBBox, TileCoord, TileFormat, TileJSON, TilePyramid, TileSchema, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
@@ -186,6 +188,8 @@ struct Operation {
 	/// Whether the tiles hold heights. A blended tile is a new tile, and has
 	/// to be encoded without loss then.
 	lossless: bool,
+	/// Where a tile that could not be blended inside a stream is reported.
+	runtime: TilesRuntime,
 }
 
 /// Fetches and blends tiles from all sources for a single coordinate.
@@ -339,7 +343,7 @@ impl Operation {
 
 		if auto_overscale {
 			for source in original_sources {
-				let filled = FillOverscale::new(source, Some(level_max)).await?;
+				let filled = FillOverscale::new(source, Some(level_max), factory.runtime()).await?;
 				sources.push(SourceEntry::Filled(Arc::new(filled)));
 			}
 		} else {
@@ -354,6 +358,7 @@ impl Operation {
 			source_types,
 			tilejson,
 			lossless: elevation.is_some(),
+			runtime: factory.runtime(),
 		}) as Box<dyn TileSource>)
 	}
 }
@@ -383,6 +388,19 @@ impl TileSource for Operation {
 		super::gathering::union_tile_coord_streams(&refs, bbox).await
 	}
 
+	/// The blended tile at `coord`.
+	///
+	/// Not answered through the stream, as the default would: a stream cannot
+	/// carry an error, and a tile that failed to blend would come back as a
+	/// tile that is not there. A server has to answer it with a 500, not a 404.
+	#[context("Failed to get stacked raster tile {:?}", coord)]
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		let Some(plan) = CellPlan::new(&self.sources, coord.to_tile_bbox()).await? else {
+			return Ok(None);
+		};
+		plan.tile(*coord, *self.metadata.tile_format(), self.lossless).await
+	}
+
 	/// Stream packed raster tiles intersecting `bbox`.
 	#[context("Failed to get stacked raster tile stream for bbox: {:?}", bbox)]
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
@@ -391,9 +409,10 @@ impl TileSource for Operation {
 		let tile_format = *self.metadata.tile_format();
 		let sources = self.sources.clone();
 		let lossless = self.lossless;
+		let runtime = self.runtime.clone();
 
 		if bbox.width() <= MAX_BBOX_SIZE && bbox.height() <= MAX_BBOX_SIZE {
-			return cell_stream(sources, bbox, tile_format, lossless).await;
+			return cell_stream(sources, bbox, tile_format, lossless, runtime).await;
 		}
 
 		// A big bbox is answered cell by cell, and a cell is only looked at
@@ -405,11 +424,12 @@ impl TileSource for Operation {
 		Ok(TileStream::from_streams_bounded(
 			stream::iter(cells.into_iter().map(move |cell| {
 				let sources = sources.clone();
+				let runtime = runtime.clone();
 				async move {
-					match cell_stream(sources, cell, tile_format, lossless).await {
+					match cell_stream(sources, cell, tile_format, lossless, runtime.clone()).await {
 						Ok(stream) => stream,
 						Err(error) => {
-							log::error!("Error reading stacked raster tiles in {cell:?}: {error:#}");
+							runtime.record_error(&format!("from_stacked_raster reading tiles in {cell:?}"), &error);
 							TileStream::empty()
 						}
 					}
@@ -427,6 +447,81 @@ const MAX_BBOX_SIZE: u32 = 32;
 /// How many cells of a big request are set up ahead of the one being read.
 const CELLS_IN_ADVANCE: usize = 4;
 
+/// What is settled for a bbox before any of its tiles is blended.
+struct CellPlan {
+	/// The layers that can have a tile in the bbox, created ones included.
+	entries: Vec<SourceEntry>,
+	/// With layers that create tiles: the coordinates where some layer has a
+	/// tile of its own. Everywhere else there is nothing to emit. Without such
+	/// layers, whatever a layer delivers is its own.
+	native_coords: Option<HashSet<TileCoord>>,
+}
+
+impl CellPlan {
+	/// `None` if no tile is emitted anywhere in `bbox`.
+	async fn new(sources: &[SourceEntry], bbox: TileBBox) -> Result<Option<Self>> {
+		let mut entries: Vec<SourceEntry> = Vec::new();
+		let mut any_own = false;
+		for entry in sources {
+			if entry.source().tile_pyramid().await?.intersects_bbox(&bbox) {
+				any_own |= entry.own().tile_pyramid().await?.intersects_bbox(&bbox);
+				entries.push(entry.clone());
+			}
+		}
+
+		// No layer has a tile of its own here: whatever could be blended would
+		// be upscales only. A downstream `raster_overscale` on the blended
+		// output handles these tiles more efficiently by upscaling one blended
+		// tile instead of N individual tiles, producing identical results.
+		if !any_own {
+			return Ok(None);
+		}
+
+		// If any layer can deliver created tiles, pre-compute which coordinates
+		// have a tile of some source's own, to avoid expensive blending work
+		// for coordinates where everything would be an upscale.
+		let native_coords = if entries.iter().any(SourceEntry::creates_tiles) {
+			let mut native_coords = HashSet::new();
+			for entry in &entries {
+				let own = entry.own();
+				if own.tile_pyramid().await?.intersects_bbox(&bbox) {
+					let mut stream = own.tile_coord_stream(bbox).await?;
+					while let Some((coord, ())) = stream.next().await {
+						native_coords.insert(coord);
+					}
+				}
+			}
+			if native_coords.is_empty() {
+				return Ok(None);
+			}
+			Some(native_coords)
+		} else {
+			None
+		};
+
+		Ok(Some(Self { entries, native_coords }))
+	}
+
+	/// The blended tile at `coord`, encoded as `tile_format`.
+	async fn tile(&self, coord: TileCoord, tile_format: TileFormat, lossless: bool) -> Result<Option<Tile>> {
+		let has_own_tile = match &self.native_coords {
+			Some(coords) if !coords.contains(&coord) => return Ok(None),
+			Some(_) => true,
+			None => false,
+		};
+		let Some((_coord, mut tile)) = tile(coord, self.entries.clone(), has_own_tile).await? else {
+			return Ok(None);
+		};
+		// Heights are encoded without loss wherever they still have to be
+		// encoded: blended, created, or in another format. A tile passed on as
+		// it is keeps its bytes.
+		let passed_on = tile.has_blob() && tile.format() == tile_format;
+		let quality = (lossless && !passed_on).then_some(100);
+		tile.change_format(tile_format, quality, None)?;
+		Ok(Some(tile))
+	}
+}
+
 /// The blended tiles of one cell: a bbox of at most [`MAX_BBOX_SIZE`] tiles
 /// along each edge.
 async fn cell_stream(
@@ -434,78 +529,32 @@ async fn cell_stream(
 	bbox: TileBBox,
 	tile_format: TileFormat,
 	lossless: bool,
+	runtime: TilesRuntime,
 ) -> Result<TileStream<'static, Tile>> {
-	// Keep the layers that can have a tile in the bbox, created ones included.
-	let mut entries: Vec<SourceEntry> = Vec::new();
-	let mut any_own = false;
-	for entry in &sources {
-		if entry.source().tile_pyramid().await?.intersects_bbox(&bbox) {
-			any_own |= entry.own().tile_pyramid().await?.intersects_bbox(&bbox);
-			entries.push(entry.clone());
-		}
-	}
-
-	// No layer has a tile of its own here: whatever could be blended would
-	// be upscales only. Return an empty stream. A downstream
-	// `raster_overscale` on the blended output handles these tiles more
-	// efficiently by upscaling one blended tile instead of N individual
-	// tiles, producing identical results.
-	if !any_own {
+	let Some(plan) = CellPlan::new(&sources, bbox).await? else {
 		return Ok(TileStream::empty());
-	}
-
-	// If any layer can deliver created tiles, pre-compute which coordinates
-	// have a tile of some source's own, to avoid expensive blending work
-	// for coordinates where everything would be an upscale.
-	let native_coords = if entries.iter().any(SourceEntry::creates_tiles) {
-		let mut native_coords = HashSet::new();
-		for entry in &entries {
-			let own = entry.own();
-			if own.tile_pyramid().await?.intersects_bbox(&bbox) {
-				let mut stream = own.tile_coord_stream(bbox).await?;
-				while let Some((coord, ())) = stream.next().await {
-					native_coords.insert(coord);
-				}
-			}
-		}
-		if native_coords.is_empty() {
-			return Ok(TileStream::empty());
-		}
-		Some(Arc::new(native_coords))
-	} else {
-		None
 	};
 
 	// Bound per-coordinate concurrency by the tile budget: blending holds one
 	// (decoded, potentially large) raster tile per source per in-flight coordinate.
-	let concurrency = super::gathering::coord_concurrency(entries.len());
+	let concurrency = super::gathering::coord_concurrency(plan.entries.len());
+	let plan = Arc::new(plan);
 	Ok(TileStream::from_bbox_async_parallel_bounded(
 		bbox,
 		concurrency,
-		move |c| {
-			let entries = entries.clone();
-			let native_coords = native_coords.clone();
+		move |coord| {
+			let plan = Arc::clone(&plan);
+			let runtime = runtime.clone();
 			async move {
-				// With layers that create tiles, the coordinates listed are the
-				// ones where some layer has a tile of its own; everywhere else
-				// there is nothing to emit. Without such layers, whatever a
-				// layer delivers is its own.
-				let has_own_tile = match &native_coords {
-					Some(coords) if !coords.contains(&c) => return None,
-					Some(_) => true,
-					None => false,
-				};
-				let tile = tile(c, entries, has_own_tile).await.unwrap();
-				if let Some((_coord, mut tile)) = tile {
-					// Heights are encoded without loss wherever they still have
-					// to be encoded: blended, created, or in another format. A
-					// tile passed on as it is keeps its bytes.
-					let passed_on = tile.has_blob() && tile.format() == tile_format;
-					let quality = (lossless && !passed_on).then_some(100);
-					tile.change_format(tile_format, quality, None).unwrap();
-					return Some((c, tile));
+				// A stream cannot carry the error. It used to be a panic, which
+				// the stream took for a tile that is not there.
+				match plan.tile(coord, tile_format, lossless).await {
+					Ok(tile) => tile.map(|tile| (coord, tile)),
+					Err(error) => {
+						runtime.record_error(&format!("from_stacked_raster tile {}", coord.to_json()), &error);
+						None
+					}
 				}
-				tile
 			}
 		},
 	))
@@ -857,7 +906,9 @@ mod tests {
 			let alpha = if i < overscaled_flags.len() - 1 { 128 } else { 255 };
 			let pyramid = TilePyramid::new_full_up_to(if is_overscaled { 2 } else { 3 });
 			let source = DummyImageSource::from_color(&[255, 0, 0, alpha], 4, PNG, Some(pyramid)).unwrap();
-			let filled = FillOverscale::new(Box::new(source), Some(3)).await.unwrap();
+			let filled = FillOverscale::new(Box::new(source), Some(3), TilesRuntime::new_silent())
+				.await
+				.unwrap();
 			entries.push(SourceEntry::Filled(Arc::new(filled)));
 		}
 
@@ -1234,7 +1285,9 @@ mod tests {
 
 		// Wrap each source the way auto_overscale=true does
 		for source in original_sources {
-			let filled = FillOverscale::new(source, Some(level_max)).await.unwrap();
+			let filled = FillOverscale::new(source, Some(level_max), TilesRuntime::new_silent())
+				.await
+				.unwrap();
 			sources.push(SourceEntry::Filled(Arc::new(filled)));
 		}
 
@@ -1252,6 +1305,7 @@ mod tests {
 			source_types: vec![],
 			tilejson,
 			lossless: false,
+			runtime: TilesRuntime::new_silent(),
 		};
 
 		let coord = TileCoord::new(request_level, 0, 0).unwrap();
@@ -1447,7 +1501,9 @@ mod tests {
 			DummyImageSource::from_color(first_color, 4, TileFormat::PNG, Some(first_pyramid)).unwrap();
 
 		for source in original_sources {
-			let filled = FillOverscale::new(source, Some(level_max)).await.unwrap();
+			let filled = FillOverscale::new(source, Some(level_max), TilesRuntime::new_silent())
+				.await
+				.unwrap();
 			sources.push(SourceEntry::Filled(Arc::new(filled)));
 		}
 
@@ -1465,6 +1521,7 @@ mod tests {
 			source_types: vec![],
 			tilejson,
 			lossless: false,
+			runtime: TilesRuntime::new_silent(),
 		};
 
 		let coord = TileCoord::new(request_level, 0, 0).unwrap();
@@ -1684,7 +1741,12 @@ mod tests {
 		let listed = Arc::new(std::sync::atomic::AtomicUsize::new(0));
 		let pyramid = TilePyramid::new_full_up_to(level);
 		let source = DummyImageSource::from_color(&[255, 0, 0, 128], 4, TileFormat::PNG, Some(pyramid.clone()))?;
-		let filled = FillOverscale::new(Box::new(CountingSource(source, Arc::clone(&listed))), Some(level)).await?;
+		let filled = FillOverscale::new(
+			Box::new(CountingSource(source, Arc::clone(&listed))),
+			Some(level),
+			TilesRuntime::new_silent(),
+		)
+		.await?;
 
 		let op = Operation {
 			metadata: TileSourceMetadata::new(
@@ -1697,6 +1759,7 @@ mod tests {
 			source_types: vec![],
 			tilejson: TileJSON::default(),
 			lossless: false,
+			runtime: TilesRuntime::new_silent(),
 		};
 
 		// 256 × 256 tiles: 64 cells.
@@ -1721,6 +1784,77 @@ mod tests {
 		}
 		assert_eq!(count, 256 * 256);
 		assert_eq!(listed.load(Relaxed), cells);
+		Ok(())
+	}
+
+	/// A source that fails to deliver one of its tiles.
+	#[derive(Debug)]
+	struct FailingSource(DummyImageSource, TileCoord);
+
+	#[async_trait]
+	impl TileSource for FailingSource {
+		fn source_type(&self) -> Arc<SourceType> {
+			self.0.source_type()
+		}
+
+		fn metadata(&self) -> &TileSourceMetadata {
+			self.0.metadata()
+		}
+
+		fn tilejson(&self) -> &TileJSON {
+			self.0.tilejson()
+		}
+
+		async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+			anyhow::ensure!(*coord != self.1, "the disk is on fire");
+			self.0.tile(coord).await
+		}
+
+		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+			self.0.tile_stream(bbox).await
+		}
+
+		async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+			self.0.tile_coord_stream(bbox).await
+		}
+	}
+
+	/// A tile that cannot be blended used to panic inside the stream, which
+	/// took the panic for a tile that is not there: a line in the log, a hole
+	/// in the output, and exit code 0.
+	#[tokio::test]
+	async fn a_tile_that_cannot_be_blended_is_reported_to_the_runtime() -> Result<()> {
+		let level = 2u8;
+		let broken = TileCoord::new(level, 1, 2)?;
+		let pyramid = TilePyramid::new_full_up_to(level);
+		let source = DummyImageSource::from_color(&[255, 0, 0, 128], 4, TileFormat::PNG, Some(pyramid.clone()))?;
+
+		// What `convert` does: errors on record make it fail once the stream
+		// has drained.
+		let runtime = TilesRuntime::new_silent();
+		runtime.set_abort_on_error(true);
+
+		let op = Operation {
+			metadata: TileSourceMetadata::new(
+				TileFormat::PNG,
+				TileCompression::Uncompressed,
+				Traversal::new_any(),
+				Some(pyramid),
+			),
+			sources: vec![SourceEntry::Plain(Arc::new(FailingSource(source, broken)))],
+			source_types: vec![],
+			tilejson: TileJSON::default(),
+			lossless: false,
+			runtime: runtime.clone(),
+		};
+
+		let tiles = op.tile_stream(TileBBox::new_full(level)?).await?.to_vec().await;
+		assert_eq!(tiles.len(), 15, "the other tiles still arrive");
+		assert_eq!(runtime.error_count(), 1);
+		assert!(runtime.had_errors(), "a conversion has to fail on this");
+
+		// Asked for by itself, as the server does, the tile is an error.
+		assert!(op.tile(&broken).await.is_err());
 		Ok(())
 	}
 
