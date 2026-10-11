@@ -132,6 +132,32 @@ pub fn install_terminal_reset_hooks() {
 	});
 }
 
+/// Give SIGINT and SIGTERM back, after [`install_terminal_reset_hooks`] took
+/// them: both get their default action again. The panic hook stays.
+///
+/// For an application that draws progress bars while it starts and then
+/// turns into something that wants the signals for itself — a server that
+/// shuts down gracefully. The two cannot hold them together: a handler
+/// registered later still runs the reset handler first, and that one restores
+/// the default action and re-raises, which ends the process on the spot. So
+/// the reset handler has to be gone before the other one is registered.
+///
+/// Does nothing if the hooks were never installed, so it cannot take away a
+/// handler that somebody else put there. **For applications only**, like the
+/// function it undoes.
+pub fn release_terminal_reset_signals() {
+	if !terminal_reset_hooks_installed() {
+		return;
+	}
+	#[cfg(unix)]
+	// SAFETY: `signal` with `SIG_DFL` installs no handler of ours; it only
+	// restores the action the process started with.
+	unsafe {
+		libc::signal(libc::SIGTERM, libc::SIG_DFL);
+		libc::signal(libc::SIGINT, libc::SIG_DFL);
+	}
+}
+
 /// Handle for tracking progress of an operation
 ///
 /// Progress handles can be cloned and shared across threads. All clones
@@ -439,6 +465,26 @@ mod tests {
 		// An application asking for them explicitly still gets them.
 		install_terminal_reset_hooks();
 		assert!(terminal_reset_hooks_installed());
+
+		// And can give the signals back: both have their default action
+		// again, so that a handler registered next is not preceded by ours.
+		// In this test, because it is the one that installs them — the check
+		// above needs every other test to leave them alone.
+		#[cfg(unix)]
+		{
+			fn current_action(signal: libc::c_int) -> libc::sighandler_t {
+				// SAFETY: a null `act` only reads the current disposition.
+				unsafe {
+					let mut current: libc::sigaction = std::mem::zeroed();
+					assert_eq!(libc::sigaction(signal, std::ptr::null(), &raw mut current), 0);
+					current.sa_sigaction
+				}
+			}
+			assert_ne!(current_action(libc::SIGTERM), libc::SIG_DFL);
+			release_terminal_reset_signals();
+			assert_eq!(current_action(libc::SIGTERM), libc::SIG_DFL);
+			assert_eq!(current_action(libc::SIGINT), libc::SIG_DFL);
+		}
 	}
 
 	#[test]

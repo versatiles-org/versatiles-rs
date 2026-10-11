@@ -161,6 +161,12 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		spawn_sighup_handler(server.reload_handle(config_path.clone()));
 	}
 
+	// Up to here, a signal ended the process after clearing the terminal's
+	// progress indicator, which opening a source may have set. From here on
+	// the signals mean "shut down gracefully", and the handler that did the
+	// clearing has to go first: registered later, ours would still run it
+	// first, and it ends the process.
+	versatiles_container::release_terminal_reset_signals();
 	let mut signals = shutdown_signals()?;
 
 	tokio::select! {

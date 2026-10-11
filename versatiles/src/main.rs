@@ -191,18 +191,9 @@ fn main() {
 	// indicator. The library no longer does this on its own: an application
 	// embedding it keeps its own handlers unless it asks for ours.
 	//
-	// Except for `serve`, which spends SIGINT and SIGTERM on a graceful
-	// shutdown instead. The two cannot share them: a handler registered later
-	// still runs this one first, and this one restores the default action and
-	// re-raises, which ends the process before any request has been drained.
-	// A server draws no progress bar that would need clearing.
-	#[cfg(feature = "server")]
-	let serves = matches!(cli.command, Commands::Serve(_));
-	#[cfg(not(feature = "server"))]
-	let serves = false;
-	if !serves {
-		versatiles_container::install_terminal_reset_hooks();
-	}
+	// `serve` holds them only while it starts — opening a tar archive draws a
+	// bar — and takes the signals for its graceful shutdown once it is up.
+	versatiles_container::install_terminal_reset_hooks();
 
 	let runtime = build_runtime(&cli);
 
