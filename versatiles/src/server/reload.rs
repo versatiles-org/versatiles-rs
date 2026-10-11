@@ -162,8 +162,8 @@ impl ReloadHandle {
 	///
 	/// Handled like tile sources: a source that did not change is not rebuilt,
 	/// and one that cannot be built leaves the source it would have replaced
-	/// in place. What failed is not recorded as mounted, so the next reload
-	/// tries again.
+	/// in place, where it is clear which one that is. What failed is not
+	/// recorded as mounted, so the next reload tries again.
 	async fn apply_static_source_diff(&self, new_configs: &[StaticSourceConfig], follow_symlinks: bool) {
 		fn prefix_of(cfg: &StaticSourceConfig) -> &str {
 			cfg.prefix.as_deref().unwrap_or("/")
@@ -183,6 +183,22 @@ impl ReloadHandle {
 				Some(index)
 			})
 			.collect();
+
+		// How many sources at a prefix are not carried over, and how many of the
+		// new config are not among the old ones: settled now, before a kept
+		// source changes the count.
+		let leaving_at: Vec<&str> = (0..old.len())
+			.filter(|&i| !taken[i])
+			.map(|i| prefix_of(&old[i].config))
+			.collect();
+		let arriving_at: Vec<&str> = new_configs
+			.iter()
+			.zip(&reused)
+			.filter(|(_, reused)| reused.is_none())
+			.map(|(cfg, _)| prefix_of(cfg))
+			.collect();
+		let leaving = |prefix: &str| leaving_at.iter().filter(|p| **p == prefix).count();
+		let arriving = |prefix: &str| arriving_at.iter().filter(|p| **p == prefix).count();
 
 		let mut mounted: Vec<MountedStatic> = Vec::new();
 		let mut changed = false;
@@ -206,8 +222,17 @@ impl ReloadHandle {
 				}
 				Err(e) => {
 					// Static sources have no name; the URL prefix is what tells
-					// which one this was meant to replace.
-					let previous = (0..old.len()).find(|&i| !taken[i] && prefix_of(&old[i].config) == prefix);
+					// which one this was meant to replace. It only tells when
+					// one source left and one arrived at that prefix: with
+					// several sharing it, any choice could keep a source the
+					// config dropped on purpose, in front of the others.
+					//
+					// A source that follows symlinks is not kept under a config
+					// that says not to.
+					let previous = (0..old.len())
+						.find(|&i| !taken[i] && prefix_of(&old[i].config) == prefix)
+						.filter(|_| leaving(prefix) == 1 && arriving(prefix) == 1)
+						.filter(|&i| follow_symlinks || !old[i].follow_symlinks);
 					if let Some(index) = previous {
 						log::error!(
 							"reload: failed to replace the static source at '{prefix}', keeping the previous one: {e:#}"
@@ -609,6 +634,73 @@ mod tests {
 		assert!(is_served(&handle, "/more/index.html").await);
 		assert_eq!(mounted_configs(&handle), config);
 
+		Ok(())
+	}
+
+	/// Several static sources may share a prefix; the first with the file
+	/// answers. A failed build then does not say which old source it was meant
+	/// to replace, and keeping the first one left a source the config had
+	/// dropped mounted in front of the others.
+	#[tokio::test]
+	async fn a_failed_static_source_keeps_no_old_one_where_several_share_the_prefix() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let (a, b) = (dir.path().join("a"), dir.path().join("b"));
+		for (folder, name) in [(&a, "a.txt"), (&b, "b.txt")] {
+			std::fs::create_dir(folder)?;
+			std::fs::write(folder.join(name), name)?;
+		}
+		let missing = dir.path().join("missing");
+		let handle = handle(PathBuf::from("unused"));
+
+		// One leaves, two arrive, one of them broken.
+		handle.apply_static_source_diff(&[static_config(&a, "/")], false).await;
+		handle
+			.apply_static_source_diff(&[static_config(&missing, "/"), static_config(&b, "/")], false)
+			.await;
+		assert!(!is_served(&handle, "/a.txt").await, "a dropped source is still mounted");
+		assert!(is_served(&handle, "/b.txt").await);
+
+		// Two leave, one broken one arrives.
+		handle
+			.apply_static_source_diff(&[static_config(&a, "/"), static_config(&b, "/")], false)
+			.await;
+		handle
+			.apply_static_source_diff(&[static_config(&missing, "/")], false)
+			.await;
+		assert!(!is_served(&handle, "/a.txt").await);
+		assert!(!is_served(&handle, "/b.txt").await);
+		Ok(())
+	}
+
+	/// A folder that follows symlinks is not kept in place of one that could
+	/// not be built, once the config says not to follow them.
+	#[tokio::test]
+	async fn a_failed_static_source_does_not_keep_one_that_follows_symlinks_against_the_config() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let public = dir.path().join("public");
+		std::fs::create_dir(&public)?;
+		std::fs::write(public.join("inside.txt"), "inside")?;
+		let missing = dir.path().join("missing");
+		let handle = handle(PathBuf::from("unused"));
+
+		handle
+			.apply_static_source_diff(&[static_config(&public, "/")], true)
+			.await;
+		assert!(is_served(&handle, "/inside.txt").await);
+
+		handle
+			.apply_static_source_diff(&[static_config(&missing, "/")], false)
+			.await;
+		assert!(!is_served(&handle, "/inside.txt").await);
+
+		// The other way round, the stricter source may stay.
+		handle
+			.apply_static_source_diff(&[static_config(&public, "/")], false)
+			.await;
+		handle
+			.apply_static_source_diff(&[static_config(&missing, "/")], true)
+			.await;
+		assert!(is_served(&handle, "/inside.txt").await);
 		Ok(())
 	}
 
