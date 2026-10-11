@@ -123,6 +123,9 @@ pub struct Subcommand {
 	flip_y: bool,
 
 	/// set the output tile format, e.g. "webp", "webp,80", "avif,90,50"
+	///
+	/// Elevation tiles (tile schema "dem/…") are converted without loss unless
+	/// a quality is given: their channels are heights.
 	#[arg(long, value_name = "format[,quality][,effort]", display_order = 3)]
 	tile_format: Option<String>,
 

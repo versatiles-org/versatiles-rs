@@ -145,6 +145,13 @@ impl Tile {
 		blob_size + content_size
 	}
 
+	/// The encoding quality hint, if one is set: what the tile is encoded with
+	/// when its content is turned into a blob.
+	#[must_use]
+	pub fn format_quality(&self) -> Option<u8> {
+		self.format_quality
+	}
+
 	/// Set the encoding quality hint (used when re-encoding content to blob).
 	///
 	/// Pass `None` to clear any previously stored hint and use the codec default.

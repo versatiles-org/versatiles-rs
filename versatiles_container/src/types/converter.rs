@@ -45,7 +45,8 @@ use std::{path::Path, sync::Arc};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use versatiles_core::{
-	GeoBBox, GeoCrop, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileRemap, TileStream,
+	GeoBBox, GeoCrop, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileRemap, TileSchema,
+	TileStream,
 };
 use versatiles_derive::context;
 
@@ -287,7 +288,10 @@ impl TilesConvertReader {
 	/// ### Errors
 	/// Propagates errors from querying/deriving parameters or updating metadata.
 	#[context("Creating converter reader from existing reader")]
-	pub async fn new_from_reader(reader: SharedTileSource, cp: TilesConverterParameters) -> Result<TilesConvertReader> {
+	pub async fn new_from_reader(
+		reader: SharedTileSource,
+		mut cp: TilesConverterParameters,
+	) -> Result<TilesConvertReader> {
 		// Coordinate remapping is delegated in full: the wrapper maps requests
 		// backwards and results forwards for every access path, which is what
 		// this type used to do by hand — inconsistently (issue #230).
@@ -323,6 +327,20 @@ impl TilesConvertReader {
 				source_format.to_type().as_str()
 			);
 			new_rp.set_tile_format(tile_format);
+
+			// Heights are not something to shave bits off by default. Changing
+			// the format of elevation tiles without naming a quality used to
+			// mean the encoder's own — 95 for WebP, which changes the low byte
+			// of a channel, and with it a height. Whoever wants that has to
+			// ask for it. Only where the format really changes: tiles already
+			// in the target format are passed on as they are, and should be.
+			let elevation = matches!(
+				reader.tilejson().tile_schema,
+				Some(TileSchema::RasterDEMMapbox | TileSchema::RasterDEMTerrarium | TileSchema::RasterDEMVersatiles)
+			);
+			if elevation && tile_format != source_format && cp.format_quality.is_none() {
+				cp.format_quality = Some(100);
+			}
 		}
 
 		if let Some(tile_compression) = cp.tile_compression {
@@ -750,6 +768,67 @@ mod tests {
 				.contains("cannot convert to 'webp': it is a raster format, but the source contains vector tiles ('mvt')"),
 			"unexpected message: {err:#}"
 		);
+		Ok(())
+	}
+
+	/// An elevation source: PNG tiles, with the schema saying they are heights.
+	fn get_elevation_reader() -> SharedTileSource {
+		let reader_metadata = TileSourceMetadata::new(PNG, Uncompressed, Traversal::ANY, None);
+		let mut reader = MockReader::new_mock(TilePyramid::new_full_up_to(4), reader_metadata).unwrap();
+		reader.tilejson_mut().tile_schema = Some(TileSchema::RasterDEMMapbox);
+		reader.into_shared()
+	}
+
+	/// The quality a converted tile is going to be encoded with.
+	async fn quality_of_converted_tile(reader: SharedTileSource, cp: TilesConverterParameters) -> Result<Option<u8>> {
+		let tcr = TilesConvertReader::new_from_reader(reader, cp).await?;
+		let coord = TileCoord::new(0, 0, 0)?;
+		let single = tcr.tile(&coord).await?.unwrap().format_quality();
+		let streamed = tcr.tile_stream(coord.to_tile_bbox()).await?.to_vec().await[0]
+			.1
+			.format_quality();
+		assert_eq!(single, streamed, "both ways of reading a tile agree");
+		Ok(single)
+	}
+
+	/// Changing the format of elevation tiles must not cost heights unless a
+	/// quality is asked for. For any other raster source the encoder's own
+	/// default stays.
+	#[tokio::test]
+	async fn elevation_tiles_keep_their_heights_when_the_format_changes() -> Result<()> {
+		let to_webp = |format_quality| TilesConverterParameters {
+			tile_format: Some(WEBP),
+			format_quality,
+			..Default::default()
+		};
+
+		assert_eq!(
+			quality_of_converted_tile(get_elevation_reader(), to_webp(None)).await?,
+			Some(100)
+		);
+		assert_eq!(
+			quality_of_converted_tile(get_elevation_reader(), to_webp(Some(80))).await?,
+			Some(80)
+		);
+		assert_eq!(
+			quality_of_converted_tile(get_mock_reader(PNG, Uncompressed), to_webp(None)).await?,
+			None
+		);
+		Ok(())
+	}
+
+	/// Tiles that are in the target format already are passed on, also for an
+	/// elevation source: a default quality is no reason to re-encode them.
+	#[tokio::test]
+	async fn elevation_tiles_in_the_target_format_are_not_reencoded() -> Result<()> {
+		let cp = TilesConverterParameters {
+			tile_format: Some(PNG),
+			..Default::default()
+		};
+		let tcr = TilesConvertReader::new_from_reader(get_elevation_reader(), cp).await?;
+		let tile = tcr.tile(&TileCoord::new(0, 0, 0)?).await?.unwrap();
+		assert!(tile.has_blob() && !tile.has_content(), "passed on, not decoded");
+		assert_eq!(tile.format_quality(), None);
 		Ok(())
 	}
 
