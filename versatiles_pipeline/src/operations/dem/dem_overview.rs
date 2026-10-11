@@ -131,6 +131,7 @@ impl Operation {
 		)?;
 
 		core.tilejson.tile_schema = Some(to_tile_schema(encoding));
+		core.lossless = true;
 
 		Ok(Self { core })
 	}
@@ -607,6 +608,31 @@ mod tests {
 		// Metadata should extend pyramid to level 0
 		let pyramid = op.tile_pyramid().await?;
 		assert_eq!(pyramid.level_min(), Some(0));
+		Ok(())
+	}
+
+	/// An overview tile is a new tile, and used to be encoded like any other:
+	/// in WebP at quality 95, which changed 18,181 of 262,144 heights in one
+	/// tile, some by more than eleven million steps.
+	#[tokio::test]
+	async fn overview_tiles_are_encoded_without_loss() -> Result<()> {
+		use versatiles_image::DynamicImageTraitConvert;
+
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_debug format=webp | meta_update schema=\"dem/mapbox\" | filter level_min=4 level_max=4 | dem_overview",
+			)
+			.await?;
+		let tiles = op.tile_stream(TileBBox::new_full(3)?).await?.to_vec().await;
+		assert_eq!(tiles.len(), 64, "all of level 3");
+
+		for (coord, tile) in tiles {
+			let image = tile.clone().into_image()?.to_rgb8();
+			let blob = tile.into_blob(&TileCompression::Uncompressed)?;
+			let decoded = DynamicImage::from_blob(&blob, TileFormat::WEBP)?.to_rgb8();
+			assert!(image.as_raw() == decoded.as_raw(), "heights of {coord:?} changed");
+		}
 		Ok(())
 	}
 }

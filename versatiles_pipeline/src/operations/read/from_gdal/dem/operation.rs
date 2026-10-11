@@ -237,10 +237,11 @@ impl TileSource for Operation {
 									size,
 									size,
 								);
-								(
-									coord,
-									Tile::from_image(tile_img, tile_format).expect("tile_format is raster"),
-								)
+								// Marked lossless, so that a `raster_format format=webp`
+								// behind this operation keeps the heights intact.
+								let mut tile = Tile::from_image(tile_img, tile_format).expect("tile_format is raster");
+								tile.set_format_quality(Some(100));
+								(coord, tile)
 							})
 							.collect::<Vec<_>>()
 					})
@@ -523,6 +524,26 @@ mod tests {
 		.unwrap();
 		let source = Operation::build(vpl_node, &factory).await?;
 		assert_eq!(*source.metadata().tile_format(), TileFormat::PNG);
+		Ok(())
+	}
+
+	/// The tiles come out as PNG, which is lossless anyway. The mark is for
+	/// what follows: `raster_format format=webp` behind this operation keeps
+	/// the quality a tile carries, and must not get the encoder's default.
+	#[tokio::test(flavor = "multi_thread")]
+	async fn tiles_stay_lossless_when_their_format_is_changed() -> Result<()> {
+		use versatiles_core::TileCompression;
+		use versatiles_image::DynamicImageTraitConvert;
+
+		let (_tmp, dem_path) = create_temp_dem();
+		let op = get_operation(&dem_path, "").await;
+		let (coord, mut tile) = op.tile_stream(TileBBox::new_full(1)?).await?.to_vec().await.remove(0);
+
+		let image = tile.clone().into_image()?.to_rgb8();
+		tile.change_format(TileFormat::WEBP, None, None)?;
+		let blob = tile.into_blob(&TileCompression::Uncompressed)?;
+		let decoded = versatiles_image::DynamicImage::from_blob(&blob, TileFormat::WEBP)?.to_rgb8();
+		assert!(image.as_raw() == decoded.as_raw(), "heights of {coord:?} changed");
 		Ok(())
 	}
 }

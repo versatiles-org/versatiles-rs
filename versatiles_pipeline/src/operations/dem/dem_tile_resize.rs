@@ -41,6 +41,7 @@ impl Operation {
 
 		let mut core = TileResizeCore::new(source, tile_size, Arc::new(super::dem_overview::dem_scale_down))?;
 		core.tilejson.tile_schema = Some(to_tile_schema(encoding));
+		core.lossless = true;
 
 		Ok(Self { core })
 	}
@@ -133,6 +134,7 @@ mod tests {
 		.await?;
 		assert!(op.source_type().to_string().contains("dem_tile_resize"));
 		assert_eq!(op.tilejson().tile_schema, Some(TileSchema::RasterDEMTerrarium));
+		assert!(op.core.lossless, "resized elevation tiles must be encoded without loss");
 		Ok(())
 	}
 
@@ -287,5 +289,38 @@ mod tests {
 		let op = make_op(make_dem_512_source(), 256)?;
 		assert!(op.source_type().to_string().contains("dem_tile_resize"));
 		Ok(())
+	}
+
+	/// A resized tile is a new tile; in WebP it must not be encoded lossy.
+	#[tokio::test]
+	async fn resized_tiles_are_encoded_without_loss() -> Result<()> {
+		use versatiles_core::TileCompression;
+		use versatiles_image::DynamicImageTraitConvert;
+
+		// Heights that differ from pixel to pixel, so that a lossy encoder
+		// would have something to smooth.
+		let mut img = RgbImage::new(512, 512);
+		for (x, y, pixel) in img.enumerate_pixels_mut() {
+			*pixel = raw_to_rgb(100_000 + x * 37 + y * 101 + (x * y) % 251);
+		}
+		let pyramid = TilePyramid::new_full_up_to(2);
+		let mut source = DummyImageSource::from_image(DynamicImage::ImageRgb8(img), TileFormat::WEBP, Some(pyramid))?;
+		source.tilejson_mut().set_tile_size(512)?;
+		source.tilejson_mut().tile_schema = Some(TileSchema::RasterDEMMapbox);
+		let op = make_op_lossless(source, 256)?;
+
+		let (coord, tile) = op.tile_stream(TileBBox::new_full(2)?).await?.to_vec().await.remove(0);
+		let image = tile.clone().into_image()?.to_rgb8();
+		let blob = tile.into_blob(&TileCompression::Uncompressed)?;
+		let decoded = DynamicImage::from_blob(&blob, TileFormat::WEBP)?.to_rgb8();
+		assert!(image.as_raw() == decoded.as_raw(), "heights of {coord:?} changed");
+		Ok(())
+	}
+
+	/// What `build` sets up, for a source made by hand.
+	fn make_op_lossless(source: DummyImageSource, tartile_size: u32) -> Result<Operation> {
+		let mut op = make_op(source, tartile_size)?;
+		op.core.lossless = true;
+		Ok(op)
 	}
 }

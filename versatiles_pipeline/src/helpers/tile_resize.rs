@@ -17,6 +17,12 @@ pub struct TileResizeCore {
 	source_tile_size: u32,
 	cache: Arc<Cache<TileCoord, Option<Arc<DynamicImage>>>>,
 	scale_down_fn: ScaleDownFn,
+	/// Whether the tiles this creates must be encoded without loss.
+	///
+	/// Set for elevation tiles: a lossy encoder changes the low bits of a
+	/// channel, and there those are heights. Without it, a resized tile in WebP
+	/// was encoded at the default quality.
+	pub lossless: bool,
 }
 
 impl Debug for TileResizeCore {
@@ -121,6 +127,7 @@ impl TileResizeCore {
 			source_tile_size,
 			cache: Arc::new(cache),
 			scale_down_fn,
+			lossless: false,
 		})
 	}
 
@@ -265,7 +272,12 @@ impl TileResizeCore {
 
 				match result {
 					Ok(Some(img)) => match Tile::from_image(img, tile_format) {
-						Ok(tile) => Some((coord_dst, tile)),
+						Ok(mut tile) => {
+							if self_arc.lossless {
+								tile.set_format_quality(Some(100));
+							}
+							Some((coord_dst, tile))
+						}
 						Err(e) => {
 							log::error!("Error creating tile {coord_dst:?}: {e:?}");
 							None

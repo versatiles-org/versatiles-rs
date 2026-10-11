@@ -164,6 +164,13 @@ pub struct OverviewCore {
 	/// built, rather than on every request.
 	request_budget: Option<u64>,
 	scale_fn: ScaleDownFn,
+	/// Whether the tiles this creates must be encoded without loss.
+	///
+	/// Set for elevation tiles: a lossy encoder changes the low bits of a
+	/// channel, and there those are heights. Without it, an overview in WebP
+	/// was encoded at the default quality and came out with heights off by
+	/// more than a million steps in places.
+	pub lossless: bool,
 }
 
 impl OverviewCore {
@@ -259,6 +266,7 @@ impl OverviewCore {
 			cache,
 			request_budget,
 			scale_fn,
+			lossless: false,
 		})
 	}
 
@@ -463,6 +471,7 @@ impl OverviewCore {
 		let format = *self.source.metadata().tile_format();
 		let full_size = self.tile_size;
 		let scale_fn = self.scale_fn.clone();
+		let lossless = self.lossless;
 
 		let results: Vec<_> = futures::future::join_all(container.into_iter().map(|(coord, image_opt)| {
 			let scale_fn = scale_fn.clone();
@@ -479,7 +488,13 @@ impl OverviewCore {
 					None
 				};
 				let tile = if emit.is_some_and(|bbox| bbox.includes_coord(&coord)) {
-					image_opt.map(|img| (coord, Tile::from_image(img, format).expect("source format is raster")))
+					image_opt.map(|img| {
+						let mut tile = Tile::from_image(img, format).expect("source format is raster");
+						if lossless {
+							tile.set_format_quality(Some(100));
+						}
+						(coord, tile)
+					})
 				} else {
 					None
 				};

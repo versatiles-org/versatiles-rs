@@ -2,7 +2,7 @@ use std::str;
 
 use anyhow::{Result, ensure};
 use versatiles_container::{Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileCompression, TileCoord, TileFormat, bounded_number};
+use versatiles_core::{TileCompression, TileCoord, TileFormat, TileSchema, bounded_number};
 use versatiles_derive::context;
 
 use crate::{
@@ -32,6 +32,9 @@ use crate::{
 /// to 13 use 70, zoom 14 uses 50, and zoom 15 and above use 20. `quality` is
 /// ignored for PNG, which is always lossless.
 ///
+/// For elevation tiles (tile schema `dem/…`), `quality` defaults to `100`:
+/// their channels are heights, and a lossy encoder would change them.
+///
 /// `quality_translucent` is typically `100`: lossy encoders handle an alpha
 /// channel badly. Setting it makes every tile that is encoded be checked for
 /// opacity.
@@ -56,6 +59,8 @@ struct Operation {
 	quality_translucent: Option<[Option<u8>; 32]>,
 	effort: Option<u8>,
 	force_reencode: bool,
+	/// Whether the tiles hold heights, going by the tile schema of the source.
+	elevation: bool,
 }
 
 impl Operation {
@@ -84,6 +89,10 @@ impl Operation {
 			quality_translucent: args.quality_translucent.map(QualityByZoom::into_levels),
 			effort: args.effort.map(Effort::get),
 			force_reencode: args.force_reencode.unwrap_or(false),
+			elevation: matches!(
+				source.tilejson().tile_schema,
+				Some(TileSchema::RasterDEMMapbox | TileSchema::RasterDEMTerrarium | TileSchema::RasterDEMVersatiles)
+			),
 		};
 		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}
@@ -109,7 +118,11 @@ impl TileTransform for Operation {
 		}
 
 		let level = coord.level as usize;
-		let quality = self.quality[level];
+		// Heights are not something to shave bits off by default: a lossy
+		// encoder changes the low byte of a channel, which here is a height
+		// off by hundreds of steps, or by far more where a byte carries over.
+		// Whoever wants that has to ask for it with `quality`.
+		let quality = self.quality[level].or(self.elevation.then_some(100));
 		let effective_quality = match self.quality_translucent {
 			Some(qt) if !tile.is_opaque()? => qt[level],
 			_ => quality,
@@ -253,6 +266,7 @@ mod tests {
 			quality_translucent: None,
 			effort,
 			force_reencode,
+			elevation: false,
 		}
 	}
 
@@ -366,6 +380,27 @@ mod tests {
 
 		assert_eq!(blob, upscaled.to_blob(WEBP, None, Some(0))?);
 		assert_ne!(blob, upscaled.to_blob(WEBP, None, None)?, "effort 0 should show");
+		Ok(())
+	}
+
+	/// Changing the format of elevation tiles without saying anything about
+	/// quality must not cost heights; asking for a quality still does.
+	#[tokio::test]
+	async fn elevation_tiles_are_lossless_unless_a_quality_is_asked_for() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();
+		let heights_survive = async |format_args: &str| -> Result<bool> {
+			let vpl = format!("from_debug format=png | meta_update schema=\"dem/mapbox\" | raster_format {format_args}");
+			let op = factory.operation_from_vpl(&vpl).await?;
+			let tile = op.tile_stream(bbox).await?.to_vec().await.remove(0).1;
+			let image = tile.clone().into_image()?.to_rgb8();
+			let blob = tile.into_blob(&TileCompression::Uncompressed)?;
+			Ok(DynamicImage::from_blob(&blob, WEBP)?.to_rgb8().as_raw() == image.as_raw())
+		};
+
+		assert!(heights_survive("format=webp").await?);
+		assert!(heights_survive("format=webp effort=0").await?);
+		assert!(!heights_survive("format=webp quality=80").await?);
 		Ok(())
 	}
 
