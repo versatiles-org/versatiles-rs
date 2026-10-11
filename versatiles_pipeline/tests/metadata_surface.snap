@@ -159,6 +159,7 @@ raster_format.format: Option<RasterTileFormat> | optional | values=[avif,jpg,png
 raster_format.quality: Option<QualityByZoom> | optional
 raster_format.quality_translucent: Option<QualityByZoom> | optional
 raster_format.effort: Option<Effort> | optional | bounds=[0,100] int
+raster_format.force_reencode: Option<bool> | optional | default=false
 
 raster_levels [transform]
 raster_levels.brightness: Option<Brightness> | optional | default=0.0 | bounds=[-255,255] float

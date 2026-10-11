@@ -84,6 +84,23 @@ fn as_content_mut_deletes_blob() -> Result<()> {
 	Ok(())
 }
 
+/// #285: an effort for a tile that is not encoded yet has to reach the
+/// encoder, while a tile that is encoded already must not be touched by it.
+#[test]
+fn change_format_keeps_an_effort_for_a_tile_without_a_blob() -> Result<()> {
+	let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
+	tile.change_format(PNG, None, Some(5))?;
+	assert_eq!(tile.format_effort, Some(5));
+
+	// Encoded now, so the next effort is too late and must not cause a re-encode.
+	let blob = tile.as_blob(&Uncompressed)?.clone();
+	tile.change_format(PNG, None, Some(100))?;
+	assert_eq!(tile.format_effort, Some(5));
+	assert!(tile.has_blob());
+	assert_eq!(tile.as_blob(&Uncompressed)?, &blob);
+	Ok(())
+}
+
 #[test]
 fn change_format_sets_flags() -> Result<()> {
 	let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;

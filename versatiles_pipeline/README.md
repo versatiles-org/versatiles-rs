@@ -519,11 +519,15 @@ Composites translucent raster tiles onto an opaque background colour.
 
 ## raster_format
 
-Re-encodes raster tiles into another image format, quality or effort setting.
+Sets the image format, quality and effort that raster tiles are encoded with.
 
-`quality` and `quality_translucent` take a zoom-dependent list as well as a single number. In `quality="70,14:50,15:20"` the first value is the default and each `zoom:value` pair applies from that zoom level upwards — so zoom 0 to 13 use 70, zoom 14 uses 50, and zoom 15 and above use 20. Tiles that are already in the target format and need no quality change are passed through without re-encoding. `quality` is ignored for PNG, which is always lossless.
+The settings apply to every tile that has to be encoded anyway: one in another format, and one that an earlier step of the pipeline created or changed — upscaled, blended, resized, flattened. A tile that is already encoded in the target format is passed through untouched, which costs no time and, for a lossy format, no detail. So `… | raster_overscale | raster_format quality=70 effort=0` encodes the upscaled tiles quickly and leaves the tiles of the source as they are.
 
-`quality_translucent` is typically `100`: lossy encoders handle an alpha channel badly. Setting it makes every tile be checked for opacity.
+Set `force_reencode=true` to re-encode those tiles as well, e.g. to shrink an existing tileset with a lower `quality`.
+
+`quality` and `quality_translucent` take a zoom-dependent list as well as a single number. In `quality="70,14:50,15:20"` the first value is the default and each `zoom:value` pair applies from that zoom level upwards — so zoom 0 to 13 use 70, zoom 14 uses 50, and zoom 15 and above use 20. `quality` is ignored for PNG, which is always lossless.
+
+`quality_translucent` is typically `100`: lossy encoders handle an alpha channel badly. Setting it makes every tile that is encoded be checked for opacity.
 
 ### Parameters
 
@@ -531,6 +535,7 @@ Re-encodes raster tiles into another image format, quality or effort setting.
 - _`quality`: u8 | zoom:u8,... (optional)_ - Encoder quality, `0` (worst) to `100` (lossless). Defaults to the encoder's own.
 - _`quality_translucent`: u8 | zoom:u8,... (optional)_ - Encoder quality for tiles with translucent pixels. Defaults to using `quality` throughout.
 - _`effort`: 0-100 (optional)_ - Encoder effort, `0` is fastest and `100` smallest. Defaults to the encoder's own.
+- _`force_reencode`: bool (optional)_ - Whether to re-encode tiles that are already encoded in the target format. Defaults to `false`.
 
 ---
 

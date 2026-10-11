@@ -87,6 +87,11 @@ impl Tile {
 	/// `quality`/`effort` hints are updated if provided (passed as `Some`).
 	/// Passing `None` keeps the previous hint value.
 	///
+	/// A tile already in `format` is left as it is unless a `quality` is given:
+	/// re-encoding it would cost time and, for a lossy format, detail. An
+	/// `effort` alone is no reason to re-encode either, but a tile that has no
+	/// blob yet still has its encoding ahead of it, and takes the hint along.
+	///
 	/// The `format` must have the same type (raster vs. vector) as the current format.
 	#[context("changing format: {:?} -> {:?} (q={:?}, e={:?})", self.format, format, quality, effort)]
 	pub fn change_format(
@@ -96,6 +101,11 @@ impl Tile {
 		effort: Option<u8>,
 	) -> Result<()> {
 		if self.format == format && quality.is_none() {
+			// Used to be dropped here for every tile (#285), so an effort set for
+			// tiles a pipeline had just created never reached the encoder.
+			if effort.is_some() && self.blob.is_none() {
+				self.format_effort = effort;
+			}
 			return Ok(());
 		}
 
