@@ -350,6 +350,65 @@ mod tests {
 		Ok(())
 	}
 
+	// --- color ---
+
+	fn gradient(channel_count: usize) -> DynamicImage {
+		let s = 256;
+		match channel_count {
+			1 => DynamicImage::from_fn(s, s, |x, _| [x as u8]),
+			2 => DynamicImage::from_fn(s, s, |x, y| [x as u8, y as u8]),
+			3 => DynamicImage::from_fn(s, s, |x, y| [x as u8, y as u8, 255 - x as u8]),
+			4 => DynamicImage::from_fn(s, s, |x, y| [x as u8, y as u8, 255 - x as u8, 255 - y as u8]),
+			_ => panic!("unsupported channel count {channel_count}"),
+		}
+	}
+
+	/// The average color of the area of `dst` cut out of a gradient at `src`,
+	/// divided by `scale` to make the expected values readable.
+	#[expect(
+		clippy::cast_sign_loss,
+		reason = "an average of u8 values divided by a positive number"
+	)]
+	fn average(channel_count: usize, src: (u8, u32, u32), dst: (u8, u32, u32), scale: u32) -> Vec<u8> {
+		let image = Scaling::Color
+			.extract(
+				&gradient(channel_count),
+				TileCoord::new(src.0, src.1, src.2).unwrap(),
+				TileCoord::new(dst.0, dst.1, dst.2).unwrap(),
+			)
+			.unwrap();
+		image
+			.average_color()
+			.into_iter()
+			.map(|c| (f64::from(c) / f64::from(scale)).round() as u8)
+			.collect()
+	}
+
+	/// One level up, a tile is a quarter of its source: each quarter of the
+	/// gradient comes out with its own average, in every channel layout.
+	#[rstest::rstest]
+	#[case::l(1, [vec![16], vec![48], vec![16], vec![48]])]
+	#[case::la(2, [vec![16, 16], vec![48, 16], vec![16, 48], vec![48, 48]])]
+	#[case::rgb(3, [vec![16, 16, 48], vec![48, 16, 16], vec![16, 48, 48], vec![48, 48, 16]])]
+	#[case::rgba(4, [vec![16, 16, 48, 48], vec![48, 16, 16, 48], vec![16, 48, 48, 16], vec![48, 48, 16, 16]])]
+	fn color_one_level_up_is_a_quarter_of_the_source(#[case] channel_count: usize, #[case] expected: [Vec<u8>; 4]) {
+		let src = (2, 1, 1);
+		let quarters = [(3, 2, 2), (3, 3, 2), (3, 2, 3), (3, 3, 3)];
+		assert_eq!(quarters.map(|dst| average(channel_count, src, dst, 4)), expected);
+	}
+
+	#[test]
+	fn color_two_levels_up_is_a_sixteenth_of_the_source() {
+		for x in 0..4u32 {
+			for y in 0..4u32 {
+				assert_eq!(
+					average(3, (2, 1, 1), (4, 4 + x, 4 + y), 32),
+					vec![(1 + x * 2) as u8, (1 + y * 2) as u8, (7 - x * 2) as u8]
+				);
+			}
+		}
+	}
+
 	#[test]
 	fn test_extract_image_same_level() -> Result<()> {
 		let image = gradient_image();

@@ -216,6 +216,28 @@ impl FillOverscale {
 		Ok(content)
 	}
 
+	/// The source whose gaps this fills.
+	pub fn source(&self) -> &SharedTileSource {
+		&self.source
+	}
+
+	/// The tile at `coord`, and whether it is one the source has (`true`) or
+	/// one created here (`false`).
+	///
+	/// `from_stacked_raster` blends created tiles in but emits a tile only
+	/// where one of its sources has a tile of its own, so it has to know.
+	pub async fn tile_with_origin(&self, coord: &TileCoord) -> Result<Option<(Tile, bool)>> {
+		if self.native.includes_coord(coord)
+			&& let Some(tile) = self.source.tile(coord).await?
+		{
+			return Ok(Some((tile, true)));
+		}
+		if !self.creates_in(&coord.to_tile_bbox()) {
+			return Ok(None);
+		}
+		Ok(self.create(*coord).await?.map(|tile| (tile, false)))
+	}
+
 	/// A format that cannot store transparency needs no look at its tiles.
 	///
 	/// Not the tile schema: `rgb` is also what a source is given when it
@@ -576,15 +598,7 @@ impl TileSource for FillOverscale {
 	}
 
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		if self.native.includes_coord(coord)
-			&& let Some(tile) = self.source.tile(coord).await?
-		{
-			return Ok(Some(tile));
-		}
-		if !self.creates_in(&coord.to_tile_bbox()) {
-			return Ok(None);
-		}
-		self.create(*coord).await
+		Ok(self.tile_with_origin(coord).await?.map(|(tile, _)| tile))
 	}
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
@@ -1023,8 +1037,7 @@ mod tests {
 	/// The setup the operation is meant for: imagery of the whole world at
 	/// low levels, and of one region at high levels on top, blended by
 	/// `from_stacked_raster`. Where only the world layer has anything, the
-	/// stack emits no tile above that layer's own levels, and lists the
-	/// coordinate all the same.
+	/// stack emits no tile above that layer's own levels.
 	#[tokio::test]
 	async fn behind_a_stack_it_fills_what_the_stack_leaves_out() -> Result<()> {
 		use versatiles_image::DynamicImageTraitOperation;
@@ -1082,8 +1095,7 @@ mod tests {
 	// --- a source that lists tiles it does not deliver ---
 
 	/// `DummyImageSource` reports every coordinate of its pyramid, and this
-	/// one hands out nothing at level 2. A stack of sources behaves like that
-	/// where all it has are upscales.
+	/// one hands out nothing at level 2.
 	#[tokio::test]
 	async fn a_tile_that_was_listed_but_not_delivered_is_created() -> Result<()> {
 		use crate::helpers::dummy_image_source::DummyImageSource;

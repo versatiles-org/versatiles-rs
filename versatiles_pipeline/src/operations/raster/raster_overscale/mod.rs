@@ -30,14 +30,12 @@
 //!
 //! ## Modules
 //!
-//! - [`fill`]: the operation behind `raster_overscale` in a pipeline.
-//! - [`fixed`]: overscaling from one fixed level, which `from_stacked_raster`
-//!   wraps its sources in.
+//! - [`fill`]: the operation behind `raster_overscale` in a pipeline, which
+//!   `from_stacked_raster auto_overscale=true` also wraps its sources in.
 //! - [`mask`]: where a tile has content.
 //! - [`scale`]: cutting out and scaling up.
 
 mod fill;
-mod fixed;
 mod mask;
 mod scale;
 
@@ -46,7 +44,7 @@ use versatiles_container::TileSource;
 use versatiles_core::ZoomLevel;
 use versatiles_derive::context;
 
-pub use self::{fill::FillOverscale, fixed::FixedOverscale};
+pub use self::fill::FillOverscale;
 use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]

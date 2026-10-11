@@ -10,19 +10,17 @@
 //! ## `auto_overscale`
 //!
 //! When enabled, each source is automatically wrapped with [`raster_overscale`](crate::operations::raster::raster_overscale)
-//! so that sources missing native tiles at a requested zoom level still
-//! contribute via upscaled tiles from lower zoom levels.
+//! so that a source missing a tile still contributes, via a tile created
+//! from the nearest one it has at a lower zoom level. That holds at every
+//! level: a source that ends at different levels in different places
+//! contributes everywhere it has data at all.
 //!
-//! **"All overscaled → empty" policy:** After spatially filtering sources
-//! to those that overlap the requested bbox, if *every* remaining source
-//! would be overscaled (none have native data at this zoom level),
-//! `tile_stream` returns an empty stream instead of blending N upscaled
-//! tiles. This includes the edge case where some sources are native at the
-//! zoom level but don't cover the requested tile — they are removed by the
-//! spatial filter first, leaving only overscaled sources. This is
-//! intentional — a downstream `raster_overscale` on the *blended* output is
-//! more efficient (it upscales one blended tile instead of N individual
-//! tiles) and produces identical visual results.
+//! **"All overscaled → empty" policy:** a tile is emitted only where at
+//! least one source has a tile of its own. Where every layer would be an
+//! upscale, `tile_stream` emits nothing instead of blending N upscaled
+//! tiles. This is intentional — a downstream `raster_overscale` on the
+//! *blended* output is more efficient (it upscales one blended tile instead
+//! of N individual tiles) and produces identical visual results.
 //!
 //! ## Per-tile code paths
 //!
@@ -32,10 +30,10 @@
 //! ### 1. No source has a tile → `None`
 //! No output tile is emitted. No processing occurs.
 //!
-//! ### 2. All contributing sources are overscaled → `None`
-//! Even if overscaled sources produce tiles, the result is discarded when no
-//! native source contributed. A downstream `raster_overscale` handles these
-//! coordinates more efficiently.
+//! ### 2. Every contributing tile is an upscale → `None`
+//! Even if sources deliver created tiles, the result is discarded when no
+//! source contributed a tile of its own. A downstream `raster_overscale`
+//! handles these coordinates more efficiently.
 //!
 //! ### 3. Exactly one source has a tile (passthrough)
 //! The tile passes through **without decoding or re-encoding** as long as
@@ -74,8 +72,8 @@
 //!
 //! 1. **Spatial filter** — sources whose pyramid doesn't intersect the bbox
 //!    are removed.
-//! 2. **All-overscaled check** — if every remaining source is overscaled,
-//!    return an empty stream.
+//! 2. **All-overscaled check** — if no remaining source has tiles of its own
+//!    in the bbox, return an empty stream.
 //! 3. **Large bbox splitting** — bboxes larger than 32×32 are split into a
 //!    grid and each cell is processed separately.
 //! 4. **Per-tile dispatch** — each coordinate is processed in parallel via
@@ -94,6 +92,7 @@ use versatiles_image::traits::DynamicImageTraitOperation;
 use crate::{
 	PipelineFactory,
 	helpers::tile_format_subset::RasterTileFormat,
+	operations::raster::raster_overscale::FillOverscale,
 	vpl::{VPLNode, VPLPipeline},
 };
 
@@ -123,47 +122,50 @@ struct Args {
 	auto_overscale: Option<bool>,
 }
 
-/// When `auto_overscale` is disabled, this sentinel value indicates that
-/// all tiles are considered "native" (never overscaled). Using `u8::MAX`
-/// ensures the comparison `native_level_max < request_level` is always false.
-const NO_OVERSCALE_LEVEL: u8 = u8::MAX;
-
-/// A wrapped tile source with its native zoom level metadata.
-///
-/// Used to track whether tiles from this source are "native" (from the source's
-/// actual data) or "synthetic" (upscaled from a lower zoom level).
+/// One layer of the stack.
 #[derive(Clone, Debug)]
-struct SourceEntry {
-	/// The tile source (possibly wrapped with `raster_overscale`)
-	source: SharedTileSource,
-	/// The maximum zoom level where this source has native (non-upscaled) tiles.
-	/// For requests above this level, tiles are considered "overscaled".
-	native_level_max: u8,
+enum SourceEntry {
+	/// A source as it is: every tile it delivers is one of its own.
+	Plain(SharedTileSource),
+	/// With `auto_overscale`: a source wrapped so that where it lacks a tile,
+	/// one is created from the nearest tile it has at a lower zoom level.
+	///
+	/// At every level, not only above the source's highest. A source that
+	/// ends at different levels in different places used to drop out of the
+	/// stack wherever it had no tile of its own at the level asked for, and
+	/// the layers beneath it showed through.
+	Filled(Arc<FillOverscale>),
 }
 
 impl SourceEntry {
-	/// Returns `true` if a tile at the given `level` would be synthetic (overscaled).
-	fn is_overscaled(&self, level: u8) -> bool {
-		self.native_level_max < level
-	}
-
-	/// Creates a `FilteredSourceEntry` for use at a specific zoom level.
-	fn for_level(&self, level: u8) -> FilteredSourceEntry {
-		FilteredSourceEntry {
-			source: self.source.clone(),
-			is_overscaled: self.is_overscaled(level),
+	/// The source as the stack sees it, created tiles included.
+	fn source(&self) -> &dyn TileSource {
+		match self {
+			SourceEntry::Plain(source) => source.as_ref(),
+			SourceEntry::Filled(fill) => fill.as_ref(),
 		}
 	}
-}
 
-/// A tile source with precomputed overscale status for a specific zoom level.
-///
-/// Created from [`SourceEntry`] when processing tiles at a particular level.
-/// This avoids repeatedly computing the overscale status during tile iteration.
-#[derive(Clone)]
-struct FilteredSourceEntry {
-	source: SharedTileSource,
-	is_overscaled: bool,
+	/// The source underneath, with only the tiles it has itself.
+	fn own(&self) -> &dyn TileSource {
+		match self {
+			SourceEntry::Plain(source) => source.as_ref(),
+			SourceEntry::Filled(fill) => fill.source().as_ref(),
+		}
+	}
+
+	/// Whether this layer can deliver tiles its source does not have.
+	fn creates_tiles(&self) -> bool {
+		matches!(self, SourceEntry::Filled(_))
+	}
+
+	/// The tile at `coord`, and whether it is one of the source's own.
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<(Tile, bool)>> {
+		match self {
+			SourceEntry::Plain(source) => Ok(source.tile(coord).await?.map(|tile| (tile, true))),
+			SourceEntry::Filled(fill) => fill.tile_with_origin(coord).await,
+		}
+	}
 }
 
 /// [`TileSource`] implementation that overlays raster tiles "on the fly."
@@ -181,22 +183,20 @@ struct Operation {
 /// Fetches and blends tiles from all sources for a single coordinate.
 ///
 /// Sources are processed in order (first source is foreground/top, later sources are background).
-/// Returns `None` if no source produced a tile, or if all sources that contributed a tile
-/// are overscaled (none have native data for this coordinate). The latter enforces the
-/// "all overscaled → empty" policy at per-tile granularity.
+/// Returns `None` if no source produced a tile, or if every tile that went into the blend
+/// was created by upscaling (no source has a tile of its own at this coordinate). The latter
+/// enforces the "all overscaled → empty" policy at per-tile granularity.
 ///
 /// # Arguments
 /// * `coord` - The tile coordinate to fetch
-/// * `entries` - Sources with precomputed overscale status for this request level
-async fn tile(coord: TileCoord, entries: Vec<FilteredSourceEntry>) -> Result<Option<(TileCoord, Tile)>> {
+/// * `entries` - The layers that can have a tile here, first on top
+async fn tile(coord: TileCoord, entries: Vec<SourceEntry>) -> Result<Option<(TileCoord, Tile)>> {
 	let mut tile = Option::<Tile>::None;
 	let mut has_native = false;
 
 	for entry in &entries {
-		if let Some(mut tile_bg) = entry.source.tile(&coord).await? {
-			if !entry.is_overscaled {
-				has_native = true;
-			}
+		if let Some((mut tile_bg, own)) = entry.tile(&coord).await? {
+			has_native |= own;
 			if let Some(mut tile_fg) = tile {
 				if tile_bg.is_empty()? {
 					tile_bg = tile_fg;
@@ -296,27 +296,13 @@ impl Operation {
 		let mut sources: Vec<SourceEntry> = vec![];
 
 		if auto_overscale {
-			use crate::operations::raster::raster_overscale;
-
 			for source in original_sources {
-				let native_level_max = source
-					.tile_pyramid()
-					.await?
-					.level_max()
-					.ok_or_else(|| anyhow::anyhow!("source pyramid is empty"))?;
-				let wrapped_source = raster_overscale::FixedOverscale::for_stacking(source, native_level_max, level_max)?;
-				sources.push(SourceEntry {
-					source: Arc::new(wrapped_source),
-					native_level_max,
-				});
+				let filled = FillOverscale::new(source, Some(level_max)).await?;
+				sources.push(SourceEntry::Filled(Arc::new(filled)));
 			}
 		} else {
-			// Without auto_overscale, all tiles are considered native
 			for source in original_sources {
-				sources.push(SourceEntry {
-					source: Arc::from(source),
-					native_level_max: NO_OVERSCALE_LEVEL,
-				});
+				sources.push(SourceEntry::Plain(Arc::from(source)));
 			}
 		}
 
@@ -347,7 +333,10 @@ impl TileSource for Operation {
 
 	#[context("Failed to get stacked raster tile coord stream for bbox: {:?}", bbox)]
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|e| e.source.as_ref()).collect();
+		// The tiles the sources have themselves: those are the coordinates a
+		// tile is emitted at. A created tile is blended in, but never emitted
+		// where nothing else is.
+		let refs: Vec<&dyn TileSource> = self.sources.iter().map(SourceEntry::own).collect();
 		super::gathering::union_tile_coord_streams(&refs, bbox).await
 	}
 
@@ -356,26 +345,22 @@ impl TileSource for Operation {
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("from_stacked_raster::tile_stream {bbox:?}");
 
-		// Filter sources to only those that overlap with the bbox,
-		// and precompute whether each source is overscaled at this level
-		let mut entries: Vec<FilteredSourceEntry> = Vec::new();
+		// Keep the layers that can have a tile in the bbox, created ones included.
+		let mut entries: Vec<SourceEntry> = Vec::new();
+		let mut any_own = false;
 		for entry in &self.sources {
-			let pyramid = entry.source.tile_pyramid().await?;
-			if pyramid.intersects_bbox(&bbox) {
-				entries.push(entry.for_level(bbox.level()));
+			if entry.source().tile_pyramid().await?.intersects_bbox(&bbox) {
+				any_own |= entry.own().tile_pyramid().await?.intersects_bbox(&bbox);
+				entries.push(entry.clone());
 			}
 		}
 
-		// Return empty stream if no sources remain after filtering
-		if entries.is_empty() {
-			return Ok(TileStream::empty());
-		}
-
-		// All remaining sources (after spatial filtering) are overscaled — return an
-		// empty stream. A downstream `raster_overscale` on the blended output handles
-		// these tiles more efficiently by upscaling one blended tile instead of N
-		// individual tiles, producing identical results.
-		if entries.iter().all(|entry| entry.is_overscaled) {
+		// No layer has a tile of its own here: whatever could be blended would
+		// be upscales only. Return an empty stream. A downstream
+		// `raster_overscale` on the blended output handles these tiles more
+		// efficiently by upscaling one blended tile instead of N individual
+		// tiles, producing identical results.
+		if !any_own {
 			return Ok(TileStream::empty());
 		}
 
@@ -394,13 +379,15 @@ impl TileSource for Operation {
 			)));
 		}
 
-		// If any source is overscaled, pre-compute which coordinates have native tiles
-		// to avoid expensive blending work for coordinates with only overscaled coverage.
-		if entries.iter().any(|e| e.is_overscaled) {
+		// If any layer can deliver created tiles, pre-compute which coordinates
+		// have a tile of some source's own, to avoid expensive blending work
+		// for coordinates where everything would be an upscale.
+		if entries.iter().any(SourceEntry::creates_tiles) {
 			let mut native_coords = HashSet::new();
 			for entry in &entries {
-				if !entry.is_overscaled {
-					let mut stream = entry.source.tile_coord_stream(bbox).await?;
+				let own = entry.own();
+				if own.tile_pyramid().await?.intersects_bbox(&bbox) {
+					let mut stream = own.tile_coord_stream(bbox).await?;
 					while let Some((coord, ())) = stream.next().await {
 						native_coords.insert(coord);
 					}
@@ -689,7 +676,7 @@ mod tests {
 			assert_eq!(s.len(), 8);
 		}
 
-		let entries: Vec<FilteredSourceEntry> = input
+		let entries: Vec<SourceEntry> = input
 			.iter()
 			.map(|s| {
 				// convert hex string to RGBA color
@@ -697,10 +684,7 @@ mod tests {
 					.map(|i| u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).unwrap())
 					.collect();
 				let source = DummyImageSource::from_color(&c, 4, PNG, None).unwrap();
-				FilteredSourceEntry {
-					source: Arc::from(source),
-					is_overscaled: false,
-				}
+				SourceEntry::Plain(Arc::new(source))
 			})
 			.collect();
 
@@ -776,7 +760,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_empty_sources_returns_none() {
-		let entries: Vec<FilteredSourceEntry> = vec![];
+		let entries: Vec<SourceEntry> = vec![];
 		let coord = TileCoord::new(0, 0, 0).unwrap();
 		let result = tile(coord, entries).await.unwrap();
 		assert!(result.is_none());
@@ -785,26 +769,6 @@ mod tests {
 	// ============================================================================
 	// Auto-overscale tests
 	// ============================================================================
-
-	#[rstest]
-	// native_level_max = 8: levels 0-8 are native, 9+ are overscaled
-	#[case(8, &[(0, false), (7, false), (8, false), (9, true), (15, true)])]
-	// sentinel value: nothing is ever overscaled
-	#[case(NO_OVERSCALE_LEVEL, &[(0, false), (30, false), (254, false)])]
-	#[test]
-	fn test_source_entry_is_overscaled(#[case] native_level_max: u8, #[case] expectations: &[(u8, bool)]) {
-		use versatiles_core::TileFormat::PNG;
-
-		let source = DummyImageSource::from_color(&[255, 0, 0], 4, PNG, None).unwrap();
-		let entry = SourceEntry {
-			source: Arc::new(source),
-			native_level_max,
-		};
-
-		for &(level, expected) in expectations {
-			assert_eq!(entry.is_overscaled(level), expected, "level {level}");
-		}
-	}
 
 	#[rstest]
 	#[case(&[true], false)] // all overscaled -> None
@@ -817,21 +781,19 @@ mod tests {
 	async fn test_tile_native_overscale_behavior(#[case] overscaled_flags: &[bool], #[case] expect_some: bool) {
 		use versatiles_core::TileFormat::PNG;
 
-		let entries: Vec<FilteredSourceEntry> = overscaled_flags
-			.iter()
-			.enumerate()
-			.map(|(i, &is_overscaled)| {
-				// Use semi-transparent for non-last sources to avoid short-circuiting
-				let alpha = if i < overscaled_flags.len() - 1 { 128 } else { 255 };
-				let source = DummyImageSource::from_color(&[255, 0, 0, alpha], 4, PNG, None).unwrap();
-				FilteredSourceEntry {
-					source: Arc::from(source),
-					is_overscaled,
-				}
-			})
-			.collect();
+		// Asked for at level 3. A source with tiles up to level 3 has one of
+		// its own there; one that ends at level 2 has to create it.
+		let mut entries: Vec<SourceEntry> = Vec::new();
+		for (i, &is_overscaled) in overscaled_flags.iter().enumerate() {
+			// Use semi-transparent for non-last sources to avoid short-circuiting
+			let alpha = if i < overscaled_flags.len() - 1 { 128 } else { 255 };
+			let pyramid = TilePyramid::new_full_up_to(if is_overscaled { 2 } else { 3 });
+			let source = DummyImageSource::from_color(&[255, 0, 0, alpha], 4, PNG, Some(pyramid)).unwrap();
+			let filled = FillOverscale::new(Box::new(source), Some(3)).await.unwrap();
+			entries.push(SourceEntry::Filled(Arc::new(filled)));
+		}
 
-		let coord = TileCoord::new(0, 0, 0).unwrap();
+		let coord = TileCoord::new(3, 0, 0).unwrap();
 		let result = tile(coord, entries).await.unwrap();
 		assert_eq!(result.is_some(), expect_some);
 	}
@@ -855,29 +817,6 @@ mod tests {
 	// Additional coverage tests
 	// ============================================================================
 
-	#[test]
-	fn test_source_entry_for_level() {
-		use versatiles_core::TileFormat::PNG;
-
-		let source = DummyImageSource::from_color(&[255, 0, 0], 4, PNG, None).unwrap();
-		let entry = SourceEntry {
-			source: Arc::new(source),
-			native_level_max: 5,
-		};
-
-		// Level 5 is native (not overscaled)
-		let filtered = entry.for_level(5);
-		assert!(!filtered.is_overscaled);
-
-		// Level 6 is overscaled
-		let filtered = entry.for_level(6);
-		assert!(filtered.is_overscaled);
-
-		// Level 0 is native
-		let filtered = entry.for_level(0);
-		assert!(!filtered.is_overscaled);
-	}
-
 	#[tokio::test]
 	async fn test_tile_with_empty_background() {
 		use versatiles_core::TileFormat::PNG;
@@ -888,14 +827,8 @@ mod tests {
 		let fg_source = DummyImageSource::from_color(&[255, 0, 0, 128], 4, PNG, None).unwrap();
 
 		let entries = vec![
-			FilteredSourceEntry {
-				source: Arc::new(empty_source),
-				is_overscaled: false,
-			},
-			FilteredSourceEntry {
-				source: Arc::new(fg_source),
-				is_overscaled: false,
-			},
+			SourceEntry::Plain(Arc::new(empty_source)),
+			SourceEntry::Plain(Arc::new(fg_source)),
 		];
 
 		let coord = TileCoord::new(0, 0, 0).unwrap();
@@ -1231,16 +1164,10 @@ mod tests {
 
 		let level_max = pyramid_raw.level_max().unwrap();
 
-		// Wrap each source with raster_overscale (like auto_overscale=true does)
-		use crate::operations::raster::raster_overscale;
+		// Wrap each source the way auto_overscale=true does
 		for source in original_sources {
-			let native_level_max = source.tile_pyramid().await.unwrap().level_max().unwrap();
-			let wrapped_source =
-				raster_overscale::FixedOverscale::for_stacking(source, native_level_max, level_max).unwrap();
-			sources.push(SourceEntry {
-				source: Arc::new(wrapped_source),
-				native_level_max,
-			});
+			let filled = FillOverscale::new(source, Some(level_max)).await.unwrap();
+			sources.push(SourceEntry::Filled(Arc::new(filled)));
 		}
 
 		let metadata = TileSourceMetadata::new(
@@ -1450,15 +1377,9 @@ mod tests {
 		let first_source_standalone =
 			DummyImageSource::from_color(first_color, 4, TileFormat::PNG, Some(first_pyramid)).unwrap();
 
-		use crate::operations::raster::raster_overscale;
 		for source in original_sources {
-			let native_level_max = source.tile_pyramid().await.unwrap().level_max().unwrap();
-			let wrapped_source =
-				raster_overscale::FixedOverscale::for_stacking(source, native_level_max, level_max).unwrap();
-			sources.push(SourceEntry {
-				source: Arc::new(wrapped_source),
-				native_level_max,
-			});
+			let filled = FillOverscale::new(source, Some(level_max)).await.unwrap();
+			sources.push(SourceEntry::Filled(Arc::new(filled)));
 		}
 
 		let metadata = TileSourceMetadata::new(
@@ -1643,5 +1564,104 @@ mod tests {
 
 		let result = auto_overscale_color_test(&layers, 5).await;
 		assert!(result.is_some(), "expected tile when source {native_index} is native");
+	}
+
+	// ============================================================================
+	// Layers with gaps
+	// ============================================================================
+
+	/// Half-transparent green everywhere to level 5; beneath it red, in the
+	/// west to level 5 and in the east only to level 3; beneath that blue, to
+	/// level 2.
+	const THREE_LAYERS: &str = r"from_stacked_raster auto_overscale=true [
+		from_color color=00FF0080 format=png tile_size=256 | filter level_max=5,
+		from_stacked_raster [
+			from_color color=FF0000 format=png tile_size=256 | filter level_max=5 bbox=[-170,-60,-10,60],
+			from_color color=FF0000 format=png tile_size=256 | filter level_max=3 bbox=[10,-60,170,60]
+		],
+		from_color color=0000FF format=png tile_size=256 | filter level_max=2
+	]";
+
+	/// A layer used to be upscaled only above its own highest level. Where it
+	/// had a gap below that, it dropped out, and the layer beneath it showed:
+	/// in the east at level 5 the result was green over blue, though the red
+	/// layer has that place at level 3.
+	#[rstest]
+	#[case::west_at_level_5(5, 8, 16)]
+	#[case::east_at_level_3(3, 6, 4)]
+	#[case::east_at_level_5(5, 24, 16)]
+	#[tokio::test]
+	async fn a_layer_with_a_gap_contributes_what_it_has_below(#[case] level: u8, #[case] x: u32, #[case] y: u32) {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory.operation_from_vpl(THREE_LAYERS).await.unwrap();
+
+		let bbox = TileCoord::new(level, x, y).unwrap().to_tile_bbox();
+		let mut tiles = op.tile_stream(bbox).await.unwrap().to_vec().await;
+		let color = tiles.pop().unwrap().1.into_image().unwrap().average_color();
+		assert_eq!(color, [127, 128, 0], "green over red");
+	}
+
+	/// The coordinates listed are the ones a tile is emitted at: where some
+	/// layer has a tile of its own, and nowhere else.
+	#[tokio::test]
+	async fn coordinates_are_listed_where_tiles_are_emitted() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				r"from_stacked_raster auto_overscale=true [
+					from_color color=FF0000 format=png tile_size=256 | filter level_max=5 bbox=[10,10,40,40],
+					from_color color=0000FF format=png tile_size=256 | filter level_max=2
+				]",
+			)
+			.await?;
+
+		for level in [2u8, 4, 5] {
+			let bbox = TileBBox::new_full(level)?;
+			let mut tiles: Vec<TileCoord> = op
+				.tile_stream(bbox)
+				.await?
+				.to_vec()
+				.await
+				.into_iter()
+				.map(|t| t.0)
+				.collect();
+			let mut coords: Vec<TileCoord> = op
+				.tile_coord_stream(bbox)
+				.await?
+				.to_vec()
+				.await
+				.into_iter()
+				.map(|t| t.0)
+				.collect();
+			tiles.sort_by_key(|c| (c.x, c.y));
+			coords.sort_by_key(|c| (c.x, c.y));
+			assert_eq!(tiles, coords, "level {level}");
+			// At level 2 the whole world; above it only the region.
+			let whole_level = 1usize << (2 * level);
+			assert!(!tiles.is_empty(), "level {level}");
+			assert_eq!(
+				tiles.len() == whole_level,
+				level == 2,
+				"level {level}: {} tiles",
+				tiles.len()
+			);
+		}
+		Ok(())
+	}
+
+	/// Heights of that schema cannot be scaled, so a stack that would have to
+	/// scale them says so; one that leaves its sources as they are does not.
+	#[tokio::test]
+	async fn an_elevation_schema_that_cannot_be_scaled_is_refused_with_auto_overscale() {
+		let factory = PipelineFactory::new_dummy();
+		let stack = |auto_overscale: bool| {
+			format!(
+				"from_stacked_raster auto_overscale={auto_overscale} [ from_color format=png tile_size=256 | meta_update schema=\"dem/versatiles\" ]"
+			)
+		};
+
+		assert!(factory.operation_from_vpl(&stack(false)).await.is_ok());
+		let error = factory.operation_from_vpl(&stack(true)).await.unwrap_err();
+		assert!(format!("{error:#}").contains("dem/versatiles"), "{error:#}");
 	}
 }
