@@ -1258,7 +1258,7 @@ VersaTiles can be used as a command-line tool or integrated into Rust projects a
 
 Version numbers follow semantic versioning for what you build on: the container formats, the commands `convert`, `probe` and `serve` with their documented options, and the URLs of tiles and TileJSON as documented (`/tiles/{name}/{z}/{x}/{y}`, `/tiles/{name}/tiles.json`). These change in a major release only.
 
-The pipeline language and its operations, the status codes of error cases and the Rust API may change in a minor release. Such a change is listed under "Upgrading" in the [release notes](https://github.com/versatiles-org/versatiles-rs/releases), and a removed parameter is an error that names its replacement. If you depend on the Rust crates, pin the minor version (`versatiles = "~5.1"`). The details are in [RELEASING.md](./RELEASING.md#version-strategy).
+The pipeline language and its operations, the status codes of everything but a tile with data and the Rust API may change in a minor release. Such a change is listed under "Upgrading" in the [release notes](https://github.com/versatiles-org/versatiles-rs/releases), and a removed parameter is an error that names its replacement. If you depend on the Rust crates, pin the minor version (`versatiles = "~5.1"`). The details are in [RELEASING.md](./RELEASING.md#version-strategy).
 
 ---
 

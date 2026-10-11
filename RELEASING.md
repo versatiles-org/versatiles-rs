@@ -291,7 +291,8 @@ would mean one every few weeks, and a version number that says nothing:
 
 - the pipeline language (VPL) and its operations: parameters, defaults, and
   what an operation does in a case it handled badly before;
-- the HTTP status codes of error cases, and response headers;
+- the HTTP status codes of everything but a tile with data (which is a 200),
+  and response headers;
 - the Rust API of the crates, which exists for the CLI and the Node.js
   package first.
 
