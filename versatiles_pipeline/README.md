@@ -578,7 +578,9 @@ Tiles are only created inside the bounds of the source, so set them with `meta_u
 
 Elevation tiles are scaled as heights, not as colors, and encoded without loss. They are recognised by the tile schema of the source, `dem/mapbox` or `dem/terrarium`; set it with `meta_update schema=…` in front if the source does not declare it.
 
-A source whose bounds are the whole world is filled for the whole world, which is fine for serving and far too many tiles to write to a file at a high `level_max`. To set the format, quality or effort of the tiles created, put `raster_format` behind this operation.
+A source whose bounds are the whole world is filled for the whole world, which is fine for serving and far too many tiles to write to a file at a high `level_max`.
+
+The tiles created are encoded with the encoder's own settings, which aim at keeping detail these tiles do not have: at the default quality a created WebP tile is as large as one of the source's, and most of the time it takes to create goes into encoding it. Put `raster_format` behind this operation to change that, e.g. `raster_format quality=75 effort=0`. It reaches the created tiles only; the tiles of the source keep their bytes.
 
 ### Parameters
 
