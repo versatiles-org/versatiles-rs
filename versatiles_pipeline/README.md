@@ -529,7 +529,7 @@ Set `force_reencode=true` to re-encode those tiles as well, e.g. to shrink an ex
 
 For elevation tiles (tile schema `dem/…`), `quality` defaults to `100`: their channels are heights, and a lossy encoder would change them. `avif` and `jpg` have no lossless encoding, so converting elevation tiles into one of them needs a `quality` for every zoom level.
 
-`quality_translucent` is typically `100`: lossy encoders handle an alpha channel badly. Setting it makes every tile that is encoded be checked for opacity.
+At a zoom level its list does not name, `quality_translucent` falls back to `quality`. `quality_translucent` is typically `100`: lossy encoders handle an alpha channel badly. Setting it makes every tile that is encoded be checked for opacity.
 
 ### Parameters
 

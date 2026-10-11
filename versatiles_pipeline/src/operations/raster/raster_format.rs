@@ -37,7 +37,8 @@ use crate::{
 /// and `jpg` have no lossless encoding, so converting elevation tiles into one
 /// of them needs a `quality` for every zoom level.
 ///
-/// `quality_translucent` is typically `100`: lossy encoders handle an alpha
+/// At a zoom level its list does not name, `quality_translucent` falls back
+/// to `quality`. `quality_translucent` is typically `100`: lossy encoders handle an alpha
 /// channel badly. Setting it makes every tile that is encoded be checked for
 /// opacity.
 struct Args {
@@ -149,8 +150,12 @@ impl TileTransform for Operation {
 		// off by hundreds of steps, or by far more where a byte carries over.
 		// Whoever wants that has to ask for it with `quality`.
 		let quality = self.quality[level].or(self.elevation.then_some(100));
+		// A zoom list for translucent tiles need not start at level 0. Below its
+		// first entry there is no value, and "no value" has to mean "as for
+		// any other tile": it used to mean the encoder's own default, whatever
+		// `quality` said, and whatever the tiles held.
 		let effective_quality = match self.quality_translucent {
-			Some(qt) if !tile.is_opaque()? => qt[level],
+			Some(qt) if !tile.is_opaque()? => qt[level].or(quality),
 			_ => quality,
 		};
 		if is_encoded {
@@ -465,6 +470,39 @@ mod tests {
 		let plain = format!("from_debug format=png | raster_format {format_args}");
 		let refused = factory.operation_from_vpl(&plain).await.is_err();
 		assert_eq!(refused, format_args.contains("quality=100"), "{plain}");
+	}
+
+	/// `quality_translucent="10:90"` says nothing about the levels below 10.
+	/// There a translucent tile gets what every other tile gets: `quality`,
+	/// or for elevation tiles the lossless default. It used to get the
+	/// encoder's own default, which made elevation tiles lossy.
+	#[rstest]
+	#[case::below_the_list(Some(40), false, 3, Some(40))]
+	#[case::inside_the_list(Some(40), false, 12, Some(90))]
+	#[case::no_quality_at_all(None, false, 3, None)]
+	#[case::elevation_below_the_list(None, true, 3, Some(100))]
+	#[case::elevation_inside_the_list(None, true, 12, Some(90))]
+	fn quality_translucent_falls_back_to_quality_below_its_first_level(
+		#[case] quality: Option<u8>,
+		#[case] elevation: bool,
+		#[case] level: u8,
+		#[case] expected: Option<u8>,
+	) -> Result<()> {
+		let mut translucent = [None; 32];
+		translucent[10..].fill(Some(90));
+		let op = Operation {
+			quality_translucent: Some(translucent),
+			elevation,
+			..operation(WEBP, quality, None, false)
+		};
+
+		#[expect(clippy::cast_possible_truncation, reason = "test data is built from literal values")]
+		let image = DynamicImage::from_fn(16, 16, |x, y| [x as u8, y as u8, 7u8, if x < 8 { 255 } else { 100 }]);
+		let tile = op
+			.run(&TileCoord::new(level, 0, 0)?, Tile::from_image(image, WEBP)?)?
+			.unwrap();
+		assert_eq!(tile.format_quality(), expected);
+		Ok(())
 	}
 
 	#[tokio::test]
