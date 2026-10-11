@@ -85,8 +85,11 @@ impl TilePyramid {
 		self.levels.iter_mut()
 	}
 
-	/// Returns a geographic bounding box covering the union of all non-empty
-	/// levels (using the highest non-empty level for maximum precision).
+	/// Returns the geographic bounding box of the highest non-empty level.
+	///
+	/// Lower levels are not looked at, so this is too small for a pyramid
+	/// whose lower levels cover more than its highest; [`geo_extent`](Self::geo_extent)
+	/// takes every level into account.
 	///
 	/// Returns `None` if all levels are empty.
 	#[must_use]

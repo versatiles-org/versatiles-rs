@@ -125,9 +125,9 @@ fn stated_default(doc: &str) -> Option<&str> {
 /// something else.
 ///
 /// `filter`'s `level_min` defaults to `level_max` — the backticks are naming
-/// another parameter, not a value to put in a form. `raster_overview`'s `level_max` defaults to
-/// `level_base + 4`, an expression rather than a literal. Neither is something
-/// `VPLFieldMeta::default` should carry, so neither is required to.
+/// another parameter, not a value to put in a form. A default written as an
+/// expression, such as `level_base + 4`, is no literal either. Neither is
+/// something `VPLFieldMeta::default` should carry, so neither is required to.
 fn is_a_value(literal: &str, siblings: &[String]) -> bool {
 	!literal.contains(char::is_whitespace) && !siblings.iter().any(|name| name == literal)
 }

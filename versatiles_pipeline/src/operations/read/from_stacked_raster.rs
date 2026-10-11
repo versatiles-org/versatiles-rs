@@ -62,23 +62,37 @@
 //!
 //! ## When re-encoding happens
 //!
-//! `change_format(tile_format, None, None)` is called on every output tile.
-//! It is a **no-op** when the tile's current format already matches
-//! `tile_format` and no quality override is set — the encoded blob passes
-//! through untouched. Re-encoding only happens when:
+//! `change_format` is called on every output tile. It is a **no-op** when the
+//! tile's current format already matches `tile_format` and no quality is
+//! given — the encoded blob passes through untouched. Re-encoding only
+//! happens when:
 //! - The output `format` differs from the source format, or
 //! - Blending occurred (the tile now holds a decoded image, not a blob).
 //!
+//! ## Elevation tiles
+//!
+//! Sources whose tile schema says their tiles hold heights are stacked only
+//! with each other, and only if they share one schema; the result keeps it.
+//! A tile that still has to be encoded then gets quality 100, so no height
+//! is lost; a tile passed on as it is keeps its bytes.
+//!
 //! ## `tile_stream` flow
 //!
-//! 1. **Spatial filter** — sources whose pyramid doesn't intersect the bbox
-//!    are removed.
-//! 2. **All-overscaled check** — if no remaining source has tiles of its own
-//!    in the bbox, return an empty stream.
-//! 3. **Large bbox splitting** — bboxes larger than 32×32 are split into a
-//!    grid and each cell is processed separately.
+//! 1. **Large bbox splitting** — a bbox larger than 32×32 is answered in
+//!    cells of that size, and a cell is only set up when its turn is near.
+//! 2. **Spatial filter** — per cell, sources whose pyramid doesn't intersect
+//!    it are left out.
+//! 3. **All-overscaled check** — if no remaining source has tiles of its own
+//!    in the cell, it yields nothing. With sources that create tiles, the
+//!    coordinates of the sources' own tiles are listed first, and only those
+//!    are blended.
 //! 4. **Per-tile dispatch** — each coordinate is processed in parallel via
 //!    `tile`, then passed through `change_format`.
+//!
+//! A stream cannot carry an error. A tile that fails is left out and
+//! reported to the runtime, on which a conversion fails once the stream has
+//! drained. A single tile asked for through `tile()` is answered with the
+//! error itself.
 
 use std::{collections::HashSet, sync::Arc, vec};
 
