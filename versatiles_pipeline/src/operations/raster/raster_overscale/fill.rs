@@ -24,7 +24,7 @@ use moka::future::Cache;
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{
 	ConcurrencyLimits, GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover, TileFormat, TileJSON, TilePyramid,
-	TileStream,
+	TileSchema, TileStream,
 };
 use versatiles_image::DynamicImage;
 
@@ -238,12 +238,18 @@ impl FillOverscale {
 		Ok(self.create(*coord).await?.map(|tile| (tile, false)))
 	}
 
-	/// A format that cannot store transparency needs no look at its tiles.
+	/// A source whose tiles cannot be transparent needs no look at what they
+	/// show: one in a format that cannot store transparency, or one whose
+	/// metadata says its tiles are `rgb`. A tile is still read once before it
+	/// is used as a source, to settle that it exists.
 	///
-	/// Not the tile schema: `rgb` is also what a source is given when it
-	/// declares none, so it does not say that the tiles have no alpha channel.
+	/// The schema can be taken at its word. A source that declares none is
+	/// given `rgba` if its format can store transparency, so `rgb` is either
+	/// a statement of the source or a format that makes it true. Should the
+	/// statement be wrong, the price is transparent tiles that get created
+	/// where they could have been left out.
 	fn never_transparent(&self) -> bool {
-		*self.metadata.tile_format() == TileFormat::JPG
+		*self.metadata.tile_format() == TileFormat::JPG || self.tilejson.tile_schema == Some(TileSchema::RasterRGB)
 	}
 
 	/// Whether any tile in `bbox` may have to be created.
@@ -946,6 +952,27 @@ mod tests {
 		let first = &image.as_bytes()[0..3];
 		assert!(image.as_bytes().chunks(3).all(|pixel| pixel == first));
 		Ok(())
+	}
+
+	/// A source that says its tiles are `rgb` is taken at its word: no tile
+	/// is looked at when the operation is built. Without that statement a
+	/// PNG source could be transparent, and its lowest tile is read.
+	#[rstest::rstest]
+	#[case(Some(TileSchema::RasterRGB), 0)]
+	#[case(None, 1)]
+	#[tokio::test]
+	async fn a_source_declared_rgb_is_not_checked_for_transparency(
+		#[case] schema: Option<TileSchema>,
+		#[case] reads_when_built: u32,
+	) {
+		let mut source = satellite_like();
+		if schema.is_some() {
+			source.tilejson.tile_schema = schema;
+		}
+		let reads = Arc::clone(&source.reads);
+		let op = fill(source, None).await;
+		assert_eq!(reads.lock().unwrap().values().sum::<u32>(), reads_when_built);
+		assert!(op.tile(&coord(4, 15, 0)).await.unwrap().is_some());
 	}
 
 	// --- where nothing is created ---

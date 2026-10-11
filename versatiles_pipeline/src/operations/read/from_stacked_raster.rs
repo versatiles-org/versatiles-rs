@@ -537,7 +537,7 @@ mod tests {
 				"  \"minzoom\": 0,",
 				"  \"name\": \"dummy raster source\",",
 				"  \"tile_format\": \"image/png\",",
-				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_schema\": \"rgba\",",
 				"  \"tile_type\": \"raster\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
@@ -591,7 +591,7 @@ mod tests {
 				"  \"minzoom\": 0,",
 				"  \"name\": \"dummy raster source\",",
 				"  \"tile_format\": \"image/png\",",
-				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_schema\": \"rgba\",",
 				"  \"tile_type\": \"raster\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
@@ -645,7 +645,7 @@ mod tests {
 				"  \"minzoom\": 1,",
 				"  \"name\": \"dummy raster source\",",
 				"  \"tile_format\": \"image/png\",",
-				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_schema\": \"rgba\",",
 				"  \"tile_type\": \"raster\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"

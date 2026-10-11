@@ -66,6 +66,10 @@ impl TileType {
 
 	/// Returns the default tile schema associated with the tile type.
 	///
+	/// For a raster source this is the least that can be said without knowing
+	/// its format. With the format known, `TileSourceMetadata::update_tilejson`
+	/// says `rgba` for one that can store transparency.
+	///
 	/// # Examples
 	///
 	/// ```

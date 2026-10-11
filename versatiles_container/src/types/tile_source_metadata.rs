@@ -100,8 +100,9 @@ impl TileSourceMetadata {
 	///
 	/// - Applies [`TileJSON::update_from_pyramid`] to intersect/set bounds and min/max zoom.
 	/// - Sets `tile_format` from the reader parameters and derives `tile_type` from it.
-	/// - If `tile_schema` is absent or mismatched with `tile_type`, infers a suitable schema
-	///   (e.g., `RasterRGB` for rasters; for vectors, derived from `vector_layers`).
+	/// - If `tile_schema` is absent or mismatched with `tile_type`, infers a suitable schema:
+	///   for rasters `RasterRGB` if the format cannot store transparency (JPEG) and
+	///   `RasterRGBA` if it can; for vectors, derived from `vector_layers`.
 	pub fn update_tilejson(&self, tile_json: &mut TileJSON) {
 		if let Some(tile_pyramid) = self.tile_pyramid() {
 			tile_json.update_from_pyramid(tile_pyramid.as_ref());
@@ -115,7 +116,13 @@ impl TileSourceMetadata {
 			&& tile_json.tile_schema.map(|s| s.tile_type()) != tile_json.tile_type
 		{
 			tile_json.tile_schema = Some(match tile_type {
-				TileType::Raster => TileSchema::RasterRGB,
+				// What the tiles can hold, not what they do hold: nobody has
+				// looked at them. A PNG or WebP source used to be called `rgb`
+				// here, which for one with an alpha channel is false, and left
+				// `rgb` meaning nothing. Now `rgb` on such a source is a
+				// statement its metadata made.
+				TileType::Raster if self.tile_format == TileFormat::JPG => TileSchema::RasterRGB,
+				TileType::Raster => TileSchema::RasterRGBA,
 				TileType::Vector => tile_json.vector_layers.tile_schema(),
 				TileType::Unknown => TileSchema::Unknown,
 			});
@@ -345,7 +352,33 @@ mod tests {
 		// Format, content, and schema
 		assert_eq!(tj.tile_format, Some(TileFormat::PNG));
 		assert_eq!(tj.tile_type, Some(TileType::Raster));
-		assert_eq!(tj.tile_schema, Some(TileSchema::RasterRGB));
+		assert_eq!(tj.tile_schema, Some(TileSchema::RasterRGBA));
 		Ok(())
+	}
+
+	/// The schema inferred for a raster source says what its format can
+	/// hold. A schema the source declares is left alone, also when it says
+	/// less than the format could.
+	#[rstest::rstest]
+	#[case(TileFormat::JPG, None, TileSchema::RasterRGB)]
+	#[case(TileFormat::PNG, None, TileSchema::RasterRGBA)]
+	#[case(TileFormat::WEBP, None, TileSchema::RasterRGBA)]
+	#[case(TileFormat::AVIF, None, TileSchema::RasterRGBA)]
+	#[case(TileFormat::WEBP, Some(TileSchema::RasterRGB), TileSchema::RasterRGB)]
+	#[case(TileFormat::PNG, Some(TileSchema::RasterDEMMapbox), TileSchema::RasterDEMMapbox)]
+	// A schema of the wrong kind is replaced.
+	#[case(TileFormat::PNG, Some(TileSchema::VectorOther), TileSchema::RasterRGBA)]
+	fn raster_schema_follows_what_the_format_can_hold(
+		#[case] format: TileFormat,
+		#[case] declared: Option<TileSchema>,
+		#[case] expected: TileSchema,
+	) {
+		let metadata = TileSourceMetadata::new(format, TileCompression::Uncompressed, Traversal::ANY, None);
+		let mut tilejson = TileJSON {
+			tile_schema: declared,
+			..TileJSON::default()
+		};
+		metadata.update_tilejson(&mut tilejson);
+		assert_eq!(tilejson.tile_schema, Some(expected));
 	}
 }
