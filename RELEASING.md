@@ -266,14 +266,41 @@ npm publish --access public
 ## Version Strategy
 
 - **Patch** (x.y.Z): Bug fixes, small improvements
-- **Minor** (x.Y.0): New features, backward compatible
-- **Major** (X.0.0): Breaking changes
+- **Minor** (x.Y.0): New features; may change the parts listed below as not strictly versioned
+- **Major** (X.0.0): Breaking changes to the public contract
 - **Alpha** (x.y.z-alpha.N): Early development, unstable API
 - **Beta** (x.y.z-beta.N): Feature complete, testing phase
 - **RC** (x.y.z-rc.N): Release candidate, final testing
 - **Dev** (x.y.z-dev.N): Daily builds, experimental features (explicit version only)
 
-We follow Semantic Versioning 2.0.0 with prerelease identifiers.
+We follow Semantic Versioning 2.0.0 with prerelease identifiers, for the parts
+of the project that are its public contract:
+
+- the container formats: a file written by one version is read by every later
+  one of the same major version;
+- the commands `convert`, `probe` and `serve` and their documented options;
+- the URLs the server serves tiles and TileJSON under.
+
+A breaking change to any of these needs a major release.
+
+Other parts may change in a minor release. A major release for each of them
+would mean one every few weeks, and a version number that says nothing:
+
+- the pipeline language (VPL) and its operations: parameters, defaults, and
+  what an operation does in a case it handled badly before;
+- the HTTP status codes of error cases, and response headers;
+- the Rust API of the crates, which exists for the CLI and the Node.js
+  package first.
+
+The rule that goes with it: such a change is never silent. It is listed in the
+"Upgrading" section of the release notes
+(`.github/release-notes/vX.Y.Z.md`, written by hand), and where a parameter is
+removed, using it is an error that names the replacement. A patch release
+changes none of this.
+
+For a Rust crate depending on `versatiles`, this means `^5.0` can pick up a
+breaking API change on `cargo update`. Pin the minor version (`~5.1`) to rule
+that out.
 
 ### Typical Prerelease Progression
 
