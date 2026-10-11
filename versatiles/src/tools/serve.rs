@@ -12,7 +12,7 @@ use versatiles::{
 };
 use versatiles_container::{DataLocation, DataSource, TilesRuntime};
 
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Clone, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
 pub struct Subcommand {
 	/// One or more tile containers to serve (path, URL, or data source expression).
@@ -87,8 +87,12 @@ pub struct Subcommand {
 	pub cache_control: Option<String>,
 }
 
-#[tokio::main]
-pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
+/// The config the server runs with: the config file, if one is given, with the
+/// command line's sources added and its settings on top.
+///
+/// A reload calls this again, so it applies the same additions and overrides
+/// as the start did.
+fn effective_config(arguments: &Subcommand) -> Result<Config> {
 	let mut config = if let Some(config_path) = &arguments.config {
 		Config::from_path(config_path)
 			.context("run `versatiles help config` to get more information about the config file format")?
@@ -147,6 +151,13 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	swap(&mut config.static_sources, &mut static_sources);
 	config.static_sources.extend(static_sources);
 
+	Ok(config)
+}
+
+#[tokio::main]
+pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
+	let config = effective_config(arguments)?;
+
 	let mut server: TileServer = TileServer::from_config(config, runtime.clone()).await?;
 
 	let mut list = server.url_mapping();
@@ -157,8 +168,9 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 
 	server.start().await?;
 
-	if let Some(config_path) = &arguments.config {
-		spawn_sighup_handler(server.reload_handle(config_path.clone()));
+	if arguments.config.is_some() {
+		let arguments = arguments.clone();
+		spawn_sighup_handler(server.reload_handle_with(move || effective_config(&arguments)));
 	}
 
 	// Up to here, a signal ended the process after clearing the terminal's

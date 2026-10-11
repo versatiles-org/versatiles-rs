@@ -27,6 +27,8 @@ mod config;
 mod cors;
 #[path = "serve/empty_tiles.rs"]
 mod empty_tiles;
+#[path = "serve/reload.rs"]
+mod reload;
 #[path = "serve/shutdown.rs"]
 mod shutdown;
 #[path = "serve/static_files.rs"]

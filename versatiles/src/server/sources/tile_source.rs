@@ -19,6 +19,11 @@ pub struct ServerTileSource {
 }
 
 impl ServerTileSource {
+	/// The URL prefix a source named `id` is served under.
+	pub fn prefix_for(id: &str) -> Url {
+		Url::new(format!("/tiles/{id}/")).to_dir()
+	}
+
 	// Constructor function for creating a TileSource instance
 	#[context("creating tile source: id='{id}'")]
 	pub fn from(reader: SharedTileSource, id: &str) -> Result<ServerTileSource> {
@@ -28,7 +33,7 @@ impl ServerTileSource {
 		let compression = *metadata.tile_compression();
 
 		Ok(ServerTileSource {
-			prefix: Url::new(format!("/tiles/{id}/")).to_dir(),
+			prefix: Self::prefix_for(id),
 			id: id.to_owned(),
 			reader,
 			tile_mime,

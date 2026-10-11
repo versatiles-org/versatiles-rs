@@ -597,7 +597,9 @@ When started with `-c`, the server reloads its configuration without downtime on
 kill -HUP $(pidof versatiles)
 ```
 
-Tile sources are updated incrementally: an unchanged source is left alone, and a changed one is opened first and then swapped in, so it stays available throughout. If a source cannot be opened, the previous one keeps serving, the error is logged, and the next reload tries again. Static sources are swapped atomically. In-flight requests always complete against the version they started with.
+Tile sources are updated incrementally: an unchanged source is left alone, and a changed one is opened first and then swapped in, so it stays available throughout. If a source cannot be opened, the previous one keeps serving, the error is logged, and the next reload tries again. Static sources are handled the same way, and the new list is swapped in at once. In-flight requests always complete against the version they started with.
+
+Tile and static sources given on the command line stay, and so do the command line's settings: a reload applies them on top of the file again, as the start did. Of the settings, only `follow_symlinks` takes effect on a reload; the others need a restart. A config that names two tile sources for the same URL is refused as a whole: the error is logged and the server keeps running as it is.
 
 **Graceful shutdown:**
 

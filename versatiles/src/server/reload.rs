@@ -1,33 +1,82 @@
-use std::{
-	path::PathBuf,
-	sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
 use versatiles_container::TilesRuntime;
 
-use super::sources::{ServerTileSource, StaticSource};
+use super::{
+	Url,
+	sources::{ServerTileSource, StaticSource},
+};
 use crate::config::{Config, StaticSourceConfig, TileSourceConfig};
 
-/// Re-reads the config file and applies the difference to a running server.
+/// A static source the config named, and what it was built from.
+#[derive(Clone)]
+pub(super) struct MountedStatic {
+	pub(super) config: StaticSourceConfig,
+	/// Part of what the source was built from: a folder built to follow
+	/// symlinks has to be rebuilt when the setting changes.
+	pub(super) follow_symlinks: bool,
+	pub(super) source: StaticSource,
+}
+
+/// Loads the config and applies the difference to a running server.
 ///
 /// Sources that did not change keep their open containers and caches, so a
 /// reload costs only what actually changed.
 pub struct ReloadHandle {
-	pub(super) config_path: PathBuf,
+	/// Assembles the config the way it was assembled at startup.
+	pub(super) load_config: Box<dyn Fn() -> Result<Config> + Send + Sync>,
 	pub(super) tile_sources: Arc<DashMap<String, Arc<ServerTileSource>>>,
 	pub(super) static_sources: Arc<ArcSwap<Vec<StaticSource>>>,
 	pub(super) current_tile_configs: Arc<Mutex<Vec<TileSourceConfig>>>,
-	pub(super) current_static_configs: Arc<Mutex<Vec<StaticSourceConfig>>>,
+	pub(super) mounted_static: Arc<Mutex<Vec<MountedStatic>>>,
 	pub(super) runtime: TilesRuntime,
 }
 
+/// The name a tile source is served under, if it has one.
+fn config_name(cfg: &TileSourceConfig) -> Option<String> {
+	cfg.name
+		.clone()
+		.or_else(|| cfg.src.name().ok().map(ToString::to_string))
+}
+
+/// Refuses tile sources that would be served under the same or overlapping URLs.
+///
+/// The start refuses them too. Applied one by one, the later of two sources
+/// with one name would silently replace the earlier.
+fn check_tile_source_names(configs: &[TileSourceConfig]) -> Result<()> {
+	let mut seen: Vec<(String, Url)> = Vec::new();
+	for cfg in configs {
+		let Some(name) = config_name(cfg) else {
+			continue;
+		};
+		let prefix = ServerTileSource::prefix_for(&name);
+		for (other_name, other_prefix) in &seen {
+			if *other_name == name {
+				bail!("tile source '{name}' is defined more than once");
+			}
+			if other_prefix.starts_with(&prefix) || prefix.starts_with(other_prefix) {
+				bail!(
+					"URL prefix collision: tile source '{name}' ({prefix}) conflicts with '{other_name}' ({other_prefix})"
+				);
+			}
+		}
+		seen.push((name, prefix));
+	}
+	Ok(())
+}
+
 impl ReloadHandle {
-	/// Re-reads the config and adds, drops or replaces sources to match it.
+	/// Loads the config and adds, drops or replaces sources to match it.
+	///
+	/// A config that cannot be loaded, or that names two tile sources for the
+	/// same URLs, is refused as a whole: the server keeps running as it is.
 	pub async fn reload(&self) -> Result<()> {
-		let new_config = Config::from_path(&self.config_path)?;
+		let new_config = (self.load_config)()?;
+		check_tile_source_names(&new_config.tile_sources).context("the config is refused, nothing was changed")?;
+
 		self.apply_tile_source_diff(&new_config.tile_sources).await;
 		// The new config's value, not one captured at startup: a reload that
 		// re-reads `follow_symlinks` and then ignores it would be a surprise.
@@ -48,12 +97,6 @@ impl ReloadHandle {
 	/// Requests in flight keep their `Arc` to the source they started with.
 	async fn apply_tile_source_diff(&self, new_configs: &[TileSourceConfig]) {
 		let old_configs = self.current_tile_configs.lock().unwrap().clone();
-
-		fn config_name(cfg: &TileSourceConfig) -> Option<String> {
-			cfg.name
-				.clone()
-				.or_else(|| cfg.src.name().ok().map(ToString::to_string))
-		}
 
 		// What the server holds once this reload is through. Not simply
 		// `new_configs`: a source that failed to open is left out, so that the
@@ -115,28 +158,87 @@ impl ReloadHandle {
 		*self.current_tile_configs.lock().unwrap() = applied_configs;
 	}
 
+	/// Builds what is new or changed, and swaps the whole list in at once.
+	///
+	/// Handled like tile sources: a source that did not change is not rebuilt,
+	/// and one that cannot be built leaves the source it would have replaced
+	/// in place. What failed is not recorded as mounted, so the next reload
+	/// tries again.
 	async fn apply_static_source_diff(&self, new_configs: &[StaticSourceConfig], follow_symlinks: bool) {
-		let old_configs = self.current_static_configs.lock().unwrap().clone();
-		if old_configs == new_configs {
-			return;
+		fn prefix_of(cfg: &StaticSourceConfig) -> &str {
+			cfg.prefix.as_deref().unwrap_or("/")
 		}
 
-		let mut new_sources: Vec<StaticSource> = Vec::new();
-		for cfg in new_configs {
-			let prefix = cfg.prefix.as_deref().unwrap_or("/");
+		let old = self.mounted_static.lock().unwrap().clone();
+		let mut taken = vec![false; old.len()];
+
+		// Settle what stays before building anything, so that a source that
+		// fails below cannot claim an old one a later entry still uses.
+		let reused: Vec<Option<usize>> = new_configs
+			.iter()
+			.map(|cfg| {
+				let index = (0..old.len())
+					.find(|&i| !taken[i] && old[i].config == *cfg && old[i].follow_symlinks == follow_symlinks)?;
+				taken[index] = true;
+				Some(index)
+			})
+			.collect();
+
+		let mut mounted: Vec<MountedStatic> = Vec::new();
+		let mut changed = false;
+		for (cfg, reused) in new_configs.iter().zip(reused) {
+			if let Some(index) = reused {
+				changed |= index != mounted.len();
+				mounted.push(old[index].clone());
+				continue;
+			}
+
+			changed = true;
+			let prefix = prefix_of(cfg);
 			match StaticSource::from_location(&cfg.src, prefix, follow_symlinks).await {
-				Ok(source) => new_sources.push(source),
-				Err(e) => log::error!("reload: failed to build static source at '{prefix}': {e:#}"),
+				Ok(source) => {
+					log::info!("reload: mounted static source at '{prefix}'");
+					mounted.push(MountedStatic {
+						config: cfg.clone(),
+						follow_symlinks,
+						source,
+					});
+				}
+				Err(e) => {
+					// Static sources have no name; the URL prefix is what tells
+					// which one this was meant to replace.
+					let previous = (0..old.len()).find(|&i| !taken[i] && prefix_of(&old[i].config) == prefix);
+					if let Some(index) = previous {
+						log::error!(
+							"reload: failed to replace the static source at '{prefix}', keeping the previous one: {e:#}"
+						);
+						taken[index] = true;
+						mounted.push(old[index].clone());
+					} else {
+						log::error!("reload: failed to mount a static source at '{prefix}': {e:#}");
+					}
+				}
 			}
 		}
 
-		self.static_sources.store(Arc::new(new_sources));
-		*self.current_static_configs.lock().unwrap() = new_configs.to_vec();
-		log::info!("reload: static sources updated");
+		for (index, old) in old.iter().enumerate() {
+			if !taken[index] {
+				changed = true;
+				log::info!("reload: removed static source at '{}'", prefix_of(&old.config));
+			}
+		}
+
+		if !changed {
+			return;
+		}
+
+		let sources: Vec<StaticSource> = mounted.iter().map(|m| m.source.clone()).collect();
+		self.static_sources.store(Arc::new(sources));
+		*self.mounted_static.lock().unwrap() = mounted;
 	}
 }
 
-/// Spawn a background task that reloads the config from `handle.config_path` on every SIGHUP.
+/// Spawn a background task that reloads the config on every SIGHUP.
 ///
 /// Platforms without SIGHUP get the stub below instead, which warns and returns.
 #[cfg(unix)]
@@ -154,7 +256,7 @@ pub fn spawn_sighup_handler(handle: ReloadHandle) {
 
 		loop {
 			sighup.recv().await;
-			log::info!("received SIGHUP — reloading config from {:?}", handle.config_path);
+			log::info!("received SIGHUP — reloading config");
 			if let Err(e) = handle.reload().await {
 				log::error!("config reload failed: {e:#}");
 			} else {
@@ -175,7 +277,7 @@ pub fn spawn_sighup_handler(_handle: ReloadHandle) {
 
 #[cfg(test)]
 mod tests {
-	use std::path::Path;
+	use std::path::{Path, PathBuf};
 
 	use versatiles_container::{DataLocation, DataSource};
 
@@ -184,11 +286,11 @@ mod tests {
 	/// A handle wired to `path`, holding nothing yet.
 	fn handle(config_path: PathBuf) -> ReloadHandle {
 		ReloadHandle {
-			config_path,
+			load_config: Box::new(move || Config::from_path(&config_path)),
 			tile_sources: Arc::new(DashMap::new()),
 			static_sources: Arc::new(ArcSwap::from_pointee(Vec::new())),
 			current_tile_configs: Arc::new(Mutex::new(Vec::new())),
-			current_static_configs: Arc::new(Mutex::new(Vec::new())),
+			mounted_static: Arc::new(Mutex::new(Vec::new())),
 			runtime: TilesRuntime::new_silent(),
 		}
 	}
@@ -397,7 +499,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn static_sources_are_replaced_wholesale() {
+	async fn a_static_source_is_mounted_and_a_vanished_one_is_removed() {
 		let handle = handle(PathBuf::from("unused"));
 
 		handle
@@ -454,6 +556,116 @@ mod tests {
 			.await;
 
 		assert_eq!(handle.static_sources.load().len(), 1);
+	}
+
+	fn static_config(src: &Path, prefix: &str) -> StaticSourceConfig {
+		StaticSourceConfig {
+			src: DataLocation::from(src),
+			prefix: Some(prefix.to_string()),
+		}
+	}
+
+	fn mounted_configs(handle: &ReloadHandle) -> Vec<StaticSourceConfig> {
+		let mounted = handle.mounted_static.lock().unwrap();
+		mounted.iter().map(|m| m.config.clone()).collect()
+	}
+
+	async fn is_served(handle: &ReloadHandle, path: &str) -> bool {
+		let accept = versatiles_core::compression::TargetCompression::from_none();
+		for source in handle.static_sources.load().iter() {
+			if source.get_data(&Url::from(path), &accept).await.is_some() {
+				return true;
+			}
+		}
+		false
+	}
+
+	/// O6: a static source that failed to build used to drop its mount, and
+	/// was recorded as loaded, so no later reload tried it again.
+	#[tokio::test]
+	async fn a_changed_static_source_that_cannot_be_built_keeps_the_old_one_and_is_retried() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let late = dir.path().join("late.tar.gz");
+		let handle = handle(PathBuf::from("unused"));
+
+		let running = static_config(Path::new("../testdata/static.tar.gz"), "/assets/");
+		handle
+			.apply_static_source_diff(std::slice::from_ref(&running), false)
+			.await;
+		assert!(is_served(&handle, "/assets/index.html").await);
+
+		// The mount now points at a file that is not there yet, and a second
+		// mount is new and broken as well.
+		let config = [static_config(&late, "/assets/"), static_config(&late, "/more/")];
+		handle.apply_static_source_diff(&config, false).await;
+		assert!(is_served(&handle, "/assets/index.html").await, "the old mount is gone");
+		assert!(!is_served(&handle, "/more/index.html").await);
+		assert_eq!(mounted_configs(&handle), [running]);
+
+		// The file arrives; the same config is reloaded.
+		std::fs::copy("../testdata/static.tar.gz", &late)?;
+		handle.apply_static_source_diff(&config, false).await;
+		assert!(is_served(&handle, "/assets/index.html").await);
+		assert!(is_served(&handle, "/more/index.html").await);
+		assert_eq!(mounted_configs(&handle), config);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn a_changed_follow_symlinks_setting_rebuilds_the_static_sources() {
+		let handle = handle(PathBuf::from("unused"));
+		let config = [static_config(Path::new("../testdata"), "/")];
+
+		handle.apply_static_source_diff(&config, true).await;
+		let first = handle.static_sources.load_full();
+
+		handle.apply_static_source_diff(&config, false).await;
+		let second = handle.static_sources.load_full();
+
+		assert!(!Arc::ptr_eq(&first, &second), "the folder still follows symlinks");
+		assert!(!handle.mounted_static.lock().unwrap()[0].follow_symlinks);
+	}
+
+	/// O5: startup refuses these, and a reload used to take them: the later
+	/// source replaced the earlier under its name.
+	#[rstest::rstest]
+	#[case::the_same_name("tiles", "tiles", "tile source 'tiles' is defined more than once")]
+	#[case::overlapping_urls("a", "a/b", "URL prefix collision")]
+	#[tokio::test]
+	async fn a_config_with_colliding_names_is_refused_as_a_whole(
+		#[case] first: &str,
+		#[case] second: &str,
+		#[case] expected: &str,
+	) -> Result<()> {
+		let mut handle = handle(PathBuf::from("unused"));
+		handle
+			.apply_tile_source_diff(&[tile_config(Some("running"), "../testdata/berlin.mbtiles")])
+			.await;
+		let before = Arc::clone(&handle.tile_sources.get("running").unwrap());
+
+		let colliding = vec![
+			tile_config(Some(first), "../testdata/berlin.mbtiles"),
+			tile_config(Some(second), "../testdata/berlin.pmtiles"),
+		];
+		handle.load_config = Box::new(move || {
+			Ok(Config {
+				tile_sources: colliding.clone(),
+				static_sources: vec![static_config(Path::new("../testdata/static.tar.gz"), "/")],
+				..Config::default()
+			})
+		});
+
+		let error = format!("{:#}", handle.reload().await.unwrap_err());
+		assert!(error.contains(expected), "{error}");
+
+		// Nothing was applied: not the tile sources, not the static one.
+		assert_eq!(loaded_names(&handle), ["running"]);
+		let after = Arc::clone(&handle.tile_sources.get("running").unwrap());
+		assert!(Arc::ptr_eq(&before, &after));
+		assert_eq!(handle.static_sources.load().len(), 0);
+
+		Ok(())
 	}
 
 	#[tokio::test]

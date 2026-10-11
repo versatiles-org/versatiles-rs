@@ -38,8 +38,12 @@ use tower_http::{catch_panic::CatchPanicLayer, set_header::SetResponseHeaderLaye
 use versatiles_container::{DataLocation, SharedTileSource, TilesRuntime};
 use versatiles_derive::context;
 
-use super::{cors, reload::ReloadHandle, routes, sources};
-use crate::config::{Config, StaticSourceConfig, TileSourceConfig};
+use super::{
+	cors,
+	reload::{MountedStatic, ReloadHandle},
+	routes, sources,
+};
+use crate::config::{Config, TileSourceConfig};
 
 /// How long [`TileServer::stop`] waits for requests in flight to finish.
 ///
@@ -99,8 +103,8 @@ pub struct TileServer {
 	extra_response_headers: Vec<(HeaderName, HeaderValue)>,
 	/// Shadow of tile-source configs at last successful load/reload — used for diffing.
 	pub(super) current_tile_configs: Arc<Mutex<Vec<TileSourceConfig>>>,
-	/// Shadow of static-source configs at last successful load/reload — used for diffing.
-	pub(super) current_static_configs: Arc<Mutex<Vec<StaticSourceConfig>>>,
+	/// The static sources the config named, as mounted at the last load/reload — used for diffing.
+	pub(super) mounted_static: Arc<Mutex<Vec<MountedStatic>>>,
 }
 
 impl TileServer {
@@ -127,7 +131,7 @@ impl TileServer {
 			cors_max_age_seconds: 3600,
 			extra_response_headers: Vec::new(),
 			current_tile_configs: Arc::new(Mutex::new(Vec::new())),
-			current_static_configs: Arc::new(Mutex::new(Vec::new())),
+			mounted_static: Arc::new(Mutex::new(Vec::new())),
 		}
 	}
 
@@ -171,7 +175,7 @@ impl TileServer {
 			cors_max_age_seconds: config.cors.max_age_seconds.unwrap_or(3600),
 			extra_response_headers: parsed_headers,
 			current_tile_configs: Arc::new(Mutex::new(Vec::new())),
-			current_static_configs: Arc::new(Mutex::new(Vec::new())),
+			mounted_static: Arc::new(Mutex::new(Vec::new())),
 		};
 
 		for tile_config in &config.tile_sources {
@@ -184,8 +188,20 @@ impl TileServer {
 				.await?;
 		}
 
+		// Nothing else has been mounted yet, so configs and sources line up.
+		let mounted_static = config
+			.static_sources
+			.into_iter()
+			.zip(server.static_sources.load().iter().cloned())
+			.map(|(config, source)| MountedStatic {
+				config,
+				follow_symlinks: server.follow_symlinks,
+				source,
+			})
+			.collect();
+
 		*server.current_tile_configs.lock().unwrap() = config.tile_sources;
-		*server.current_static_configs.lock().unwrap() = config.static_sources;
+		*server.mounted_static.lock().unwrap() = mounted_static;
 
 		Ok(server)
 	}
@@ -497,15 +513,29 @@ impl TileServer {
 		routes::add_api_to_app(app, Arc::clone(&self.tile_sources)).await
 	}
 
-	/// Create a `ReloadHandle` that can reload the config from `config_path` on SIGHUP.
+	/// Create a `ReloadHandle` that reloads the config file at `config_path`.
+	///
+	/// Only right for a server built from that file alone. One that was started
+	/// with more than the file says needs [`TileServer::reload_handle_with`], or
+	/// a reload drops what the file does not name.
 	#[must_use]
 	pub fn reload_handle(&self, config_path: std::path::PathBuf) -> ReloadHandle {
+		self.reload_handle_with(move || Config::from_path(&config_path))
+	}
+
+	/// Create a `ReloadHandle` that asks `load_config` for the config on every reload.
+	///
+	/// `load_config` has to assemble the config the way it was assembled for
+	/// [`TileServer::from_config`], so that a reload applies the same additions
+	/// and overrides as the start did.
+	#[must_use]
+	pub fn reload_handle_with(&self, load_config: impl Fn() -> Result<Config> + Send + Sync + 'static) -> ReloadHandle {
 		ReloadHandle {
-			config_path,
+			load_config: Box::new(load_config),
 			tile_sources: Arc::clone(&self.tile_sources),
 			static_sources: Arc::clone(&self.static_sources),
 			current_tile_configs: Arc::clone(&self.current_tile_configs),
-			current_static_configs: Arc::clone(&self.current_static_configs),
+			mounted_static: Arc::clone(&self.mounted_static),
 			runtime: self.runtime.clone(),
 		}
 	}
