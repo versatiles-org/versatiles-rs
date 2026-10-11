@@ -199,9 +199,7 @@ vector_filter_properties.regex: RegexPattern | required
 vector_filter_properties.invert: Option<bool> | optional | default=false
 
 vector_overzoom [transform]
-vector_overzoom.level_base: Option<ZoomLevel> | optional | bounds=[0,30] int
 vector_overzoom.level_max: Option<ZoomLevel> | optional | bounds=[0,30] int
-vector_overzoom.enable_climbing: Option<bool> | optional | default=false
 vector_overzoom.buffer: Option<u32> | optional | default=80 | bounds=[0,4294967295] int
 
 vector_reduce_to_style [transform]

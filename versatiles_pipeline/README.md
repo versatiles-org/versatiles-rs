@@ -778,15 +778,15 @@ A property's name is matched with its layer as a prefix, in the form `layer_name
 
 Serves vector tiles above the source's highest zoom level by clipping and rescaling.
 
-Tiles at `level_base` and below are passed through unchanged; above it, the covering tile from `level_base` is clipped to the requested sub-region and its coordinates rescaled. No detail is added — the geometry is the parent's — but a client can keep zooming instead of hitting a blank map.
+A tile the source has is passed through unchanged. A tile above the source's highest level is clipped out of the source's tile at that level and its coordinates rescaled. No detail is added — the geometry is the parent's — but a client can keep zooming instead of hitting a blank map. A tile that would hold no features is not created.
 
-`level_max` defaults to four levels above `level_base` because each extra level quadruples the tile count, and four is usually as far as the pyramid stays manageable.
+Nothing is created at or below the source's highest level, and nothing from a tile further down: a vector tile the source lacks is a place with nothing in it. To overzoom from a lower level than the source's highest, put `filter level_max=…` in front.
+
+`level_max` has to be set above the source's highest level for the operation to have anything to do. Each extra level quadruples the tile count.
 
 ### Parameters
 
-- _`level_base`: 0-30 (optional)_ - Zoom level to overzoom from. Defaults to the source's highest.
-- _`level_max`: 0-30 (optional)_ - Highest zoom level to serve, capped at `30`. Defaults to `level_base + 4`.
-- _`enable_climbing`: bool (optional)_ - Whether to climb to lower levels when the `level_base` tile is missing. Defaults to `false`.
+- _`level_max`: 0-30 (optional)_ - Highest zoom level to serve, capped at `30`. Defaults to the source's highest.
 - _`buffer`: u32 (optional)_ - Clip buffer in tile-extent units, so edge-straddling features survive. Defaults to `80`.
 
 ---

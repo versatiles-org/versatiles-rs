@@ -1,15 +1,15 @@
 //! # Vector Overzoom Operation
 //!
-//! This operation generates vector tiles beyond the source's native maximum zoom level
+//! This operation generates vector tiles beyond the source's highest zoom level
 //! by extracting and re-encoding the relevant sub-region of an existing parent tile -
 //! the vector-tile counterpart of `raster_overscale`.
 //!
 //! ## How It Works
 //!
-//! Given a tile source with a maximum zoom level (e.g., z14), this operation can serve
+//! Given a tile source with a highest zoom level (e.g., z14), this operation can serve
 //! tiles at higher zoom levels (e.g., z15, z16, z17...) by:
 //!
-//! 1. Finding the corresponding "parent" tile at the base level
+//! 1. Finding the corresponding "parent" tile at the source's highest level
 //! 2. Computing the child's sub-region in the parent's tile-local coordinate space
 //! 3. Clipping every feature to that sub-region (with an optional buffer)
 //! 4. Translating + scaling surviving geometry into the child tile's coordinate space
@@ -19,11 +19,14 @@
 //! the corresponding quarter and produces a new tile in which the surviving features fill
 //! the full `[0, extent]` range.
 //!
-//! ## Tile Climbing
+//! ## Where it differs from `raster_overscale`
 //!
-//! When `enable_climbing` is enabled, the operation handles sparse tile sources gracefully.
-//! If a tile doesn't exist at the base level, the algorithm "climbs" up the zoom hierarchy
-//! (to parent tiles at lower zoom levels) until it finds an existing tile.
+//! `raster_overscale` also fills the gaps a source has at or below its highest level,
+//! from the nearest tile below. This operation does not, and never looks further down
+//! than the source's highest level: a raster tile that is missing is data the source
+//! lacks at that resolution, but a vector tile that is missing is a place with nothing
+//! in it — open sea, say. Looking for it further down would mean decoding and clipping
+//! a large low-zoom tile for every such place, to find nothing.
 //!
 //! ## Caching
 //!
@@ -32,7 +35,7 @@
 
 use std::{fmt::Debug, sync::Arc};
 
-use anyhow::{Result, ensure};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use geo::MapCoords;
 use geo_types::{Coord, Geometry, MultiPolygon, Polygon};
@@ -57,29 +60,40 @@ const CACHE_CAPACITY_BYTES: u64 = 256 * 1024 * 1024;
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Serves vector tiles above the source's highest zoom level by clipping and rescaling.
 ///
-/// Tiles at `level_base` and below are passed through unchanged; above it, the
-/// covering tile from `level_base` is clipped to the requested sub-region and
-/// its coordinates rescaled. No detail is added — the geometry is the parent's —
-/// but a client can keep zooming instead of hitting a blank map.
+/// A tile the source has is passed through unchanged. A tile above the source's
+/// highest level is clipped out of the source's tile at that level and its
+/// coordinates rescaled. No detail is added — the geometry is the parent's —
+/// but a client can keep zooming instead of hitting a blank map. A tile that
+/// would hold no features is not created.
 ///
-/// `level_max` defaults to four levels above `level_base` because each extra
-/// level quadruples the tile count, and four is usually as far as the pyramid
-/// stays manageable.
+/// Nothing is created at or below the source's highest level, and nothing from
+/// a tile further down: a vector tile the source lacks is a place with nothing
+/// in it. To overzoom from a lower level than the source's highest, put
+/// `filter level_max=…` in front.
+///
+/// `level_max` has to be set above the source's highest level for the
+/// operation to have anything to do. Each extra level quadruples the tile
+/// count.
 pub struct Args {
-	/// Zoom level to overzoom from. Defaults to the source's highest.
-	pub level_base: Option<ZoomLevel>,
-
-	/// Highest zoom level to serve, capped at `30`. Defaults to `level_base + 4`.
+	/// Highest zoom level to serve, capped at `30`. Defaults to the source's highest.
 	pub level_max: Option<ZoomLevel>,
-
-	/// Whether to climb to lower levels when the `level_base` tile is missing. Defaults to `false`.
-	#[vpl(default = "false")]
-	pub enable_climbing: Option<bool>,
 
 	/// Clip buffer in tile-extent units, so edge-straddling features survive. Defaults to `80`.
 	#[vpl(default = "80")]
 	pub buffer: Option<u32>,
 }
+
+/// Parameters `vector_overzoom` used to have, and what to do in their place.
+const REMOVED_PARAMETERS: [(&str, &str); 2] = [
+	(
+		"level_base",
+		"tiles are created from the source's highest zoom level; to use a lower one, put `filter level_max=…` in front",
+	),
+	(
+		"enable_climbing",
+		"a tile the source lacks at its highest zoom level is an empty one, and nothing is created from further down; remove the parameter",
+	),
+];
 
 /// The vector overzoom operation state.
 #[derive(Clone)]
@@ -87,9 +101,8 @@ pub struct Operation {
 	metadata: TileSourceMetadata,
 	source: SharedTileSource,
 	tilejson: TileJSON,
-	level_base: u8,
-	level_min: u8,
-	enable_climbing: bool,
+	/// The source's highest level: what every created tile is clipped out of.
+	level_top: u8,
 	buffer: u32,
 	cache: Arc<Cache<TileCoord, Option<Arc<VectorTile>>>>,
 }
@@ -100,9 +113,7 @@ impl Debug for Operation {
 			.field("metadata", &self.metadata)
 			.field("source", &self.source)
 			.field("tilejson", &self.tilejson)
-			.field("level_base", &self.level_base)
-			.field("level_min", &self.level_min)
-			.field("enable_climbing", &self.enable_climbing)
+			.field("level_top", &self.level_top)
 			.field("buffer", &self.buffer)
 			.field("cache", &"<moka::future::Cache>")
 			.finish()
@@ -115,11 +126,19 @@ impl Operation {
 	where
 		Self: Sized + TileSource,
 	{
+		// A parameter that is gone says so, and says what to do.
+		for (name, advice) in REMOVED_PARAMETERS {
+			if vpl_node.properties.contains_key(name) {
+				bail!("'vector_overzoom' no longer has the parameter '{name}': {advice}");
+			}
+		}
 		let args = Args::from_vpl_node(&vpl_node)?;
-		Self::new(source, &args)
+		Self::new(source, args.level_max.map(u8::from), args.buffer)
 	}
 
-	pub fn new(source: Box<dyn TileSource>, args: &Args) -> Result<Operation> {
+	/// `level_max` defaults to the source's highest level, as it does for
+	/// `raster_overscale` — which here leaves nothing to do, and is refused.
+	pub fn new(source: Box<dyn TileSource>, level_max: Option<u8>, buffer: Option<u32>) -> Result<Operation> {
 		ensure!(
 			source.metadata().tile_format().to_type() == versatiles_core::TileType::Vector,
 			"vector_overzoom requires a vector tile source"
@@ -130,27 +149,25 @@ impl Operation {
 		let source_pyramid = metadata
 			.tile_pyramid()
 			.ok_or_else(|| anyhow::anyhow!("source tile_pyramid not set"))?;
+		let level_top = source_pyramid
+			.level_max()
+			.ok_or_else(|| anyhow::anyhow!("source pyramid is empty"))?;
+		let level_max = level_max.unwrap_or(level_top).min(MAX_ZOOM_LEVEL);
 
-		let level_base = match args.level_base {
-			Some(level) => u8::from(level),
-			None => source_pyramid
-				.level_max()
-				.ok_or_else(|| anyhow::anyhow!("source pyramid is empty"))?,
-		};
-		log::trace!("level_base {level_base}");
+		// Doing nothing without saying so would look like a pipeline that
+		// works, until someone zooms in.
+		ensure!(
+			level_max > level_top,
+			"'vector_overzoom' has nothing to do: it creates tiles above the source's highest zoom level, which is {level_top}; set `level_max` to more than that"
+		);
 
-		let level_max = args
-			.level_max
-			.map_or_else(|| level_base.saturating_add(4), u8::from)
-			.clamp(level_base, MAX_ZOOM_LEVEL);
-
+		// Above the source's highest level, a tile can exist exactly where the
+		// source has one at that level.
 		let mut new_pyramid = source_pyramid.as_ref().clone();
-		let mut level_bbox = new_pyramid.level_ref(level_base).to_bbox();
-		while !level_bbox.is_empty() && level_bbox.level() < level_max {
-			level_bbox.level_up();
-			new_pyramid.insert_bbox(&level_bbox)?;
+		let top = new_pyramid.level_ref(level_top).clone();
+		for level in level_top + 1..=level_max {
+			new_pyramid.set_level(top.at_level(level));
 		}
-		let level_min = new_pyramid.level_min().unwrap_or(0);
 		metadata.set_tile_pyramid(new_pyramid);
 
 		let mut tilejson = source.as_ref().tilejson().clone();
@@ -159,7 +176,9 @@ impl Operation {
 		let cache = Cache::builder()
 			.max_capacity(CACHE_CAPACITY_BYTES)
 			.weigher(|_k: &TileCoord, v: &Option<Arc<VectorTile>>| -> u32 {
-				v.as_ref().map_or(8, |t| {
+				// A missing tile costs a cache entry, not nothing: weighed at 8
+				// bytes, the budget allowed 32 million of them.
+				v.as_ref().map_or(256, |t| {
 					// Approximate decoded size by total feature geom_data + tag bytes.
 					let bytes: u64 = t
 						.layers
@@ -181,54 +200,31 @@ impl Operation {
 			metadata,
 			source: Arc::from(source),
 			tilejson,
-			level_base,
-			level_min,
-			enable_climbing: args.enable_climbing.unwrap_or(false),
-			buffer: args.buffer.unwrap_or(DEFAULT_BUFFER),
+			level_top,
+			buffer: buffer.unwrap_or(DEFAULT_BUFFER),
 			cache,
 		})
 	}
 
-	/// Finds a source tile that covers `coord_dst`, climbing if configured.
+	/// The source's tile at its highest level that covers `coord_dst`, if it
+	/// has one there.
 	#[context("finding tile for coord {:?}", coord_dst)]
-	async fn find_tile(
-		&self,
-		coord_dst: TileCoord,
-		with_climbing: bool,
-	) -> Result<Option<(TileCoord, Arc<VectorTile>)>> {
-		let mut coord_src = coord_dst.at_level(self.level_base.min(coord_dst.level));
-
-		if with_climbing {
-			loop {
-				if let Some(tile) = self.try_fetch_tile(coord_src).await? {
-					return Ok(Some((coord_src, tile)));
-				}
-				if coord_src.level <= self.level_min {
-					return Ok(None);
-				}
-				coord_src = coord_src.to_level_decreased()?;
-			}
-		} else if let Some(tile) = self.try_fetch_tile(coord_src).await? {
-			Ok(Some((coord_src, tile)))
-		} else {
-			Ok(None)
-		}
+	async fn find_tile(&self, coord_dst: TileCoord) -> Result<Option<(TileCoord, Arc<VectorTile>)>> {
+		let coord_src = coord_dst.at_level(self.level_top.min(coord_dst.level));
+		Ok(self.try_fetch_tile(coord_src).await?.map(|tile| (coord_src, tile)))
 	}
 
+	/// The decoded tile of the source at `coord`. Requests that arrive
+	/// together for the same tile share one read and one decode.
 	async fn try_fetch_tile(&self, coord: TileCoord) -> Result<Option<Arc<VectorTile>>> {
-		if let Some(cached) = self.cache.get(&coord).await {
-			return Ok(cached);
-		}
-
-		let vt = self
-			.source
-			.tile(&coord)
-			.await?
-			.map(|t| t.into_vector().map(Arc::new))
-			.transpose()?;
-
-		self.cache.insert(coord, vt.clone()).await;
-		Ok(vt)
+		self
+			.cache
+			.try_get_with(coord, async {
+				let tile = self.source.tile(&coord).await?;
+				tile.map(|t| t.into_vector().map(Arc::new)).transpose()
+			})
+			.await
+			.map_err(|error: Arc<anyhow::Error>| anyhow::anyhow!("{error:#}"))
 	}
 }
 
@@ -463,19 +459,18 @@ impl TileSource for Operation {
 			return Ok(TileStream::empty());
 		}
 
-		if bbox_dst.level() <= self.level_base {
+		if bbox_dst.level() <= self.level_top {
 			return self.source.as_ref().tile_stream(bbox_dst).await;
 		}
 
 		let self_arc = Arc::new(self.clone());
-		let enable_climbing = self.enable_climbing;
 		let buffer = self.buffer;
 		let tile_format = *self.metadata.tile_format();
 
 		let stream = TileStream::from_bbox_async_parallel(bbox_dst, move |coord_dst| {
 			let self_arc = self_arc.clone();
 			async move {
-				match self_arc.find_tile(coord_dst, enable_climbing).await {
+				match self_arc.find_tile(coord_dst).await {
 					Ok(Some((coord_src, tile_src))) => match extract_tile(&tile_src, coord_src, coord_dst, buffer) {
 						Ok(Some(vt)) => match Tile::from_vector(vt, tile_format) {
 							Ok(tile) => Some((coord_dst, tile)),
@@ -508,7 +503,7 @@ impl TileSource for Operation {
 		{
 			return Ok(TileStream::empty());
 		}
-		if bbox.level() <= self.level_base {
+		if bbox.level() <= self.level_top {
 			return self.source.as_ref().tile_coord_stream(bbox).await;
 		}
 
@@ -520,13 +515,12 @@ impl TileSource for Operation {
 		// per-operation cache, so the decode happens at most once per source
 		// tile across both stream calls.
 		let self_arc = Arc::new(self.clone());
-		let enable_climbing = self.enable_climbing;
 		let buffer = self.buffer;
 
 		let stream = TileStream::from_bbox_async_parallel(bbox, move |coord_dst| {
 			let self_arc = self_arc.clone();
 			async move {
-				match self_arc.find_tile(coord_dst, enable_climbing).await {
+				match self_arc.find_tile(coord_dst).await {
 					Ok(Some((coord_src, tile_src))) => match extract_features(&tile_src, coord_src, coord_dst, buffer) {
 						Ok(Some(_)) => Some((coord_dst, ())),
 						Ok(None) => None,
@@ -558,13 +552,14 @@ mod tests {
 	use super::*;
 	use crate::{factory::OperationFactoryTrait, helpers::dummy_vector_source::DummyVectorSource};
 
-	async fn build_op(extra_args: &str) -> Result<Operation> {
+	/// A source with every tile up to level 2, overzoomed to `level_max`.
+	async fn build_op(level_max: u8) -> Result<Operation> {
 		let source = Box::new(DummyVectorSource::new(
 			&[("dummy", &[&[("k", "v")]])],
 			Some(TilePyramid::new_full_up_to(2)),
 		));
 		Operation::build(
-			VPLNode::try_from_str(&format!("vector_overzoom level_base=2 {extra_args}"))?,
+			VPLNode::try_from_str(&format!("vector_overzoom level_max={level_max}"))?,
 			source,
 			&PipelineFactory::new_dummy(),
 		)
@@ -581,40 +576,82 @@ mod tests {
 	async fn test_factory_docs() {
 		let factory = Factory {};
 		let docs = factory.docs();
-		assert!(docs.contains("level_base"));
 		assert!(docs.contains("level_max"));
-		assert!(docs.contains("enable_climbing"));
 		assert!(docs.contains("buffer"));
+		assert!(!docs.contains("level_base"));
+		assert!(!docs.contains("enable_climbing"));
 	}
 
 	#[tokio::test]
 	async fn test_source_type() -> Result<()> {
-		let op = build_op("").await?;
+		let op = build_op(6).await?;
 		assert!(op.source_type().to_string().contains("vector_overzoom"));
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn test_pyramid_extended() -> Result<()> {
-		let op = build_op("level_max=5").await?;
+		let op = build_op(5).await?;
 		let pyramid = op.metadata.tile_pyramid().unwrap();
-		assert!(pyramid.level_max().unwrap() >= 5);
+		assert_eq!(pyramid.level_max(), Some(5));
+		assert_eq!(
+			pyramid.level_ref(5).count_tiles(),
+			1024,
+			"every tile over a tile of level 2"
+		);
+		assert_eq!(op.tilejson().zoom_max(), Some(5));
 		Ok(())
 	}
 
+	/// `level_max` defaults to the source's highest level, as for
+	/// `raster_overscale`. Here that leaves nothing to do, and a pipeline
+	/// that silently did nothing would look like one that works.
+	#[rstest::rstest]
+	#[case::not_given("vector_overzoom")]
+	#[case::at_the_highest_level("vector_overzoom level_max=2")]
+	#[case::below_it("vector_overzoom level_max=1")]
 	#[tokio::test]
-	async fn level_max_defaults_to_level_base_plus_four() -> Result<()> {
-		// Source pyramid stops at z=2, level_base defaults to source level_max (2),
-		// so the operation should extend to z=6 by default — not all the way to 30.
-		let op = build_op("").await?;
-		let pyramid = op.metadata.tile_pyramid().unwrap();
-		assert_eq!(pyramid.level_max().unwrap(), 6);
-		Ok(())
+	async fn refuses_when_there_is_nothing_to_do(#[case] vpl: &str) {
+		let source = Box::new(DummyVectorSource::new(
+			&[("dummy", &[&[("k", "v")]])],
+			Some(TilePyramid::new_full_up_to(2)),
+		));
+		let error = Operation::build(
+			VPLNode::try_from_str(vpl).unwrap(),
+			source,
+			&PipelineFactory::new_dummy(),
+		)
+		.await
+		.unwrap_err();
+		let message = format!("{error:#}");
+		assert!(message.contains("nothing to do"), "{message}");
+		assert!(message.contains("which is 2"), "{message}");
+	}
+
+	#[rstest::rstest]
+	#[case("level_base=2", "filter level_max")]
+	#[case("enable_climbing=true", "remove the parameter")]
+	#[tokio::test]
+	async fn a_removed_parameter_says_what_to_do_instead(#[case] parameter: &str, #[case] advice: &str) {
+		let source = Box::new(DummyVectorSource::new(
+			&[("dummy", &[&[("k", "v")]])],
+			Some(TilePyramid::new_full_up_to(2)),
+		));
+		let error = Operation::build(
+			VPLNode::try_from_str(&format!("vector_overzoom level_max=4 {parameter}")).unwrap(),
+			source,
+			&PipelineFactory::new_dummy(),
+		)
+		.await
+		.unwrap_err();
+		let message = format!("{error:#}");
+		assert!(message.contains("no longer has the parameter"), "{message}");
+		assert!(message.contains(advice), "{message}");
 	}
 
 	#[tokio::test]
 	async fn test_level_below_base_passthrough() -> Result<()> {
-		let op = build_op("").await?;
+		let op = build_op(6).await?;
 		let bbox = TileCoord::new(2, 1, 1)?.to_tile_bbox();
 		let tiles = op.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1);
@@ -626,11 +663,11 @@ mod tests {
 	async fn test_overzoom_generates_child_tile() -> Result<()> {
 		// DummyVectorSource emits one MVT-local Point at (1, 2) per source tile,
 		// plus properties `x`/`y`/`z` carrying the source coord and `k="v"`.
-		// For destination (3, 2, 2) the level_base=2 parent is (2, 1, 1); the
+		// For destination (3, 2, 2) the parent at the source's highest level is (2, 1, 1); the
 		// child sub-region within that parent is its top-left quadrant
 		// (offset_x = offset_y = 0, scale = 2). The point sits inside the
 		// sub-region and rescales to (2, 4) in child space.
-		let op = build_op("").await?;
+		let op = build_op(6).await?;
 		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();
 		let tiles = op.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1, "exactly one child tile expected");
@@ -667,10 +704,9 @@ mod tests {
 		Ok(())
 	}
 
-	/// Source with a sparse pyramid at `level_base=1`: ancestors plus three of
-	/// four z=1 tiles. The interior tile `(1, 1, 1)` is intentionally absent
-	/// so a request for its descendant at z=2 has to climb to z=0.
-	async fn build_sparse_op(extra_args: &str) -> Result<Operation> {
+	/// A source whose highest level, 1, has three of its four tiles. The tile
+	/// `(1, 1, 1)` is missing, though the tile below it at level 0 exists.
+	async fn build_sparse_op() -> Result<Operation> {
 		let pyramid = TilePyramid::from_tile_coords(
 			[
 				TileCoord::new(0, 0, 0)?,
@@ -683,7 +719,7 @@ mod tests {
 		);
 		let source = Box::new(DummyVectorSource::new(&[("dummy", &[&[("k", "v")]])], Some(pyramid)));
 		Operation::build(
-			VPLNode::try_from_str(&format!("vector_overzoom level_base=1 level_max=3 {extra_args}"))?,
+			VPLNode::try_from_str("vector_overzoom level_max=3")?,
 			source,
 			&PipelineFactory::new_dummy(),
 		)
@@ -691,46 +727,39 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn find_tile_returns_level_base_tile_when_present() -> Result<()> {
-		// Destination (2, 0, 0) — its parent at z=1 is (1, 0, 0), which IS in
-		// the source pyramid. No climbing needed regardless of the flag.
-		let op = build_sparse_op("").await?;
-		let coord_dst = TileCoord::new(2, 0, 0)?;
+	async fn a_tile_is_clipped_out_of_the_highest_level_of_the_source() -> Result<()> {
+		// Destination (2, 0, 0): its parent at level 1 is (1, 0, 0), which the
+		// source has.
+		let op = build_sparse_op().await?;
 		let (coord_src, _) = op
-			.find_tile(coord_dst, true)
+			.find_tile(TileCoord::new(2, 0, 0)?)
 			.await?
-			.expect("level_base tile is present");
-		assert_eq!(coord_src.level, 1);
-		assert_eq!((coord_src.x, coord_src.y), (0, 0));
+			.expect("the source has it");
+		assert_eq!((coord_src.level, coord_src.x, coord_src.y), (1, 0, 0));
 		Ok(())
 	}
 
+	/// Where the source has no tile at its highest level, there is nothing:
+	/// a vector tile that is missing is an empty place. The tile at level 0
+	/// covers it too, and is not looked at.
 	#[tokio::test]
-	async fn find_tile_climbs_when_level_base_tile_is_missing() -> Result<()> {
-		// Destination (2, 2, 2) — its parent at z=1 is (1, 1, 1), which is
-		// NOT in the source pyramid. With climbing enabled, find_tile must
-		// fall through to (0, 0, 0).
-		let op = build_sparse_op("").await?;
-		let coord_dst = TileCoord::new(2, 2, 2)?;
-		let (coord_src, _) = op
-			.find_tile(coord_dst, true)
-			.await?
-			.expect("climbing should locate the z=0 ancestor");
-		assert_eq!(coord_src.level, 0, "climbed to z=0");
-		assert_eq!((coord_src.x, coord_src.y), (0, 0));
-		Ok(())
-	}
+	async fn nothing_is_created_from_below_the_highest_level() -> Result<()> {
+		let op = build_sparse_op().await?;
+		// Destination (2, 2, 2): its parent at level 1 is the missing (1, 1, 1).
+		assert!(op.find_tile(TileCoord::new(2, 2, 2)?).await?.is_none());
 
-	#[tokio::test]
-	async fn find_tile_returns_none_without_climbing_when_parent_missing() -> Result<()> {
-		// Same destination as the climbing test, but with climbing disabled
-		// the missing parent at level_base aborts the lookup.
-		let op = build_sparse_op("").await?;
-		let coord_dst = TileCoord::new(2, 2, 2)?;
-		assert!(
-			op.find_tile(coord_dst, false).await?.is_none(),
-			"climbing disabled → None when level_base tile is missing"
-		);
+		let bbox = TileCoord::new(2, 2, 2)?.to_tile_bbox();
+		assert_eq!(op.tile_stream(bbox).await?.to_vec().await.len(), 0);
+		assert_eq!(op.tile_coord_stream(bbox).await?.to_vec().await.len(), 0);
+
+		// Next to it, over a tile the source has, there is one.
+		let bbox = TileCoord::new(2, 0, 0)?.to_tile_bbox();
+		assert_eq!(op.tile_stream(bbox).await?.to_vec().await.len(), 1);
+
+		// And the pyramid does not announce the gap.
+		let pyramid = op.metadata.tile_pyramid().unwrap();
+		assert_eq!(pyramid.level_ref(2).count_tiles(), 12);
+		assert!(!pyramid.includes_coord(&TileCoord::new(2, 2, 2)?));
 		Ok(())
 	}
 
@@ -740,7 +769,7 @@ mod tests {
 		// `tile_coord_stream` through `extract_features` so destinations whose
 		// features don't survive the per-child clip are dropped from the count
 		// too.
-		let op = build_op("").await?;
+		let op = build_op(6).await?;
 		let pyr = op.tile_pyramid().await?;
 		for z in 0..=pyr.level_max().unwrap_or(0) {
 			let bbox = pyr.level_ref(z).to_bbox();
@@ -753,31 +782,10 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn enable_climbing_arg_threads_through_to_tile_stream() -> Result<()> {
-		// Integration-flavoured: with climbing enabled the operation emits
-		// some tile content in the missing-parent region; without it, the
-		// same region yields nothing.
-		let bbox = TileCoord::new(2, 2, 2)?.to_tile_bbox();
-
-		let op_with = build_sparse_op("enable_climbing=true").await?;
-		let with_count = op_with.tile_stream(bbox).await?.to_vec().await.len();
-
-		let op_without = build_sparse_op("enable_climbing=false").await?;
-		let without_count = op_without.tile_stream(bbox).await?.to_vec().await.len();
-
-		assert!(
-			with_count >= without_count,
-			"climbing must not reduce tile yield (with={with_count}, without={without_count})"
-		);
-		assert_eq!(without_count, 0, "climbing disabled and parent missing → zero tiles");
-		Ok(())
-	}
-
-	#[tokio::test]
 	async fn output_tiles_pass_mvt_validation() -> Result<()> {
 		use crate::helpers::assert_tiles_valid;
-		let op = build_op("").await?;
-		// level_base=2; request tiles at z=3 so the overzoom path is exercised
+		let op = build_op(6).await?;
+		// the source ends at z=2; request tiles at z=3 so the overzoom path is exercised
 		let bbox = TileBBox::from_min_and_max(3, 0, 0, 3, 3)?;
 		let tiles = op.tile_stream(bbox).await?.to_vec().await;
 		assert_tiles_valid(tiles);
@@ -791,7 +799,7 @@ mod tests {
 		use crate::helpers::dummy_image_source::DummyImageSource;
 		let source = Box::new(DummyImageSource::from_color(&[128u8, 0, 0], 4, TileFormat::PNG, None).unwrap());
 		let result = Operation::build(
-			VPLNode::try_from_str("vector_overzoom level_base=2").unwrap(),
+			VPLNode::try_from_str("vector_overzoom level_max=4").unwrap(),
 			source,
 			&PipelineFactory::new_dummy(),
 		)
