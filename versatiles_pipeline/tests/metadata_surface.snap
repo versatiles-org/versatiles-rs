@@ -173,9 +173,7 @@ raster_mask.blur: Option<f32> | optional | default=0 | bounds=(-inf,inf) float
 raster_mask.blur_function: Option<BlurFunction> | optional | default=linear | values=[linear,cosine]
 
 raster_overscale [transform]
-raster_overscale.level_base: Option<ZoomLevel> | optional | bounds=[0,30] int
-raster_overscale.level_max: Option<ZoomLevel> | optional | default=30 | bounds=[0,30] int
-raster_overscale.enable_climbing: Option<bool> | optional | default=false
+raster_overscale.level_max: Option<ZoomLevel> | optional | bounds=[0,30] int
 
 raster_overview [transform]
 raster_overview.level: Option<ZoomLevel> | optional | bounds=[0,30] int

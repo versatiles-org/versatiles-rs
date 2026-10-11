@@ -107,7 +107,9 @@ use crate::{
 /// With `auto_overscale=true`, a request that no source covers natively returns
 /// an empty stream rather than a blank tile. Put a `raster_overscale` *after*
 /// `from_stacked_raster` to fill those in — upscaling one blended tile is
-/// cheaper than upscaling each source separately.
+/// cheaper than upscaling each source separately. It fills them up to the
+/// highest level any of the sources has, from the nearest level below that
+/// has a blended tile.
 struct Args {
 	/// The sources to blend, with the first on top. All must provide raster
 	/// tiles at the same resolution.

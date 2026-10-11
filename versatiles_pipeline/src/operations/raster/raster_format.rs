@@ -357,7 +357,7 @@ mod tests {
 			let op = factory.operation_from_vpl(vpl).await?;
 			Ok(op.tile_stream(bbox).await?.to_vec().await.remove(0).1)
 		};
-		let overscale = "from_debug format=webp | filter level_max=3 | raster_overscale";
+		let overscale = "from_debug format=webp | filter level_max=3 | raster_overscale level_max=5";
 
 		let upscaled = tile_of(overscale).await?.into_image()?;
 		let blob = tile_of(&format!("{overscale} | raster_format effort=0"))

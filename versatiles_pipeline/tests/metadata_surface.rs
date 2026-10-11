@@ -503,9 +503,9 @@ fn every_parameter_named_like_a_zoom_level_is_typed_as_one() {
 	}
 
 	// The floor: a rule keyed on a shape stops having a subject when the shape
-	// goes, and goes green rather than red. Thirteen without `gdal`; the two
+	// goes, and goes green rather than red. Twelve without `gdal`; the two
 	// GDAL read operations carry two zoom parameters each.
-	let expected = if cfg!(feature = "gdal") { 17 } else { 13 };
+	let expected = if cfg!(feature = "gdal") { 16 } else { 12 };
 	assert_eq!(
 		seen, expected,
 		"expected {expected} zoom-level parameters, found {seen} — did they stop sharing a name or a type?"
@@ -533,7 +533,7 @@ fn every_zoom_parameter_describes_its_range() {
 		}
 	}
 
-	let expected = if cfg!(feature = "gdal") { 17 } else { 13 };
+	let expected = if cfg!(feature = "gdal") { 16 } else { 12 };
 	assert_eq!(seen, expected, "expected {expected} zoom parameters, found {seen}");
 }
 

@@ -371,7 +371,7 @@ Blends several raster tile sources into one by alpha-compositing them.
 
 Unlike `from_stacked`, which picks one source's tile whole, this composites them pixel by pixel, so a translucent source lets the ones beneath it show through.
 
-With `auto_overscale=true`, a request that no source covers natively returns an empty stream rather than a blank tile. Put a `raster_overscale` _after_ `from_stacked_raster` to fill those in — upscaling one blended tile is cheaper than upscaling each source separately.
+With `auto_overscale=true`, a request that no source covers natively returns an empty stream rather than a blank tile. Put a `raster_overscale` _after_ `from_stacked_raster` to fill those in — upscaling one blended tile is cheaper than upscaling each source separately. It fills them up to the highest level any of the sources has, from the nearest level below that has a blended tile.
 
 ### Sources
 
@@ -568,15 +568,17 @@ The mask is not reprojected: coordinates outside the WGS84 range are refused, as
 
 ## raster_overscale
 
-Serves raster tiles above the source's native resolution by upscaling.
+Creates the raster tiles a source lacks by upscaling the tiles it has.
 
-Tiles at `level_base` and below are passed through unchanged; above it, the covering tile from `level_base` is cropped to the requested area and scaled up. The result is blurry rather than detailed — the point is that a client can keep zooming instead of hitting a blank map.
+A tile the source has is passed on untouched. A tile it lacks is created from the nearest tile it has at a lower zoom level: the area is cut out and scaled up. The result is blurry rather than detailed — the point is that every tile up to `level_max` has an answer, from the best data there is at that place. For a source with worldwide imagery at its low levels and aerial imagery for some regions on top, that fills in everything between.
+
+Tiles are only created inside the bounds of the source, so set them with `meta_update bounds=…` in front if they are missing or too wide. A tile that would be completely transparent is not created; a transparent tile the source has is passed on like any other. Nothing is created below the source's lowest level.
+
+A source whose bounds are the whole world is filled for the whole world, which is fine for serving and far too many tiles to write to a file at a high `level_max`. To set the format, quality or effort of the tiles created, put `raster_format` behind this operation.
 
 ### Parameters
 
-- _`level_base`: 0-30 (optional)_ - Zoom level to upscale from. Defaults to the source's highest.
-- _`level_max`: 0-30 (optional)_ - Highest zoom level to serve. Defaults to `30`.
-- _`enable_climbing`: bool (optional)_ - Whether to climb to lower levels when the `level_base` tile is missing. Defaults to `false`.
+- _`level_max`: 0-30 (optional)_ - Highest zoom level to create tiles at. Defaults to the source's highest.
 
 ---
 

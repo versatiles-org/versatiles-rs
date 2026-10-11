@@ -1,383 +1,113 @@
 //! # Raster Overscale Operation
 //!
-//! This operation generates raster tiles beyond the source's native maximum zoom level
-//! by extracting and upscaling portions of existing tiles.
+//! Creates the raster tiles a source lacks from the tiles it has at lower zoom
+//! levels, by cutting out the area of the missing tile and scaling it up.
 //!
-//! ## How It Works
+//! ## How it works
 //!
-//! Given a tile source with a maximum zoom level (e.g., z14), this operation can serve
-//! tiles at higher zoom levels (e.g., z15, z16, z17...) by:
+//! A tile the source has is passed on untouched. For a tile it lacks, the
+//! operation looks for the nearest tile below it: the parent, then the
+//! grandparent, and so on down to the source's lowest level. A z15 tile covers
+//! a quarter of its z14 parent, so that quarter is cut out and scaled up to a
+//! full tile.
 //!
-//! 1. Finding the corresponding "parent" tile at the base level
-//! 2. Extracting the relevant sub-region from that parent tile
-//! 3. Upscaling the extracted region to full tile size
+//! This is what makes a sparse source usable: worldwide imagery to z12, say,
+//! with aerial imagery to z19 for some regions. Every tile up to `level_max`
+//! then has an answer, from the best data there is at that place.
 //!
-//! For example, a z15 tile covers 1/4 the area of its z14 parent. The operation extracts
-//! that quarter and scales it up to 256x256 (or whatever the tile size is).
+//! ## Where tiles are created
 //!
-//! ## Tile Climbing
+//! - Inside the bounds of the source, as its metadata declares them.
+//! - Where the tile below has content: a tile that would be completely
+//!   transparent is not created ([`mask`]).
+//! - Up to `level_max`, and never at or below the source's lowest level.
 //!
-//! When `enable_climbing` is enabled, the operation handles sparse tile sources gracefully.
-//! If a tile doesn't exist at the base level, the algorithm "climbs" up the zoom hierarchy
-//! (to parent tiles at lower zoom levels) until it finds an existing tile.
+//! ## Modules
 //!
-//! **Example**: Requesting tile z16/1000/2000 with `level_base=14`:
-//! - Without climbing: Only looks for z14/250/500. If missing, returns nothing.
-//! - With climbing: Tries z14/250/500 → z13/125/250 → z12/62/125 → ... until found.
-//!
-//! This is useful for tile sources with incomplete coverage, where some areas may only
-//! have tiles at lower zoom levels.
-//!
-//! ## Caching
-//!
-//! The operation maintains an LRU cache (512MB by default) of decoded source images.
-//! This significantly improves performance when generating multiple high-zoom tiles
-//! from the same parent tile, as the parent only needs to be fetched and decoded once.
+//! - [`fill`]: the operation behind `raster_overscale` in a pipeline.
+//! - [`fixed`]: overscaling from one fixed level, which `from_stacked_raster`
+//!   wraps its sources in.
+//! - [`mask`]: where a tile has content.
+//! - [`scale`]: cutting out and scaling up.
 
+mod fill;
 mod fixed;
+mod mask;
 mod scale;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use versatiles_container::TileSource;
 use versatiles_core::ZoomLevel;
 use versatiles_derive::context;
 
-pub use self::fixed::FixedOverscale;
+pub use self::{fill::FillOverscale, fixed::FixedOverscale};
 use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Serves raster tiles above the source's native resolution by upscaling.
+/// Creates the raster tiles a source lacks by upscaling the tiles it has.
 ///
-/// Tiles at `level_base` and below are passed through unchanged; above it, the
-/// covering tile from `level_base` is cropped to the requested area and scaled
-/// up. The result is blurry rather than detailed — the point is that a client
-/// can keep zooming instead of hitting a blank map.
+/// A tile the source has is passed on untouched. A tile it lacks is created
+/// from the nearest tile it has at a lower zoom level: the area is cut out and
+/// scaled up. The result is blurry rather than detailed — the point is that
+/// every tile up to `level_max` has an answer, from the best data there is at
+/// that place. For a source with worldwide imagery at its low levels and
+/// aerial imagery for some regions on top, that fills in everything between.
+///
+/// Tiles are only created inside the bounds of the source, so set them with
+/// `meta_update bounds=…` in front if they are missing or too wide. A tile that
+/// would be completely transparent is not created; a transparent tile the
+/// source has is passed on like any other. Nothing is created below the
+/// source's lowest level.
+///
+/// A source whose bounds are the whole world is filled for the whole world,
+/// which is fine for serving and far too many tiles to write to a file at a
+/// high `level_max`. To set the format, quality or effort of the tiles
+/// created, put `raster_format` behind this operation.
 pub struct Args {
-	/// Zoom level to upscale from. Defaults to the source's highest.
-	pub level_base: Option<ZoomLevel>,
-
-	/// Highest zoom level to serve. Defaults to `30`.
-	#[vpl(default = "30")]
+	/// Highest zoom level to create tiles at. Defaults to the source's highest.
 	pub level_max: Option<ZoomLevel>,
-
-	/// Whether to climb to lower levels when the `level_base` tile is missing. Defaults to `false`.
-	#[vpl(default = "false")]
-	pub enable_climbing: Option<bool>,
 }
+
+/// Parameters `raster_overscale` had before it filled gaps (#284), and what to
+/// do in their place.
+const REMOVED_PARAMETERS: [(&str, &str); 2] = [
+	(
+		"level_base",
+		"tiles are created from the nearest lower zoom level the source has; to ignore its higher levels, put `filter level_max=…` in front",
+	),
+	(
+		"enable_climbing",
+		"tiles are always created from the nearest lower zoom level the source has; remove the parameter",
+	),
+];
 
 /// Builds the operation behind `raster_overscale` in a pipeline.
 pub struct Operation;
 
 impl Operation {
 	#[context("Building raster_overscale operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
-		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		_factory: &PipelineFactory,
-	) -> Result<FixedOverscale> {
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<FillOverscale> {
+		// A parameter that is gone says so, and says what to do. The generic
+		// "does not have a parameter" would leave a pipeline that worked
+		// yesterday with a list of names and no way forward.
+		for (name, advice) in REMOVED_PARAMETERS {
+			if vpl_node.properties.contains_key(name) {
+				bail!("'raster_overscale' no longer has the parameter '{name}': {advice}");
+			}
+		}
 		let args = Args::from_vpl_node(&vpl_node)?;
-		FixedOverscale::new(
-			source,
-			args.level_base.map(u8::from),
-			args.level_max.map(u8::from),
-			args.enable_climbing.unwrap_or(false),
-		)
+		FillOverscale::new(source, args.level_max.map(u8::from)).await
 	}
 }
 
 crate::operations::macros::define_transform_factory!("raster_overscale", Args, Operation, requires: Raster);
 
 #[cfg(test)]
-#[expect(clippy::cast_possible_truncation, reason = "test data is built from literal values")]
 mod tests {
-	use rstest::rstest;
-	use versatiles_container::Tile;
-	use versatiles_core::{TileBBox, TileCoord, TileFormat, TilePyramid};
-	use versatiles_image::{DynamicImage, DynamicImageTraitConvert, DynamicImageTraitOperation};
+	use versatiles_core::{TileCoord, TileFormat};
 
 	use super::*;
-	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
-
-	fn make_gradient_image(channel_count: usize) -> DynamicImage {
-		let s = 256;
-		match channel_count {
-			1 => DynamicImage::from_fn(s, s, |x, _| [x as u8]),
-			2 => DynamicImage::from_fn(s, s, |x, y| [x as u8, y as u8]),
-			3 => DynamicImage::from_fn(s, s, |x, y| [x as u8, y as u8, 255 - x as u8]),
-			4 => DynamicImage::from_fn(s, s, |x, y| [x as u8, y as u8, 255 - x as u8, 255 - y as u8]),
-			_ => panic!("unsupported channel count {channel_count}"),
-		}
-	}
-
-	#[expect(
-		clippy::cast_possible_truncation,
-		clippy::cast_sign_loss,
-		reason = "`c` is a u8 and `scale` a small u32, so the average is 0..=255"
-	)]
-	async fn get_avg(op: &FixedOverscale, coord: (u8, u8, u8), scale: u32) -> Vec<u8> {
-		let (level, x, y) = coord;
-		let coord = TileCoord::new(level, u32::from(x), u32::from(y))
-			.unwrap()
-			.to_tile_bbox();
-		let mut tiles = op.tile_stream(coord).await.unwrap().to_vec().await;
-		assert_eq!(tiles.len(), 1);
-		let mut tile = tiles.pop().unwrap().1;
-		let image = tile.as_image().unwrap();
-		let avg = image.average_color();
-		avg.into_iter()
-			.map(|c| (f64::from(c) / f64::from(scale)).round() as u8)
-			.collect()
-	}
-
-	async fn build_op(channel_count: usize) -> Result<FixedOverscale> {
-		let image = make_gradient_image(channel_count);
-		let source = Box::new(DummyImageSource::from_image(image, TileFormat::PNG, None)?);
-
-		Operation::build(
-			VPLNode::try_from_str("raster_overscale level_base=2")?,
-			source,
-			&PipelineFactory::new_dummy(),
-		)
-		.await
-	}
-
-	#[rstest]
-	#[case::l(1,[vec![16], vec![48], vec![16], vec![48]])]
-	#[case::la(2,[vec![16,16], vec![48,16], vec![16,48], vec![48,48]])]
-	#[case::rgb(3,[vec![16,16,48], vec![48,16,16], vec![16,48,48], vec![48,48,16]])]
-	#[case::rgba(4,[vec![16,16,48,48], vec![48,16,16,48], vec![16,48,48,16], vec![48,48,16,16]])]
-	#[tokio::test]
-	async fn overscale_to_z3(#[case] channel_count: usize, #[case] expected: [Vec<u8>; 4]) {
-		let op = build_op(channel_count).await.unwrap();
-
-		let avg_colors = [
-			get_avg(&op, (3, 2, 2), 4).await,
-			get_avg(&op, (3, 3, 2), 4).await,
-			get_avg(&op, (3, 2, 3), 4).await,
-			get_avg(&op, (3, 3, 3), 4).await,
-		];
-
-		assert_eq!(avg_colors, expected);
-	}
-
-	#[tokio::test]
-	async fn overscale_to_z4_rgb() -> Result<()> {
-		let op = build_op(3).await?;
-
-		for x in 0..4 {
-			for y in 0..4 {
-				assert_eq!(
-					get_avg(&op, (4, 4 + x, 4 + y), 32).await,
-					vec![1 + x * 2, 1 + y * 2, 7 - x * 2]
-				);
-			}
-		}
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_overscale_without_climbing() -> Result<()> {
-		let image = make_gradient_image(3);
-		let source = Box::new(DummyImageSource::from_image(image, TileFormat::PNG, None)?);
-
-		// Build with climbing disabled (default)
-		let op = Operation::build(
-			VPLNode::try_from_str("raster_overscale level_base=2")?,
-			source,
-			&PipelineFactory::new_dummy(),
-		)
-		.await?;
-
-		// Should work for tiles at level_base (z=2)
-		let coord_base = TileCoord::new(2, 0, 0)?.to_tile_bbox();
-		let tiles = op.tile_stream(coord_base).await?.to_vec().await;
-		assert_eq!(tiles.len(), 1, "Should return tile at level_base");
-
-		// Should work for tiles above level_base (extracted from level_base)
-		let coord_high = TileCoord::new(3, 0, 0)?.to_tile_bbox();
-		let tiles = op.tile_stream(coord_high).await?.to_vec().await;
-		assert_eq!(tiles.len(), 1, "Should extract from level_base for high zoom");
-
-		// Multiple high-zoom tiles should reuse cached base tile
-		let coord_high2 = TileCoord::new(3, 1, 0)?.to_tile_bbox();
-		let tiles2 = op.tile_stream(coord_high2).await?.to_vec().await;
-		assert_eq!(tiles2.len(), 1, "Should also work for adjacent tile");
-
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_overscale_with_climbing_enabled() -> Result<()> {
-		let image = make_gradient_image(3);
-		let source = Box::new(DummyImageSource::from_image(image, TileFormat::PNG, None)?);
-
-		// Build with climbing ENABLED
-		let op = Operation::build(
-			VPLNode::try_from_str("raster_overscale level_base=2 enable_climbing=true")?,
-			source,
-			&PipelineFactory::new_dummy(),
-		)
-		.await?;
-
-		// Should work with climbing enabled
-		let coord = TileCoord::new(3, 0, 0)?.to_tile_bbox();
-		let tiles = op.tile_stream(coord).await?.to_vec().await;
-		assert_eq!(tiles.len(), 1, "Should return tile with climbing enabled");
-
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_source_type() -> Result<()> {
-		let op = build_op(3).await?;
-		let source_type = op.source_type();
-		assert!(source_type.to_string().contains("raster_overscale"));
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_metadata_and_tilejson() -> Result<()> {
-		let op = build_op(3).await?;
-		// metadata and tilejson should be available
-		let metadata = op.metadata();
-		assert!(metadata.tile_pyramid().unwrap().level_max().is_some());
-		let _tilejson = op.tilejson();
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_level_max_parameter() -> Result<()> {
-		let image = make_gradient_image(3);
-		let source = Box::new(DummyImageSource::from_image(image, TileFormat::PNG, None)?);
-
-		// Build with custom level_max
-		let op = Operation::build(
-			VPLNode::try_from_str("raster_overscale level_base=2 level_max=5")?,
-			source,
-			&PipelineFactory::new_dummy(),
-		)
-		.await?;
-
-		// Should have extended max level
-		let metadata = op.metadata();
-		assert!(metadata.tile_pyramid().unwrap().level_max().unwrap() >= 5);
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_level_below_base_passthrough() -> Result<()> {
-		let op = build_op(3).await?;
-
-		// Request at level below level_base should pass through to source
-		let coord = TileCoord::new(2, 1, 1)?.to_tile_bbox();
-		let tiles = op.tile_stream(coord).await?.to_vec().await;
-		assert_eq!(tiles.len(), 1, "Should passthrough to source for level <= level_base");
-		Ok(())
-	}
-
-	// --- the mode `from_stacked_raster auto_overscale=true` relies on ---
-
-	/// A source with holes: levels 1 to 4, not full, and inside its pyramid a
-	/// tile missing here and there. Every tile has its own gradient, so both
-	/// the tile an upscale came from and the region cut out of it show.
-	fn sparse_source() -> Result<DummyImageSource> {
-		let mut pyramid = TilePyramid::new_empty();
-		pyramid.insert_bbox(&TileBBox::new_full(1)?)?;
-		pyramid.insert_bbox(&TileBBox::from_min_and_max(2, 0, 0, 3, 2)?)?;
-		pyramid.insert_bbox(&TileBBox::from_min_and_max(3, 1, 1, 6, 5)?)?;
-		pyramid.insert_bbox(&TileBBox::from_min_and_max(4, 2, 2, 9, 9)?)?;
-
-		DummyImageSource::new(
-			|coord| {
-				let (level, x, y) = (u32::from(coord.level), coord.x, coord.y);
-				if (x + 2 * y + level) % 5 == 0 {
-					return None;
-				}
-				let image = DynamicImage::from_fn(8, 8, |px, py| {
-					[
-						(level * 37 + px * 3) as u8,
-						(x * 29 + py * 5) as u8,
-						(y * 31 + px + py) as u8,
-					]
-				});
-				Some(Tile::from_image(image, TileFormat::PNG).unwrap())
-			},
-			TileFormat::PNG,
-			Some(pyramid),
-		)
-	}
-
-	/// One line per level: how many tiles and coordinates the operation hands
-	/// out, how many its pyramid announces, and a hash over which tiles they
-	/// are and what is in them.
-	async fn fingerprint(op: &dyn TileSource, level_max: u8) -> Result<String> {
-		fn fnv(hash: &mut u64, bytes: &[u8]) {
-			for byte in bytes {
-				*hash ^= u64::from(*byte);
-				*hash = hash.wrapping_mul(0x0100_0000_01b3);
-			}
-		}
-		let key = |c: &TileCoord| (c.level, c.x, c.y);
-
-		let pyramid = op.metadata().tile_pyramid().unwrap();
-		let mut lines = Vec::new();
-		for level in 0..=level_max {
-			let bbox = TileBBox::new_full(level)?;
-			let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-
-			let mut tiles = op.tile_stream(bbox).await?.to_vec().await;
-			tiles.sort_by_key(|(coord, _)| key(coord));
-			let tile_count = tiles.len();
-			for (coord, tile) in tiles {
-				fnv(&mut hash, format!("{:?}", key(&coord)).as_bytes());
-				fnv(&mut hash, tile.into_image()?.as_bytes());
-			}
-
-			let mut coords: Vec<TileCoord> = op
-				.tile_coord_stream(bbox)
-				.await?
-				.to_vec()
-				.await
-				.into_iter()
-				.map(|(coord, ())| coord)
-				.collect();
-			coords.sort_by_key(key);
-			for coord in &coords {
-				fnv(&mut hash, format!("{:?}", key(coord)).as_bytes());
-			}
-
-			lines.push(format!(
-				"level {level}: tiles={tile_count} coords={} pyramid={} hash={hash:016x}",
-				coords.len(),
-				pyramid.level_ref(level).count_tiles()
-			));
-		}
-		Ok(lines.join("\n"))
-	}
-
-	/// Frozen before `raster_overscale` learned to fill gaps (#284), so that
-	/// nothing in that work changes what a stack of sources is blended from.
-	#[tokio::test]
-	async fn the_stacking_mode_gives_what_it_always_gave() -> Result<()> {
-		let op = FixedOverscale::for_stacking(Box::new(sparse_source()?), 4, 7)?;
-
-		assert_eq!(
-			fingerprint(&op, 8).await?,
-			[
-				"level 0: tiles=0 coords=0 pyramid=0 hash=cbf29ce484222325",
-				"level 1: tiles=4 coords=4 pyramid=4 hash=c0bf84935b355a01",
-				"level 2: tiles=10 coords=12 pyramid=12 hash=fd3cd4d04f3db28c",
-				"level 3: tiles=24 coords=30 pyramid=30 hash=2b65ddbf30192d40",
-				"level 4: tiles=51 coords=64 pyramid=64 hash=f0218e8b73d4abe5",
-				"level 5: tiles=1024 coords=1024 pyramid=256 hash=b29d7d012c2f28c8",
-				"level 6: tiles=4096 coords=4096 pyramid=1024 hash=da95c98490faa769",
-				"level 7: tiles=16384 coords=16384 pyramid=4096 hash=96aa0f8a1f9d18bf",
-				"level 8: tiles=0 coords=0 pyramid=0 hash=cbf29ce484222325",
-			]
-			.join("\n")
-		);
-		Ok(())
-	}
+	use crate::factory::OperationFactoryTrait;
 
 	#[test]
 	fn test_factory_tag_name() {
@@ -389,8 +119,53 @@ mod tests {
 	fn test_factory_docs() {
 		let factory = Factory {};
 		let docs = factory.docs();
-		assert!(docs.contains("level_base"));
 		assert!(docs.contains("level_max"));
-		assert!(docs.contains("enable_climbing"));
+		assert!(!docs.contains("level_base"));
+		assert!(!docs.contains("enable_climbing"));
+	}
+
+	/// `from_debug` has tiles at every level up to 30 and no gaps, so there is
+	/// nothing to create: the operation passes its tiles on.
+	#[tokio::test]
+	async fn in_a_pipeline_it_passes_existing_tiles_on() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl("from_debug format=png | raster_overscale")
+			.await?;
+		assert_eq!(*op.metadata().tile_format(), TileFormat::PNG);
+
+		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();
+		assert_eq!(op.tile_stream(bbox).await?.to_vec().await.len(), 1);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn in_a_pipeline_it_creates_tiles_above_the_source() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl("from_debug format=png | filter level_max=3 | raster_overscale level_max=5")
+			.await?;
+		assert_eq!(op.metadata().tile_pyramid().unwrap().level_max(), Some(5));
+
+		let bbox = TileCoord::new(5, 9, 9)?.to_tile_bbox();
+		assert_eq!(op.tile_stream(bbox).await?.to_vec().await.len(), 1);
+		let bbox = TileCoord::new(6, 9, 9)?.to_tile_bbox();
+		assert_eq!(op.tile_stream(bbox).await?.to_vec().await.len(), 0);
+		Ok(())
+	}
+
+	#[rstest::rstest]
+	#[case("level_base=2", "filter level_max")]
+	#[case("enable_climbing=true", "remove the parameter")]
+	#[tokio::test]
+	async fn a_removed_parameter_says_what_to_do_instead(#[case] parameter: &str, #[case] advice: &str) {
+		let factory = PipelineFactory::new_dummy();
+		let error = factory
+			.operation_from_vpl(&format!("from_debug format=png | raster_overscale {parameter}"))
+			.await
+			.unwrap_err();
+		let message = format!("{error:#}");
+		assert!(message.contains("no longer has the parameter"), "{message}");
+		assert!(message.contains(advice), "{message}");
 	}
 }
