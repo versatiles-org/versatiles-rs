@@ -87,6 +87,7 @@ impl FillOverscale {
 		let level_min = native.level_min().context("source pyramid is empty")?;
 		let level_top = native.level_max().context("source pyramid is empty")?;
 		let level_max = level_max.unwrap_or(level_top).min(MAX_ZOOM_LEVEL);
+		let scaling = Scaling::for_source(source.tilejson())?;
 
 		let mut operation = Self {
 			metadata: source.metadata().clone(),
@@ -96,7 +97,7 @@ impl FillOverscale {
 			fill: Arc::new(TilePyramid::new_empty()),
 			level_min,
 			level_max,
-			scaling: Scaling::Color,
+			scaling,
 			images: Cache::builder()
 				.max_capacity(512 * 1024 * 1024)
 				.weigher(|_, image: &Option<Arc<DynamicImage>>| {
@@ -129,8 +130,12 @@ impl FillOverscale {
 		// Where tiles are created follows from the source's metadata, not from
 		// a parameter, so say what was read from it.
 		log::info!(
-			"raster_overscale: creating missing tiles at levels {}-{level_max} from levels {level_min}-{level_top}, inside {}{}",
+			"raster_overscale: creating missing tiles at levels {}-{level_max} from levels {level_min}-{level_top}, scaled as {}, inside {}{}",
 			level_min.saturating_add(1),
+			match scaling {
+				Scaling::Color => "color",
+				Scaling::Elevation => "elevation",
+			},
 			bounds.map_or_else(|| "no bounds".to_string(), |b| format!("{:?}", b.as_array())),
 			match (content.first(), content.last()) {
 				(Some((first, _)), Some((last, _))) =>
@@ -268,8 +273,9 @@ impl FillOverscale {
 	/// Cuts the area of `coord` out of the source tile at `source_coord` and
 	/// scales it up to a tile.
 	fn scale(&self, image: &DynamicImage, source_coord: TileCoord, coord: TileCoord) -> Result<Tile> {
-		let image = self.scaling.extract(image, source_coord, coord)?;
-		Tile::from_image(image, *self.metadata.tile_format())
+		self
+			.scaling
+			.tile(image, source_coord, coord, *self.metadata.tile_format())
 	}
 
 	/// Creates the tile at `coord` from the nearest tile the source has below

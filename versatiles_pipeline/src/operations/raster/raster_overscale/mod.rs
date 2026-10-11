@@ -22,6 +22,12 @@
 //!   transparent is not created ([`mask`]).
 //! - Up to `level_max`, and never at or below the source's lowest level.
 //!
+//! ## Elevation tiles
+//!
+//! A source whose tile schema says its tiles hold heights gets them scaled
+//! as heights ([`scale`]). Scaled as colors, a height would come out wrong
+//! wherever one of its three bytes carries over into the next.
+//!
 //! ## Modules
 //!
 //! - [`fill`]: the operation behind `raster_overscale` in a pipeline.
@@ -58,6 +64,11 @@ use crate::{PipelineFactory, vpl::VPLNode};
 /// would be completely transparent is not created; a transparent tile the
 /// source has is passed on like any other. Nothing is created below the
 /// source's lowest level.
+///
+/// Elevation tiles are scaled as heights, not as colors, and encoded without
+/// loss. They are recognised by the tile schema of the source, `dem/mapbox` or
+/// `dem/terrarium`; set it with `meta_update schema=…` in front if the source
+/// does not declare it.
 ///
 /// A source whose bounds are the whole world is filled for the whole world,
 /// which is fine for serving and far too many tiles to write to a file at a
@@ -105,6 +116,7 @@ crate::operations::macros::define_transform_factory!("raster_overscale", Args, O
 #[cfg(test)]
 mod tests {
 	use versatiles_core::{TileCoord, TileFormat};
+	use versatiles_image::DynamicImageTraitConvert;
 
 	use super::*;
 	use crate::factory::OperationFactoryTrait;
@@ -152,6 +164,51 @@ mod tests {
 		let bbox = TileCoord::new(6, 9, 9)?.to_tile_bbox();
 		assert_eq!(op.tile_stream(bbox).await?.to_vec().await.len(), 0);
 		Ok(())
+	}
+
+	/// The schema in the metadata decides: these tiles are heights, and are
+	/// scaled and encoded as such.
+	#[tokio::test]
+	async fn elevation_tiles_are_scaled_as_heights() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let source = "from_debug format=webp | meta_update schema=\"dem/mapbox\" | filter level_max=3";
+		let bbox = TileCoord::new(5, 9, 9)?.to_tile_bbox();
+		let tile_of = async |vpl: String| -> Result<versatiles_container::Tile> {
+			let op = factory.operation_from_vpl(&vpl).await?;
+			Ok(op.tile_stream(bbox).await?.to_vec().await.remove(0).1)
+		};
+
+		let as_height = tile_of(format!("{source} | raster_overscale level_max=5")).await?;
+		let as_color = tile_of(format!(
+			"{source} | meta_update schema=\"rgba\" | raster_overscale level_max=5"
+		))
+		.await?;
+		assert!(
+			as_height.clone().into_image()?.as_bytes() != as_color.into_image()?.as_bytes(),
+			"scaled as colors"
+		);
+
+		// Encoded without loss: the heights that come back are the ones that
+		// went in. Compared as RGB, because an opaque image loses its alpha
+		// channel on the way.
+		let image = as_height.clone().into_image()?;
+		let blob = as_height.into_blob(&versatiles_core::TileCompression::Uncompressed)?;
+		let decoded = versatiles_image::DynamicImage::from_blob(&blob, TileFormat::WEBP)?;
+		assert!(
+			decoded.to_rgb8().as_raw() == image.to_rgb8().as_raw(),
+			"heights changed"
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn an_elevation_schema_that_cannot_be_scaled_is_refused() {
+		let factory = PipelineFactory::new_dummy();
+		let error = factory
+			.operation_from_vpl("from_debug format=png | meta_update schema=\"dem/versatiles\" | raster_overscale")
+			.await
+			.unwrap_err();
+		assert!(format!("{error:#}").contains("dem/versatiles"), "{error:#}");
 	}
 
 	#[rstest::rstest]

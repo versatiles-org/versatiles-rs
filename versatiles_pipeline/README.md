@@ -574,6 +574,8 @@ A tile the source has is passed on untouched. A tile it lacks is created from th
 
 Tiles are only created inside the bounds of the source, so set them with `meta_update bounds=…` in front if they are missing or too wide. A tile that would be completely transparent is not created; a transparent tile the source has is passed on like any other. Nothing is created below the source's lowest level.
 
+Elevation tiles are scaled as heights, not as colors, and encoded without loss. They are recognised by the tile schema of the source, `dem/mapbox` or `dem/terrarium`; set it with `meta_update schema=…` in front if the source does not declare it.
+
 A source whose bounds are the whole world is filled for the whole world, which is fine for serving and far too many tiles to write to a file at a high `level_max`. To set the format, quality or effort of the tiles created, put `raster_format` behind this operation.
 
 ### Parameters

@@ -71,6 +71,7 @@ impl FixedOverscale {
 		enable_climbing: bool,
 	) -> Result<Self> {
 		let mut metadata = source.as_ref().metadata().clone();
+		let scaling = Scaling::for_source(source.as_ref().tilejson()).unwrap_or(Scaling::Color);
 
 		let source_pyramid = metadata
 			.tile_pyramid()
@@ -113,7 +114,9 @@ impl FixedOverscale {
 			level_min,
 			cache,
 			enable_climbing,
-			scaling: Scaling::Color,
+			// A stack of elevation sources gets its heights scaled as heights
+			// too. A schema this cannot scale stays with what it always got.
+			scaling,
 		})
 	}
 
@@ -217,16 +220,10 @@ impl TileSource for FixedOverscale {
 			let self_arc = self_arc.clone();
 			async move {
 				match self_arc.find_tile(coord_dst, enable_climbing).await {
-					Ok(Some((coord_src, image_src))) => match scaling.extract(&image_src, coord_src, coord_dst) {
-						Ok(img) => match Tile::from_image(img, tile_format) {
-							Ok(tile) => Some((coord_dst, tile)),
-							Err(e) => {
-								log::error!("Error creating tile {coord_dst:?}: {e:?}");
-								None
-							}
-						},
+					Ok(Some((coord_src, image_src))) => match scaling.tile(&image_src, coord_src, coord_dst, tile_format) {
+						Ok(tile) => Some((coord_dst, tile)),
 						Err(e) => {
-							log::error!("Error extracting image {coord_dst:?}: {e:?}");
+							log::error!("Error creating tile {coord_dst:?}: {e:?}");
 							None
 						}
 					},
