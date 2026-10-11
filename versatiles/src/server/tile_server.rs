@@ -52,6 +52,9 @@ use crate::config::{Config, TileSourceConfig};
 /// by itself when a request does not finish in time.
 const SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
+/// How long a request may take before it is answered with a 503.
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
 /// Thin orchestration layer for the VersaTiles HTTP server.
 ///
 /// This type is intentionally small: it stores configuration and composes the
@@ -86,6 +89,9 @@ pub struct TileServer {
 	/// How long `stop()` waits for requests in flight. A field so that a test
 	/// can shorten it; everything else leaves it at [`SHUTDOWN_TIMEOUT`].
 	shutdown_timeout: std::time::Duration,
+	/// How long a request may take. A field so that tests can shorten it;
+	/// everything else leaves it at [`REQUEST_TIMEOUT`].
+	request_timeout: std::time::Duration,
 	/// If true, prefer faster (lower ratio) recompression when negotiating encodings.
 	minimal_recompression: bool,
 	/// `Cache-Control` sent with every served tile and static file. Validated
@@ -121,6 +127,7 @@ impl TileServer {
 			static_sources: Arc::new(ArcSwap::from_pointee(Vec::new())),
 			exit_signal: None,
 			shutdown_timeout: SHUTDOWN_TIMEOUT,
+			request_timeout: REQUEST_TIMEOUT,
 			join: None,
 			minimal_recompression,
 			cache_control: Arc::from(super::handlers::DEFAULT_CACHE_CONTROL),
@@ -165,6 +172,7 @@ impl TileServer {
 			static_sources: Arc::new(ArcSwap::from_pointee(Vec::new())),
 			exit_signal: None,
 			shutdown_timeout: SHUTDOWN_TIMEOUT,
+			request_timeout: REQUEST_TIMEOUT,
 			join: None,
 			minimal_recompression: config.server.minimal_recompression.unwrap_or(false),
 			cache_control: Arc::from(cache_control.as_str()),
@@ -353,34 +361,13 @@ impl TileServer {
 		}
 		router = self.add_static_sources_to_app(router);
 
-		let cors_layer = cors::build_cors_layer(&self.cors_allowed_origins, self.cors_max_age_seconds)?;
-		router = router.layer(ServiceBuilder::new().layer(cors_layer));
-
-		// Tell the browser to trust the `Content-Type` we sent rather than
-		// guessing from the bytes. An unknown extension in a static folder falls
-		// back to `application/octet-stream` (`utils::guess_mime`), and a sniffing
-		// browser will happily decide that an uploaded blob is HTML and run it
-		// against this origin.
-		//
-		// Applied *inside* the extra-header layers below, so an operator who sets
-		// `X-Content-Type-Options` in `extra_response_headers` still wins.
-		router = router.layer(SetResponseHeaderLayer::if_not_present(
-			header::X_CONTENT_TYPE_OPTIONS,
-			HeaderValue::from_static("nosniff"),
-		));
-
-		// Apply any extra response headers from configuration (overriding existing values).
-		for (name, value) in self.extra_response_headers.iter().cloned() {
-			router = router.layer(SetResponseHeaderLayer::overriding(name, value));
-		}
-
 		// --- Global backpressure & protection layers ---
 		// The order of layers matters. From innermost to outermost:
 		//   LoadShed → ConcurrencyLimit → Buffer → Timeout → CatchPanic → HandleError
 		// We apply `HandleErrorLayer` outermost so Axum observes an `Infallible` error type.
 		let global_concurrency = 256usize; // tune based on CPU and workload
 		let global_buffer = 512usize; // bounded queue in front of the service
-		let request_timeout = std::time::Duration::from_secs(15); // hard per-request cap
+		let request_timeout = self.request_timeout; // hard per-request cap
 
 		let overload_handler = HandleErrorLayer::new(|_err: BoxError| async move {
 			// Map timeouts, loadshed, and buffer-closed errors to a clear 503.
@@ -407,6 +394,31 @@ impl TileServer {
 			.layer(LoadShedLayer::new());
 
 		router = router.layer(protection);
+
+		// The layers that put headers on a response go around the protection
+		// layers, not inside them: the 503 is made out there, and used to leave
+		// without any of these. A browser then reported a failed CORS check
+		// where the server had said "try again later".
+		let cors_layer = cors::build_cors_layer(&self.cors_allowed_origins, self.cors_max_age_seconds)?;
+		router = router.layer(ServiceBuilder::new().layer(cors_layer));
+
+		// Tell the browser to trust the `Content-Type` we sent rather than
+		// guessing from the bytes. An unknown extension in a static folder falls
+		// back to `application/octet-stream` (`utils::guess_mime`), and a sniffing
+		// browser will happily decide that an uploaded blob is HTML and run it
+		// against this origin.
+		//
+		// Applied *inside* the extra-header layers below, so an operator who sets
+		// `X-Content-Type-Options` in `extra_response_headers` still wins.
+		router = router.layer(SetResponseHeaderLayer::if_not_present(
+			header::X_CONTENT_TYPE_OPTIONS,
+			HeaderValue::from_static("nosniff"),
+		));
+
+		// Apply any extra response headers from configuration (overriding existing values).
+		for (name, value) in self.extra_response_headers.iter().cloned() {
+			router = router.layer(SetResponseHeaderLayer::overriding(name, value));
+		}
 
 		let addr = format!("{}:{}", self.ip, self.port);
 		log::info!("server binding on {addr}");
@@ -528,6 +540,12 @@ impl TileServer {
 	/// `load_config` has to assemble the config the way it was assembled for
 	/// [`TileServer::from_config`], so that a reload applies the same additions
 	/// and overrides as the start did.
+	///
+	/// A reload knows the sources of the config only. Static sources added
+	/// with [`TileServer::add_static_source`] are dropped by the first reload
+	/// that changes the list, and a tile source added with
+	/// [`TileServer::add_tile_source`] is replaced by one the config names the
+	/// same. Use one or the other. Two reloads must not run at the same time.
 	#[must_use]
 	pub fn reload_handle_with(&self, load_config: impl Fn() -> Result<Config> + Send + Sync + 'static) -> ReloadHandle {
 		ReloadHandle {
@@ -843,6 +861,44 @@ mod tests {
 		let response = request.await?.expect("the request should still be answered");
 		assert_eq!(response.status(), StatusCode::OK);
 		assert!(sent.elapsed() >= delay);
+		Ok(())
+	}
+
+	/// The 503 of a request that took too long is made outside the handlers.
+	/// It used to leave without the headers every other response carries:
+	/// no `nosniff`, none of the configured extra headers, and no CORS header,
+	/// so a browser reported a CORS failure instead of the 503. (The limit is
+	/// 15 seconds; shortened here.)
+	#[tokio::test]
+	async fn a_request_that_takes_too_long_is_a_503_with_the_headers_of_every_response() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		server.request_timeout = std::time::Duration::from_millis(100);
+		server.extra_response_headers = vec![(
+			HeaderName::from_static("x-robots-tag"),
+			HeaderValue::from_static("noindex"),
+		)];
+		let slow = SlowSource(
+			MockReader::new_mock_profile(MRP::Pbf)?,
+			std::time::Duration::from_secs(2),
+		);
+		server.add_tile_source("slow".to_string(), Arc::new(slow)).await?;
+		server.start().await?;
+		let port = server.port();
+
+		let response = reqwest::Client::new()
+			.get(format!("http://{IP}:{port}/tiles/slow/3/1/2"))
+			.header("Origin", "https://example.org")
+			.send()
+			.await?;
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+		let header = |name: &str| response.headers().get(name).and_then(|v| v.to_str().ok());
+		assert_eq!(header("retry-after"), Some("2"));
+		assert_eq!(header("x-content-type-options"), Some("nosniff"));
+		assert_eq!(header("x-robots-tag"), Some("noindex"));
+		assert_eq!(header("access-control-allow-origin"), Some("*"));
+		assert_eq!(header("cache-control"), None, "a 503 is not cached like a tile");
+
+		server.stop().await;
 		Ok(())
 	}
 
