@@ -79,6 +79,9 @@ pub struct TileServer {
 	exit_signal: Option<oneshot::Sender<()>>,
 	/// Join handle for the serving task; awaited in `stop()` to ensure shutdown completes.
 	join: Option<tokio::task::JoinHandle<()>>,
+	/// How long `stop()` waits for requests in flight. A field so that a test
+	/// can shorten it; everything else leaves it at [`SHUTDOWN_TIMEOUT`].
+	shutdown_timeout: std::time::Duration,
 	/// If true, prefer faster (lower ratio) recompression when negotiating encodings.
 	minimal_recompression: bool,
 	/// `Cache-Control` sent with every served tile and static file. Validated
@@ -113,6 +116,7 @@ impl TileServer {
 			tile_sources: Arc::new(DashMap::new()),
 			static_sources: Arc::new(ArcSwap::from_pointee(Vec::new())),
 			exit_signal: None,
+			shutdown_timeout: SHUTDOWN_TIMEOUT,
 			join: None,
 			minimal_recompression,
 			cache_control: Arc::from(super::handlers::DEFAULT_CACHE_CONTROL),
@@ -156,6 +160,7 @@ impl TileServer {
 			tile_sources: Arc::new(DashMap::new()),
 			static_sources: Arc::new(ArcSwap::from_pointee(Vec::new())),
 			exit_signal: None,
+			shutdown_timeout: SHUTDOWN_TIMEOUT,
 			join: None,
 			minimal_recompression: config.server.minimal_recompression.unwrap_or(false),
 			cache_control: Arc::from(cache_control.as_str()),
@@ -420,6 +425,11 @@ impl TileServer {
 	/// Trigger graceful shutdown and wait for the server task to finish: no new
 	/// connections, and up to 5 seconds for the requests in flight.
 	///
+	/// A request that is still running after that is not waited for any
+	/// longer, and not cut off either: it finishes in the background, if the
+	/// process lives that long. `versatiles serve` exits once this returns,
+	/// which ends it; a host that keeps running lets it complete.
+	///
 	/// Idempotent: if the server is not running, this returns immediately.
 	pub async fn stop(&mut self) {
 		// If not running, do nothing (idempotent).
@@ -436,14 +446,17 @@ impl TileServer {
 
 		// Await the server task to finish, but don't hang forever.
 		if let Some(handle) = self.join.take() {
-			match tokio::time::timeout(SHUTDOWN_TIMEOUT, handle).await {
+			match tokio::time::timeout(self.shutdown_timeout, handle).await {
 				Ok(join_result) => {
 					if let Err(join_err) = join_result {
 						log::warn!("server task join error: {join_err}");
 					}
 				}
 				Err(_) => {
-					log::warn!("server task did not shutdown within timeout; continuing");
+					log::warn!(
+						"requests still open after {:?}; no longer waiting for them",
+						self.shutdown_timeout
+					);
 				}
 			}
 		}
@@ -745,6 +758,43 @@ mod tests {
 				.await
 				.is_err()
 		);
+		Ok(())
+	}
+
+	/// Past the limit, `stop` returns without the request. The request is not
+	/// cut off by that: it is answered in the background, as long as the
+	/// process is there. (The limit is 5 seconds; shortened here.)
+	#[tokio::test]
+	async fn stop_gives_up_waiting_at_the_limit_and_the_request_still_finishes() -> Result<()> {
+		let delay = std::time::Duration::from_millis(600);
+		let limit = std::time::Duration::from_millis(150);
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		server.shutdown_timeout = limit;
+		let slow = SlowSource(MockReader::new_mock_profile(MRP::Pbf)?, delay);
+		server.add_tile_source("slow".to_string(), Arc::new(slow)).await?;
+		server.start().await?;
+		let port = server.port();
+
+		let sent = std::time::Instant::now();
+		let request = tokio::spawn(reqwest::get(format!("http://{IP}:{port}/tiles/slow/3/1/2")));
+		tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+		server.stop().await;
+		let stopped_after = sent.elapsed();
+		assert!(stopped_after >= limit, "stop did not wait: {stopped_after:?}");
+		assert!(stopped_after < delay, "stop waited for the request: {stopped_after:?}");
+		assert!(!request.is_finished(), "the request should still be running");
+
+		// Nothing new is accepted, though the old request is still on its way.
+		assert!(
+			reqwest::get(format!("http://{IP}:{port}/tiles/slow/3/1/2"))
+				.await
+				.is_err()
+		);
+
+		let response = request.await?.expect("the request should still be answered");
+		assert_eq!(response.status(), StatusCode::OK);
+		assert!(sent.elapsed() >= delay);
 		Ok(())
 	}
 

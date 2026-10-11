@@ -368,8 +368,9 @@ Start the HTTP server.
 
 #### `server.stop()`
 
-Stop the HTTP server. It stops accepting connections and lets the requests it
-is answering finish, for up to 5 seconds.
+Stop the HTTP server. It stops accepting connections and waits for the
+requests it is answering, for up to 5 seconds. A request that takes longer is
+answered in the background after `stop()` has returned.
 
 **Returns:** `Promise<void>`
 
