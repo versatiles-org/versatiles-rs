@@ -66,16 +66,17 @@ impl TileType {
 
 	/// Returns the default tile schema associated with the tile type.
 	///
-	/// For a raster source this is the least that can be said without knowing
-	/// its format. With the format known, `TileSourceMetadata::update_tilejson`
-	/// says `rgba` for one that can store transparency.
+	/// For a raster source it is `rgba`: without knowing the format, tiles may
+	/// be transparent, and saying `rgb` would promise that they are not. With
+	/// the format known, `TileSourceMetadata::update_tilejson` says `rgb` for
+	/// one that cannot store transparency.
 	///
 	/// # Examples
 	///
 	/// ```
 	/// use versatiles_core::TileType;
 	///
-	/// assert_eq!(TileType::Raster.default_tile_schema(), Some("rgb"));
+	/// assert_eq!(TileType::Raster.default_tile_schema(), Some("rgba"));
 	/// assert_eq!(TileType::Vector.default_tile_schema(), Some("other"));
 	/// assert_eq!(TileType::Unknown.default_tile_schema(), None);
 	/// ```
@@ -83,7 +84,7 @@ impl TileType {
 	pub fn default_tile_schema(&self) -> Option<&'static str> {
 		use TileType::{Raster, Unknown, Vector};
 		match self {
-			Raster => Some("rgb"),
+			Raster => Some("rgba"),
 			Vector => Some("other"),
 			Unknown => None,
 		}
@@ -157,7 +158,7 @@ mod tests {
 
 	#[test]
 	fn test_default_tile_schema() {
-		assert_eq!(TileType::Raster.default_tile_schema(), Some("rgb"));
+		assert_eq!(TileType::Raster.default_tile_schema(), Some("rgba"));
 		assert_eq!(TileType::Vector.default_tile_schema(), Some("other"));
 		assert_eq!(TileType::Unknown.default_tile_schema(), None);
 	}
