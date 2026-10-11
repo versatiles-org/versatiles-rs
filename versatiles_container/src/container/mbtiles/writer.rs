@@ -206,6 +206,14 @@ impl TilesWriter for MBTilesWriter {
 			)?;
 		}
 
+		// Not a field of the MBTiles spec, which has no place for what the
+		// pixels of a tile mean. Without it, elevation tiles read back from
+		// an MBTiles file are an image like any other, and nothing downstream
+		// knows to keep their heights intact.
+		if let Some(tile_schema) = tilejson.tile_schema {
+			writer.set_metadata("tile_schema", tile_schema.as_str())?;
+		}
+
 		for key in ["name", "author", "type", "description", "version", "license"] {
 			if let Some(value) = tilejson.str(key) {
 				writer.set_metadata(key, value)?;
@@ -280,6 +288,27 @@ mod tests {
 		let written = MBTilesReader::open(file.path(), TilesRuntime::default())?;
 		assert_eq!(written.metadata().tile_compression(), &TileCompression::Gzip);
 		assert_eq!(written.metadata().tile_format(), &TileFormat::MVT);
+		Ok(())
+	}
+
+	/// The tile schema survives the trip through an MBTiles file. Without it,
+	/// elevation tiles came back as an image like any other, and converting
+	/// them on encoded them with loss.
+	#[tokio::test]
+	async fn the_tile_schema_is_stored_and_read_back() -> Result<()> {
+		use versatiles_core::TileSchema;
+
+		let file = NamedTempFile::new("dem.mbtiles")?;
+		let mut reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(2),
+			TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
+		)?;
+		reader.tilejson_mut().tile_schema = Some(TileSchema::RasterDEMMapbox);
+
+		MBTilesWriter::write_to_path(&reader, file.path(), TilesRuntime::default()).await?;
+
+		let written = MBTilesReader::open(file.path(), TilesRuntime::default())?;
+		assert_eq!(written.tilejson().tile_schema, Some(TileSchema::RasterDEMMapbox));
 		Ok(())
 	}
 

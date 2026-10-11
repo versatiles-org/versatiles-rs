@@ -63,6 +63,8 @@ struct Operation {
 	/// never requested. Computed in `build` because it needs the source's
 	/// pyramid, which is async to obtain.
 	tile_pyramid: TilePyramid,
+	/// Whether the tiles hold heights, going by the tile schema of the source.
+	elevation: bool,
 }
 
 impl Operation {
@@ -109,6 +111,10 @@ impl Operation {
 		let operation = Operation {
 			mask: Arc::new(mask),
 			tile_pyramid,
+			elevation: source
+				.tilejson()
+				.tile_schema
+				.is_some_and(|schema| schema.is_elevation()),
 		};
 		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}
@@ -130,6 +136,11 @@ impl TileTransform for Operation {
 			TileClassification::Partial => {
 				// Process using hierarchical subdivision for efficiency
 				let format = tile.format();
+				// The masked tile is a new tile. It keeps the quality the old
+				// one carried, and heights are not encoded with loss by default:
+				// this used to hand a lossless elevation tile on as one to be
+				// encoded at the encoder's own quality.
+				let quality = tile.format_quality().or(self.elevation.then_some(100));
 
 				let image = tile.into_image()?;
 				let (width, height) = (image.width(), image.height());
@@ -153,7 +164,9 @@ impl TileTransform for Operation {
 					}
 				}
 
-				Ok(Some(Tile::from_image(DynamicImage::ImageRgba8(rgba), format)?))
+				let mut tile = Tile::from_image(DynamicImage::ImageRgba8(rgba), format)?;
+				tile.set_format_quality(quality);
+				Ok(Some(tile))
 			}
 		}
 	}
@@ -465,6 +478,37 @@ mod tests {
 			"expected a translucent tile, got {alpha_max}"
 		);
 
+		Ok(())
+	}
+
+	/// A tile the mask cuts through is a new tile. For elevation tiles it has
+	/// to be encoded without loss; it used to get the encoder's own quality.
+	#[rstest::rstest]
+	#[case("meta_update schema=\"dem/mapbox\" | ", Some(100))]
+	#[case("", None)]
+	#[tokio::test]
+	async fn a_masked_elevation_tile_is_encoded_without_loss(
+		#[case] schema: &str,
+		#[case] expected_quality: Option<u8>,
+	) -> Result<()> {
+		let geojson_file = create_test_geojson(); // a square spanning lon/lat 0..10
+		let geojson_path = geojson_file.path().display();
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(&format!(
+				"from_debug format=webp | {schema}raster_mask geojson='{geojson_path}'"
+			))
+			.await?;
+
+		// At level 4 a tile is 22.5° wide: the one east of the meridian holds
+		// the square and a lot more, so the mask cuts through it.
+		let bbox = versatiles_core::TileBBox::new_full(4)?;
+		let tiles = op.tile_stream(bbox).await?.to_vec().await;
+		let cut: Vec<_> = tiles.iter().filter(|(_, tile)| !tile.has_blob()).collect();
+		assert!(!cut.is_empty(), "the mask should cut through a tile");
+		for (coord, tile) in cut {
+			assert_eq!(tile.format_quality(), expected_quality, "{coord:?}");
+		}
 		Ok(())
 	}
 

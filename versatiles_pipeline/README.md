@@ -373,6 +373,8 @@ Unlike `from_stacked`, which picks one source's tile whole, this composites them
 
 With `auto_overscale=true`, a request that no source covers natively returns an empty stream rather than a blank tile. Put a `raster_overscale` _after_ `from_stacked_raster` to fill those in — upscaling one blended tile is cheaper than upscaling each source separately. It fills them up to the highest level any of the sources has, from the nearest level below that has a blended tile.
 
+Elevation sources (tile schema `dem/…`) can be stacked with each other if they all have the same schema; the result keeps it, and is encoded without loss. They cannot be stacked with images, or written as `jpg` or `avif`.
+
 ### Sources
 
 The sources to blend, with the first on top. All must provide raster tiles at the same resolution.

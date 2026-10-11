@@ -86,7 +86,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{future::try_join_all, stream};
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
+use versatiles_core::{TileBBox, TileCoord, TileFormat, TileJSON, TilePyramid, TileSchema, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
 
@@ -110,6 +110,10 @@ use crate::{
 /// cheaper than upscaling each source separately. It fills them up to the
 /// highest level any of the sources has, from the nearest level below that
 /// has a blended tile.
+///
+/// Elevation sources (tile schema `dem/…`) can be stacked with each other if
+/// they all have the same schema; the result keeps it, and is encoded without
+/// loss. They cannot be stacked with images, or written as `jpg` or `avif`.
 struct Args {
 	/// The sources to blend, with the first on top. All must provide raster
 	/// tiles at the same resolution.
@@ -179,6 +183,9 @@ struct Operation {
 	sources: Vec<SourceEntry>,
 	source_types: Vec<Arc<SourceType>>,
 	tilejson: TileJSON,
+	/// Whether the tiles hold heights. A blended tile is a new tile, and has
+	/// to be encoded without loss then.
+	lossless: bool,
 }
 
 /// Fetches and blends tiles from all sources for a single coordinate.
@@ -293,6 +300,32 @@ impl Operation {
 			}
 		}
 
+		// The tile schema is another field `merge_all` leaves alone, and one
+		// `update_tilejson` would fill in with "an image". For elevation tiles
+		// that is wrong in a way that matters: everything behind the stack
+		// that protects heights — scaling them as heights, encoding them
+		// without loss — goes by the schema. So a stack of elevation sources
+		// says that it is one. Heights blended with colors, or with heights
+		// in another encoding, are neither; that is refused.
+		let schemas: Vec<Option<TileSchema>> = original_sources.iter().map(|s| s.tilejson().tile_schema).collect();
+		let elevation = schemas.iter().flatten().find(|schema| schema.is_elevation()).copied();
+		if let Some(elevation) = elevation {
+			ensure!(
+				schemas.iter().all(|schema| *schema == Some(elevation)),
+				"cannot stack elevation tiles ('{elevation}') with tiles of another schema: the sources have {}",
+				schemas
+					.iter()
+					.map(|schema| schema.map_or_else(|| "none".to_string(), |schema| format!("'{schema}'")))
+					.collect::<Vec<_>>()
+					.join(", ")
+			);
+			ensure!(
+				tile_format.can_be_lossless(),
+				"cannot stack elevation tiles ('{elevation}') as '{tile_format}': '{tile_format}' has no lossless encoding. Use format=webp or format=png"
+			);
+			tilejson.tile_schema = Some(elevation);
+		}
+
 		let level_max = pyramid
 			.level_max()
 			.ok_or_else(|| anyhow::anyhow!("combined source pyramid is empty"))?;
@@ -320,6 +353,7 @@ impl Operation {
 			sources,
 			source_types,
 			tilejson,
+			lossless: elevation.is_some(),
 		}) as Box<dyn TileSource>)
 	}
 }
@@ -356,9 +390,10 @@ impl TileSource for Operation {
 
 		let tile_format = *self.metadata.tile_format();
 		let sources = self.sources.clone();
+		let lossless = self.lossless;
 
 		if bbox.width() <= MAX_BBOX_SIZE && bbox.height() <= MAX_BBOX_SIZE {
-			return cell_stream(sources, bbox, tile_format).await;
+			return cell_stream(sources, bbox, tile_format, lossless).await;
 		}
 
 		// A big bbox is answered cell by cell, and a cell is only looked at
@@ -371,7 +406,7 @@ impl TileSource for Operation {
 			stream::iter(cells.into_iter().map(move |cell| {
 				let sources = sources.clone();
 				async move {
-					match cell_stream(sources, cell, tile_format).await {
+					match cell_stream(sources, cell, tile_format, lossless).await {
 						Ok(stream) => stream,
 						Err(error) => {
 							log::error!("Error reading stacked raster tiles in {cell:?}: {error:#}");
@@ -398,6 +433,7 @@ async fn cell_stream(
 	sources: Vec<SourceEntry>,
 	bbox: TileBBox,
 	tile_format: TileFormat,
+	lossless: bool,
 ) -> Result<TileStream<'static, Tile>> {
 	// Keep the layers that can have a tile in the bbox, created ones included.
 	let mut entries: Vec<SourceEntry> = Vec::new();
@@ -461,7 +497,12 @@ async fn cell_stream(
 				};
 				let tile = tile(c, entries, has_own_tile).await.unwrap();
 				if let Some((_coord, mut tile)) = tile {
-					tile.change_format(tile_format, None, None).unwrap();
+					// Heights are encoded without loss wherever they still have
+					// to be encoded: blended, created, or in another format. A
+					// tile passed on as it is keeps its bytes.
+					let passed_on = tile.has_blob() && tile.format() == tile_format;
+					let quality = (lossless && !passed_on).then_some(100);
+					tile.change_format(tile_format, quality, None).unwrap();
 					return Some((c, tile));
 				}
 				tile
@@ -1210,6 +1251,7 @@ mod tests {
 			sources,
 			source_types: vec![],
 			tilejson,
+			lossless: false,
 		};
 
 		let coord = TileCoord::new(request_level, 0, 0).unwrap();
@@ -1422,6 +1464,7 @@ mod tests {
 			sources,
 			source_types: vec![],
 			tilejson,
+			lossless: false,
 		};
 
 		let coord = TileCoord::new(request_level, 0, 0).unwrap();
@@ -1653,6 +1696,7 @@ mod tests {
 			sources: vec![SourceEntry::Filled(Arc::new(filled))],
 			source_types: vec![],
 			tilejson: TileJSON::default(),
+			lossless: false,
 		};
 
 		// 256 × 256 tiles: 64 cells.
@@ -1800,6 +1844,85 @@ mod tests {
 				assert_eq!(tile.into_image()?.average_color(), [255, 0, 0], "{coord:?}");
 			}
 		}
+		Ok(())
+	}
+
+	// ============================================================================
+	// Elevation tiles
+	// ============================================================================
+
+	const HEIGHTS: &str = "from_color color=10203080 format=webp tile_size=256 | meta_update schema=\"dem/mapbox\"";
+
+	/// A stack of elevation sources is an elevation source. It used to say
+	/// `rgba`, and with that everything behind it treated heights as colors:
+	/// `raster_overscale` scaled them channel by channel, `raster_format` and
+	/// `convert` encoded them with loss.
+	#[tokio::test]
+	async fn a_stack_of_elevation_sources_keeps_the_schema() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(&format!("from_stacked_raster [ {HEIGHTS}, {HEIGHTS} ]"))
+			.await?;
+		assert_eq!(op.tilejson().tile_schema, Some(TileSchema::RasterDEMMapbox));
+
+		// Two translucent layers are blended, which makes a new tile. It is
+		// encoded without loss.
+		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();
+		let tile = op.tile_stream(bbox).await?.to_vec().await.remove(0).1;
+		assert!(!tile.has_blob(), "blended, so not encoded yet");
+		assert_eq!(tile.format_quality(), Some(100));
+
+		// A single layer is passed on with its bytes: it is looked at, to see
+		// whether anything beneath could show, but not encoded again.
+		let op = factory
+			.operation_from_vpl(&format!("from_stacked_raster [ {HEIGHTS} ]"))
+			.await?;
+		let tile = op.tile_stream(bbox).await?.to_vec().await.remove(0).1;
+		assert!(tile.has_blob(), "passed on with its bytes");
+		Ok(())
+	}
+
+	/// Heights blended with colors, or with heights in another encoding, are
+	/// neither. And heights cannot go into a format without a lossless encoding.
+	#[rstest]
+	#[case::with_an_image(
+		"from_color color=10203080 format=webp tile_size=256",
+		"",
+		"with tiles of another schema"
+	)]
+	#[case::with_another_encoding(
+		"from_color color=10203080 format=webp tile_size=256 | meta_update schema=\"dem/terrarium\"",
+		"",
+		"with tiles of another schema"
+	)]
+	#[case::into_jpeg(HEIGHTS, "format=jpg", "has no lossless encoding")]
+	#[tokio::test]
+	async fn a_stack_refuses_what_would_spoil_elevation_tiles(
+		#[case] other: &str,
+		#[case] args: &str,
+		#[case] reason: &str,
+	) {
+		let factory = PipelineFactory::new_dummy();
+		let error = factory
+			.operation_from_vpl(&format!("from_stacked_raster {args} [ {HEIGHTS}, {other} ]"))
+			.await
+			.unwrap_err();
+		let message = format!("{error:#}");
+		assert!(message.contains(reason), "{message}");
+		assert!(message.contains("dem/mapbox"), "{message}");
+	}
+
+	/// Images of different kinds still stack: an opaque format under one with
+	/// transparency is the ordinary case.
+	#[tokio::test]
+	async fn images_with_and_without_alpha_still_stack() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_stacked_raster format=png [ from_color color=FF000080 format=png tile_size=256, from_color color=0000FF format=jpg tile_size=256 ]",
+			)
+			.await?;
+		assert_eq!(op.tilejson().tile_schema, Some(TileSchema::RasterRGBA));
 		Ok(())
 	}
 

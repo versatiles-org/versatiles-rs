@@ -22,6 +22,8 @@ struct Args {
 #[derive(Debug)]
 struct Operation {
 	color: Rgb<u8>,
+	/// Whether the tiles hold heights, going by the tile schema of the source.
+	elevation: bool,
 }
 
 impl Operation {
@@ -36,7 +38,13 @@ impl Operation {
 		// not a thing this operation can do, so `RRGGBBAA` is refused here
 		// rather than having its alpha quietly dropped.
 		let color = args.color.map_or(Ok([255, 255, 255]), |color| color.rgb())?;
-		let operation = Operation { color: Rgb(color) };
+		let operation = Operation {
+			color: Rgb(color),
+			elevation: source
+				.tilejson()
+				.tile_schema
+				.is_some_and(|schema| schema.is_elevation()),
+		};
 		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}
 }
@@ -49,8 +57,13 @@ impl TileTransform for Operation {
 			return Ok(Some(tile));
 		}
 		let format = tile.format();
+		// The flattened tile is a new tile; see `raster_mask` for why it takes
+		// the old one's quality along.
+		let quality = tile.format_quality().or(self.elevation.then_some(100));
 		let image = tile.into_image()?.into_flattened(self.color)?;
-		Ok(Some(Tile::from_image(image, format)?))
+		let mut tile = Tile::from_image(image, format)?;
+		tile.set_format_quality(quality);
+		Ok(Some(tile))
 	}
 }
 
@@ -171,5 +184,28 @@ mod tests {
 		let factory = Factory {};
 		let docs = factory.docs();
 		assert!(docs.contains("color"));
+	}
+
+	/// A flattened tile is a new tile, and takes the quality along that the
+	/// old one carried; for elevation tiles it is encoded without loss.
+	#[rstest::rstest]
+	#[case("meta_update schema=\"dem/mapbox\" | ", Some(100))]
+	#[case("", None)]
+	#[tokio::test]
+	async fn a_flattened_elevation_tile_is_encoded_without_loss(
+		#[case] schema: &str,
+		#[case] expected_quality: Option<u8>,
+	) -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(&format!(
+				"from_color color=10203080 format=webp tile_size=256 | {schema}raster_flatten"
+			))
+			.await?;
+		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();
+		let tile = op.tile_stream(bbox).await?.to_vec().await.remove(0).1;
+		assert!(!tile.has_blob(), "flattened, so not encoded yet");
+		assert_eq!(tile.format_quality(), expected_quality);
+		Ok(())
 	}
 }

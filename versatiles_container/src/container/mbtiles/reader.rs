@@ -67,7 +67,8 @@ use versatiles_core::{
 	TileFormat::{JPG, MVT, PNG, WEBP},
 	json::parse_json_str,
 	types::{
-		Blob, GeoBBox, GeoCenter, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
+		Blob, GeoBBox, GeoCenter, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileSchema,
+		TileStream,
 	},
 };
 use versatiles_derive::context;
@@ -229,6 +230,14 @@ impl MBTilesReader {
 						.map(str::parse::<f64>)
 						.collect::<Result<Vec<f64>, _>>()?;
 					self.tilejson.center = Some(GeoCenter::try_from(parts)?);
+				}
+				// Written by this crate's MBTiles writer; see there. A value
+				// this version does not know is left out, not an error: the
+				// file is still readable.
+				"tile_schema" => {
+					if let Ok(tile_schema) = TileSchema::try_from(value) {
+						self.tilejson.tile_schema = Some(tile_schema);
+					}
 				}
 				"minzoom" => self.tilejson.set_zoom_min(value.parse::<u8>()?),
 				"maxzoom" => self.tilejson.set_zoom_max(value.parse::<u8>()?),
