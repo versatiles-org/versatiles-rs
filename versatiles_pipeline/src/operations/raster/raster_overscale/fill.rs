@@ -1018,6 +1018,67 @@ mod tests {
 		Ok(())
 	}
 
+	// --- behind a stack of sources ---
+
+	/// The setup the operation is meant for: imagery of the whole world at
+	/// low levels, and of one region at high levels on top, blended by
+	/// `from_stacked_raster`. Where only the world layer has anything, the
+	/// stack emits no tile above that layer's own levels, and lists the
+	/// coordinate all the same.
+	#[tokio::test]
+	async fn behind_a_stack_it_fills_what_the_stack_leaves_out() -> Result<()> {
+		use versatiles_image::DynamicImageTraitOperation;
+
+		let factory = crate::PipelineFactory::new_dummy();
+		let stack = r"from_stacked_raster auto_overscale=true [
+			from_color color=FF0000 format=png tile_size=256 | filter level_max=5 bbox=[10,10,40,40],
+			from_color color=0000FF format=png tile_size=256 | filter level_max=2
+		]";
+		let color_at = async |vpl: String, level: u8, x: u32, y: u32| -> Result<Option<Vec<u8>>> {
+			let op = factory.operation_from_vpl(&vpl).await?;
+			let mut tiles = op.tile_stream(coord(level, x, y).to_tile_bbox()).await?.to_vec().await;
+			Ok(tiles.pop().map(|(_, tile)| tile.into_image().unwrap().average_color()))
+		};
+		// At level 5, inside the region and far away from it.
+		let inside = (5, 18, 13);
+		let outside = (5, 3, 28);
+
+		// The stack by itself: the region, and a hole everywhere else.
+		assert_eq!(
+			color_at(stack.to_string(), inside.0, inside.1, inside.2).await?,
+			Some(vec![255, 0, 0])
+		);
+		assert_eq!(
+			color_at(stack.to_string(), outside.0, outside.1, outside.2).await?,
+			None
+		);
+
+		// With the operation behind it: the region as it was, the world layer
+		// scaled up around it.
+		let filled = format!("{stack} | raster_overscale");
+		assert_eq!(
+			color_at(filled.clone(), inside.0, inside.1, inside.2).await?,
+			Some(vec![255, 0, 0])
+		);
+		assert_eq!(
+			color_at(filled.clone(), outside.0, outside.1, outside.2).await?,
+			Some(vec![0, 0, 255])
+		);
+
+		let op = factory.operation_from_vpl(&filled).await?;
+		for level in 3..=5u8 {
+			let bbox = TileBBox::new_full(level)?;
+			let count = 1usize << (2 * level);
+			assert_eq!(op.tile_stream(bbox).await?.to_vec().await.len(), count, "level {level}");
+			assert_eq!(
+				op.tile_coord_stream(bbox).await?.to_vec().await.len(),
+				count,
+				"level {level}"
+			);
+		}
+		Ok(())
+	}
+
 	// --- a source that lists tiles it does not deliver ---
 
 	/// `DummyImageSource` reports every coordinate of its pyramid, and this
