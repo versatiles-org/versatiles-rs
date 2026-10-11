@@ -21,10 +21,10 @@
 //!     - "https://*.example.net"
 //!   max_age_seconds: 86400         # optional
 //!
-//! # Optional extra HTTP response headers
+//! # Optional extra HTTP response headers, added to every response
 //! extra_response_headers:
-//!   Cache-Control: "public, max-age=86400, immutable"
-//!   CDN-Cache-Control: "max-age=604800"
+//!   Timing-Allow-Origin: "*"
+//!   X-Robots-Tag: "noindex"
 //!
 //! # Optional list of static content sources
 //! static:
@@ -85,12 +85,13 @@ pub struct Config {
 	pub cors: CorsConfig,
 
 	/// Optional extra HTTP response headers to add to every response
-	/// For example, cache control or timing headers
+	/// "Every" includes a 404 and an error, so this is not the place for
+	/// `Cache-Control`: set that with `server.cache_control`
 	#[serde(default)]
 	#[config_demo(
 		r#"
-  Cache-Control: public, max-age=86400, immutable
-  CDN-Cache-Control: max-age=604800"#
+  Timing-Allow-Origin: "*"
+  X-Robots-Tag: noindex"#
 	)]
 	pub extra_response_headers: HashMap<String, String>,
 
@@ -193,7 +194,7 @@ mod tests {
 					minimal_recompression: Some(true),
 					disable_api: Some(true),
 					follow_symlinks: None,
-					cache_control: None,
+					cache_control: Some("public, max-age=86400, immutable".to_string()),
 				},
 				cors: CorsConfig {
 					allowed_origins: vec![
@@ -202,15 +203,10 @@ mod tests {
 					],
 					max_age_seconds: Some(86400)
 				},
-				extra_response_headers: [
-					("Timing-Allow-Origin", "*"),
-					("CDN-Cache-Control", "max-age=604800"),
-					("Cache-Control", "public, max-age=86400, immutable"),
-					("Surrogate-Control", "max-age=604800")
-				]
-				.iter()
-				.map(|(a, b)| (a.to_string(), b.to_string()))
-				.collect::<HashMap<String, String>>(),
+				extra_response_headers: [("Timing-Allow-Origin", "*"), ("X-Robots-Tag", "noindex")]
+					.iter()
+					.map(|(a, b)| (a.to_string(), b.to_string()))
+					.collect::<HashMap<String, String>>(),
 				static_sources: vec![
 					StaticSourceConfig::from(("/", "../testdata/static.tar.br")),
 					StaticSourceConfig::from(("/whynot/", "../testdata/static.tar.gz")),
@@ -264,13 +260,10 @@ mod tests {
 					allowed_origins: vec!["https://example.org".to_string(), "https://*.example.net".to_string()],
 					max_age_seconds: Some(86400),
 				},
-				extra_response_headers: [
-					("CDN-Cache-Control", "max-age=604800"),
-					("Cache-Control", "public, max-age=86400, immutable"),
-				]
-				.iter()
-				.map(|(a, b)| (a.to_string(), b.to_string()))
-				.collect::<HashMap<String, String>>(),
+				extra_response_headers: [("Timing-Allow-Origin", "*"), ("X-Robots-Tag", "noindex")]
+					.iter()
+					.map(|(a, b)| (a.to_string(), b.to_string()))
+					.collect::<HashMap<String, String>>(),
 				static_sources: vec![StaticSourceConfig::from(("/", "./frontend.tar")),],
 				tile_sources: vec![TileSourceConfig::from(("osm", "osm.versatiles")),],
 			}

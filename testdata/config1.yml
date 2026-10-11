@@ -5,6 +5,9 @@ server:
   port: 51234
   minimal_recompression: true
   disable_api: true
+  # `Cache-Control` of tiles, `tiles.json` and static files. Not sent with a 404
+  # or an error, which is why it is set here and not under the extra headers.
+  cache_control: "public, max-age=86400, immutable"
 
 # --- CORS & Headers ----------------------------------------------------------
 # CORS applies to API and tile/static responses.
@@ -17,17 +20,15 @@ cors:
   # Preflight cache duration in seconds (Access-Control-Max-Age).
   max_age_seconds: 86400
 
-# Extra response headers (useful behind CDNs). Keys are case-insensitive.
-# These are added to every HTTP response. If a header already exists, this overrides it.
+# Extra response headers. Keys are case-insensitive.
+# These are added to every HTTP response, a 404 and an error included. If a
+# header already exists, this overrides it. So no cache headers here: an error
+# would be cached like a tile.
 extra_response_headers:
-  # Encourage long-lived caching for immutable tiles while letting the CDN keep longer.
-  Cache-Control: "public, max-age=86400, immutable"
-  # For CDNs that honor surrogate controls (Fastly, Varnish):
-  Surrogate-Control: "max-age=604800"
-  # Some CDNs read this separately (Cloudflare, etc.)
-  CDN-Cache-Control: "max-age=604800"
   # Useful for resource timing across origins; align with your CORS policy.
   Timing-Allow-Origin: "*"
+  # Keep the tile URLs out of search engines.
+  X-Robots-Tag: "noindex"
 
 # --- Static mounts -----------------------------------------------------------
 static:

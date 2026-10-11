@@ -53,7 +53,7 @@ server:
   # Defaults to false (a symlink may not leave the folder)
   follow_symlinks: false
 
-  # Optional `Cache-Control` header sent with every tile
+  # Optional `Cache-Control` header sent with tiles, `tiles.json` and static files
   # Defaults to "public, max-age=2419200, no-transform" (four weeks)
   #
   # Tile URLs are stable — built from a mount name and a coordinate — so a
@@ -88,10 +88,11 @@ cors:
   max_age_seconds: 86400
 
 # Optional extra HTTP response headers to add to every response
-# For example, cache control or timing headers
+# "Every" includes a 404 and an error, so this is not the place for
+# `Cache-Control`: set that with `server.cache_control`
 extra_response_headers:
-  Cache-Control: public, max-age=86400, immutable
-  CDN-Cache-Control: max-age=604800
+  Timing-Allow-Origin: "*"
+  X-Robots-Tag: noindex
 
 # Optional list of static content sources
 static:

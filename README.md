@@ -309,6 +309,8 @@ versatiles convert input.mbtiles output.versatiles
 | `--writer-option`          | Format-specific output option (repeatable)                                         | `--writer-option=allow_unclustered=true` |
 | `--force`                  | Replace a destination directory that is not empty                                  | `--force`                                |
 
+**Elevation tiles.** Tiles whose tile schema says they hold heights (`dem/mapbox`, `dem/terrarium`, `dem/versatiles`) are re-encoded without loss when `--tile-format` names a format and no quality: a lossy encoder changes the color bytes a little, and each byte is part of a height. `webp` and `png` can do that; `avif` and `jpg` cannot, so `--tile-format=avif` on such tiles is refused unless you name a quality yourself (`--tile-format=avif,90`) and accept the loss. Other tiles get the encoder's default quality, as before.
+
 **How the output is written.** A conversion builds its output beside the destination, under a `.<name>.tmp` name, and moves it into place as the last step. The destination therefore only ever holds a complete container: a conversion that fails part-way leaves whatever was there before exactly as it was, and leaves nothing new behind. (A crash leaves the `.tmp` behind; the next run to that destination clears it.) Writing to a _new_ path costs no extra disk — the bytes live under one name and the move is free — but overwriting an existing output holds both copies until the move completes.
 
 Writing to a directory replaces its entire contents, so a re-run over a smaller area cannot leave tiles from a previous run mixed in with the new ones. Because that deletes whatever else is inside, an existing non-empty directory is refused unless you pass `--force`. Overwriting a _file_ needs no such flag: that is atomic, and the previous output survives until the new one is complete.
@@ -474,7 +476,9 @@ versatiles serve tiles.versatiles
 
 `--cache-control` defaults to `public, max-age=2419200, no-transform`: four
 weeks, right for a public tile server. Set something shorter when the tiles
-behind a URL change.
+behind a URL change. The header is sent with everything the server answers
+with data: tiles, the 204 of an empty tile, `tiles.json` and static files. It
+is not sent with a 404 or an error.
 
 **Tiles without data:**
 
@@ -488,6 +492,7 @@ outside the covered area) is answered by tile type:
 | Zoom level outside the tile source's zoom range | 404    | 404    |
 | Coordinates that cannot exist, unknown source   | 404    | 404    |
 | The tile cannot be read                         | 500    | 500    |
+| The answer takes longer than 15 s, or overload  | 503    | 503    |
 
 - A vector tile without data gets `204 No Content` and the `Cache-Control` of
   a tile. A map shows the same either way, and unlike a 404 it leaves no
@@ -497,10 +502,18 @@ outside the covered area) is answered by tile type:
   drawn as a transparent tile. A raster source with gaps at its high zoom
   levels keeps working that way. To fill such gaps on the server instead, see
   `raster_overscale` in `versatiles help pipeline`.
-- A tile that exists but cannot be read (a remote source that stopped
-  answering, a damaged file) gets `500 Internal Server Error`, without a
-  `Cache-Control`, and the reason goes to the log. It is not a missing tile,
-  and must not be kept as one by a proxy.
+- A tile that exists but cannot be read (a remote source that answers with
+  an error, a damaged file) gets `500 Internal Server Error`, without the
+  `Cache-Control` of a tile, and the reason goes to the log. It is not a
+  missing tile, and must not be kept as one by a proxy.
+- A request that is not answered within 15 seconds (a remote source that
+  stopped answering), or that arrives while the server has more requests than
+  it can queue, gets `503 Service Unavailable` with `Retry-After: 2`.
+
+Headers set under `extra_response_headers` in the configuration file are added
+to every response, the 404, 500 and 503 included. A `Cache-Control` set there
+replaces the one described here and puts it on errors too, so set the cache
+header with `--cache-control` or `server.cache_control` instead.
 
 `--minimal-recompression`, `--disable-api` and `--follow-symlinks` can be given
 on their own or with `true`/`false`; left out, the configuration file decides.
@@ -767,14 +780,22 @@ The first four forms are matched on the parts of an origin — scheme, host labe
 
 Any other use of `*` is refused at startup, and the error names a replacement. Versions before 5.0 accepted open-ended globs that matched on raw string edges: `https://example.*` also allowed `https://example.attacker.test`, `*example.org` allowed `https://notexample.org`, and a scheme-less `*.example.org` allowed `http://` as well as `https://`. Use `https://*.example.org` for subdomains and `https://example.org:*` for ports. A regex must be anchored with `^...$`; `/example\.org/` is refused.
 
-**Custom Response Headers** - Add caching and CDN headers:
+**Caching** - Set the `Cache-Control` of tiles, `tiles.json` and static files:
+
+```yaml
+server:
+  cache_control: "public, max-age=86400, immutable"
+```
+
+**Custom Response Headers** - Add headers to every response:
 
 ```yaml
 extra_response_headers:
-  Cache-Control: "public, max-age=86400, immutable"
-  Surrogate-Control: "max-age=604800" # For Varnish
-  CDN-Cache-Control: "max-age=604800" # For CDNs
+  Timing-Allow-Origin: "*"
+  X-Robots-Tag: "noindex"
 ```
+
+These are added to every response, errors included, and replace a header of the same name the server would have set. That makes this the wrong place for `Cache-Control`: a 404 or a 500 would then be cached like a tile. The same goes for a CDN's own cache header (`CDN-Cache-Control`, `Surrogate-Control`) unless your CDN ignores it on errors.
 
 Every response carries `X-Content-Type-Options: nosniff` by default, so a browser uses the `Content-Type` the server sent instead of guessing from the bytes — a file with an unknown extension is served as `application/octet-stream`, and a browser left to guess may decide it is HTML. Setting the header in `extra_response_headers` overrides the default.
 
@@ -823,15 +844,13 @@ server:
   ip: 0.0.0.0
   port: 8080
   minimal_recompression: false
+  cache_control: "public, max-age=86400"
 
 cors:
   allowed_origins:
     - "https://myapp.com"
     - "https://*.myapp.dev"
   max_age_seconds: 86400
-
-extra_response_headers:
-  Cache-Control: "public, max-age=86400"
 
 tiles:
   - name: basemap

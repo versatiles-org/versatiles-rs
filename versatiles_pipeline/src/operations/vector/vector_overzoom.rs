@@ -71,11 +71,11 @@ const CACHE_CAPACITY_BYTES: u64 = 256 * 1024 * 1024;
 /// in it. To overzoom from a lower level than the source's highest, put
 /// `filter level_max=…` in front.
 ///
-/// `level_max` has to be set above the source's highest level for the
-/// operation to have anything to do. Each extra level quadruples the tile
-/// count.
+/// `level_max` has to be set, and above the source's highest level: left out
+/// or lower, the operation has nothing to do and is refused. Each extra level
+/// quadruples the tile count.
 pub struct Args {
-	/// Highest zoom level to serve, capped at `30`. Defaults to the source's highest.
+	/// Highest zoom level to serve, capped at `30`. Defaults to the source's highest, which is refused.
 	pub level_max: Option<ZoomLevel>,
 
 	/// Clip buffer in tile-extent units, so edge-straddling features survive. Defaults to `80`.

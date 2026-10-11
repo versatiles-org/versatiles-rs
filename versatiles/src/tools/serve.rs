@@ -78,7 +78,7 @@ pub struct Subcommand {
 	)]
 	pub follow_symlinks: Option<bool>,
 
-	/// Cache-Control header sent with every tile, e.g. "no-cache"
+	/// Cache-Control header for tiles, tiles.json and static files, e.g. "no-cache"
 	///
 	/// Tile URLs are stable, so a client answers from its own cache when the
 	/// tiles behind a mount change. The default of four weeks suits a public,

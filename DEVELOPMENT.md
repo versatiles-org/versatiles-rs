@@ -462,7 +462,8 @@ pyramid.intersect_geo_bbox(&geo_bbox)?;
 
 let min_zoom = pyramid.level_min(); // Option<u8>
 let max_zoom = pyramid.level_max(); // Option<u8>
-let geo      = pyramid.geo_bbox();  // Option<GeoBBox>
+let top      = pyramid.geo_bbox();   // Option<GeoBBox>: the highest level only
+let geo      = pyramid.geo_extent(); // Option<GeoBBox>: every level taken into account
 ```
 
 ### `PyramidInfo` Trait
@@ -471,9 +472,9 @@ let geo      = pyramid.geo_bbox();  // Option<GeoBBox>
 
 ```rust
 pub trait PyramidInfo {
-    fn get_geo_bbox(&self) -> Option<GeoBBox>;
-    fn get_zoom_min(&self) -> Option<u8>;
-    fn get_zoom_max(&self) -> Option<u8>;
+    fn geo_extent(&self) -> Option<GeoBBox>;
+    fn level_min(&self) -> Option<u8>;
+    fn level_max(&self) -> Option<u8>;
 }
 ```
 

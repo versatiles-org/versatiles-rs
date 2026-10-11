@@ -578,11 +578,11 @@ A tile the source has is passed on untouched. A tile it lacks is created from th
 
 Tiles are only created inside the bounds of the source, so set them with `meta_update bounds=…` in front if they are missing or too wide. A tile that would be completely transparent is not created; a transparent tile the source has is passed on like any other. Nothing is created below the source's lowest level.
 
-Elevation tiles are scaled as heights, not as colors, and encoded without loss. They are recognised by the tile schema of the source, `dem/mapbox` or `dem/terrarium`; set it with `meta_update schema=…` in front if the source does not declare it.
+Elevation tiles are scaled as heights, not as colors, and encoded without loss. They are recognised by the tile schema of the source, `dem/mapbox` or `dem/terrarium`; set it with `meta_update schema=…` in front if the source does not declare it. A source with the schema `dem/versatiles` is refused: its tiles cannot be scaled as heights.
 
 A source whose bounds are the whole world is filled for the whole world, which is fine for serving and far too many tiles to write to a file at a high `level_max`.
 
-The tiles created are encoded with the encoder's own settings, which aim at keeping detail these tiles do not have: at the default quality a created WebP tile is as large as one of the source's, and most of the time it takes to create goes into encoding it. Put `raster_format` behind this operation to change that, e.g. `raster_format quality=75 effort=0`. It reaches the created tiles only; the tiles of the source keep their bytes.
+The tiles created are encoded with the encoder's own settings, which aim at keeping detail these tiles do not have: at the default quality a created WebP tile is as large as one of the source's, and most of the time it takes to create goes into encoding it. Put `raster_format` behind this operation to change that, e.g. `raster_format quality=75 effort=0`. It reaches the created tiles only; the tiles of the source keep their bytes. Not for elevation tiles: a quality below 100 changes their heights.
 
 ### Parameters
 
@@ -784,11 +784,11 @@ A tile the source has is passed through unchanged. A tile above the source's hig
 
 Nothing is created at or below the source's highest level, and nothing from a tile further down: a vector tile the source lacks is a place with nothing in it. To overzoom from a lower level than the source's highest, put `filter level_max=…` in front.
 
-`level_max` has to be set above the source's highest level for the operation to have anything to do. Each extra level quadruples the tile count.
+`level_max` has to be set, and above the source's highest level: left out or lower, the operation has nothing to do and is refused. Each extra level quadruples the tile count.
 
 ### Parameters
 
-- _`level_max`: 0-30 (optional)_ - Highest zoom level to serve, capped at `30`. Defaults to the source's highest.
+- _`level_max`: 0-30 (optional)_ - Highest zoom level to serve, capped at `30`. Defaults to the source's highest, which is refused.
 - _`buffer`: u32 (optional)_ - Clip buffer in tile-extent units, so edge-straddling features survive. Defaults to `80`.
 
 ---

@@ -66,7 +66,8 @@ use crate::{PipelineFactory, operations::removed::refuse_removed_parameters, vpl
 /// Elevation tiles are scaled as heights, not as colors, and encoded without
 /// loss. They are recognised by the tile schema of the source, `dem/mapbox` or
 /// `dem/terrarium`; set it with `meta_update schema=…` in front if the source
-/// does not declare it.
+/// does not declare it. A source with the schema `dem/versatiles` is refused:
+/// its tiles cannot be scaled as heights.
 ///
 /// A source whose bounds are the whole world is filled for the whole world,
 /// which is fine for serving and far too many tiles to write to a file at a
@@ -78,6 +79,7 @@ use crate::{PipelineFactory, operations::removed::refuse_removed_parameters, vpl
 /// it takes to create goes into encoding it. Put `raster_format` behind this
 /// operation to change that, e.g. `raster_format quality=75 effort=0`. It
 /// reaches the created tiles only; the tiles of the source keep their bytes.
+/// Not for elevation tiles: a quality below 100 changes their heights.
 pub struct Args {
 	/// Highest zoom level to create tiles at. Defaults to the source's highest.
 	pub level_max: Option<ZoomLevel>,

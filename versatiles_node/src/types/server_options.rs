@@ -80,7 +80,7 @@ pub struct ServerOptions {
 	/// **Default:** `false` (optimal recompression)
 	pub minimal_recompression: Option<bool>,
 
-	/// `Cache-Control` header sent with every tile
+	/// `Cache-Control` header sent with tiles, `tiles.json` and static files
 	///
 	/// Tile URLs are stable — built from a mount name and a coordinate — so
 	/// when the tiles behind a mount change, the URL does not, and the browser

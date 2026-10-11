@@ -316,6 +316,7 @@ Create a new tile server.
   - `ip` (string): IP address to bind (default: `"0.0.0.0"`)
   - `port` (number): Port number (default: `8080`)
   - `minimalRecompression` (boolean): Use minimal recompression
+  - `cacheControl` (string): `Cache-Control` header sent with tiles, `tiles.json` and static files (default: `"public, max-age=2419200, no-transform"`, four weeks). Set something shorter, e.g. `"no-cache"`, when the tiles behind a name change.
 
 #### `server.addTileSourceFromPath(name, path)`
 

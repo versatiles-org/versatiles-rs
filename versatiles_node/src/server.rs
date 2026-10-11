@@ -58,8 +58,8 @@ type StaticSourceList = Mutex<Vec<(String, Option<String>)>>; // Vec of (path, u
 /// const server = new TileServer({ port: 8080 });
 ///
 /// // Add tile sources
-/// await server.addTileSource('osm', 'tiles/osm.versatiles');
-/// await server.addTileSource('terrain', 'tiles/terrain.mbtiles');
+/// await server.addTileSourceFromPath('osm', 'tiles/osm.versatiles');
+/// await server.addTileSourceFromPath('terrain', 'tiles/terrain.mbtiles');
 ///
 /// // Add static content
 /// await server.addStaticSource('public/', '/');
@@ -69,7 +69,7 @@ type StaticSourceList = Mutex<Vec<(String, Option<String>)>>; // Vec of (path, u
 /// console.log(`Server running on port ${server.port}`);
 ///
 /// // Hot reload: add more sources while running
-/// await server.addTileSource('satellite', 'tiles/satellite.pmtiles');
+/// await server.addTileSourceFromPath('satellite', 'tiles/satellite.pmtiles');
 ///
 /// // Clean up
 /// await server.stop();
@@ -293,7 +293,7 @@ impl TileServer {
 	///
 	/// ```javascript
 	/// const server = new TileServer({ port: 8080 });
-	/// await server.addTileSource('osm', 'tiles.versatiles');
+	/// await server.addTileSourceFromPath('osm', 'tiles.versatiles');
 	/// await server.start();
 	/// console.log('Server started successfully');
 	/// ```

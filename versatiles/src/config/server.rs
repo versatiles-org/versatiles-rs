@@ -65,7 +65,7 @@ pub struct ServerConfig {
 	#[config_demo("false")]
 	pub follow_symlinks: Option<bool>,
 
-	/// Optional `Cache-Control` header sent with every tile
+	/// Optional `Cache-Control` header sent with tiles, `tiles.json` and static files
 	/// Defaults to "public, max-age=2419200, no-transform" (four weeks)
 	///
 	/// Tile URLs are stable — built from a mount name and a coordinate — so a
@@ -89,7 +89,7 @@ impl ServerConfig {
 			self.ip.clone_from(ip);
 		}
 	}
-	/// Overrides the `Cache-Control` header sent with tiles, if a value is given.
+	/// Overrides the `Cache-Control` header, if a value is given.
 	pub fn override_optional_cache_control(&mut self, cache_control: &Option<String>) {
 		if cache_control.is_some() {
 			self.cache_control.clone_from(cache_control);
