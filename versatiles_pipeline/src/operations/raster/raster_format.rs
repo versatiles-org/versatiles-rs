@@ -2,7 +2,7 @@ use std::str;
 
 use anyhow::{Result, ensure};
 use versatiles_container::{Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileCompression, TileCoord, TileFormat, TileSchema, bounded_number};
+use versatiles_core::{TileCompression, TileCoord, TileFormat, bounded_number};
 use versatiles_derive::context;
 
 use crate::{
@@ -33,7 +33,9 @@ use crate::{
 /// ignored for PNG, which is always lossless.
 ///
 /// For elevation tiles (tile schema `dem/…`), `quality` defaults to `100`:
-/// their channels are heights, and a lossy encoder would change them.
+/// their channels are heights, and a lossy encoder would change them. `avif`
+/// and `jpg` have no lossless encoding, so converting elevation tiles into one
+/// of them needs a `quality` for every zoom level.
 ///
 /// `quality_translucent` is typically `100`: lossy encoders handle an alpha
 /// channel badly. Setting it makes every tile that is encoded be checked for
@@ -83,17 +85,41 @@ impl Operation {
 		// Parsed already: `QualityByZoom` is what `Args` decodes into, so a bad
 		// zoom list fails in `from_vpl_node` — and in `check`, which asks the
 		// same parser without building anything.
+		let schema = source.tilejson().tile_schema;
 		let operation = Operation {
 			format: format.into(),
 			quality: args.quality.unwrap_or_default().into_levels(),
 			quality_translucent: args.quality_translucent.map(QualityByZoom::into_levels),
 			effort: args.effort.map(Effort::get),
 			force_reencode: args.force_reencode.unwrap_or(false),
-			elevation: matches!(
-				source.tilejson().tile_schema,
-				Some(TileSchema::RasterDEMMapbox | TileSchema::RasterDEMTerrarium | TileSchema::RasterDEMVersatiles)
-			),
+			elevation: schema.is_some_and(|schema| schema.is_elevation()),
 		};
+
+		// A format without a lossless encoding cannot take quality 100, and
+		// the encoder says so only at the first tile, from inside a stream.
+		// Said here, it is an error of the pipeline and names the remedy.
+		if !operation.format.can_be_lossless() {
+			let asks_for_lossless = |levels: &[Option<u8>; 32]| levels.contains(&Some(100));
+			ensure!(
+				!asks_for_lossless(&operation.quality)
+					&& !operation.quality_translucent.as_ref().is_some_and(asks_for_lossless),
+				"'{}' has no lossless encoding: quality has to be below 100",
+				operation.format
+			);
+			// Elevation tiles default to "without loss", which is not on offer
+			// here. Only where the format changes: tiles already in the format
+			// are passed on as they are.
+			let changes_format = operation.format != *source.metadata().tile_format();
+			ensure!(
+				!(operation.elevation && changes_format && operation.quality.contains(&None)),
+				"cannot encode elevation tiles ('{}') as '{}' without loss: '{}' has no lossless encoding. \
+				 Use format=webp or format=png, or give a quality below 100 for every zoom level \
+				 to accept that the heights change",
+				schema.map_or_else(String::new, |schema| schema.to_string()),
+				operation.format,
+				operation.format
+			);
+		}
 		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}
 }
@@ -402,6 +428,43 @@ mod tests {
 		assert!(heights_survive("format=webp effort=0").await?);
 		assert!(!heights_survive("format=webp quality=80").await?);
 		Ok(())
+	}
+
+	/// AVIF and JPEG have no lossless encoding, so elevation tiles cannot get
+	/// their default there. That used to surface at the first tile, as the
+	/// encoder's refusal from inside a stream.
+	#[rstest]
+	#[case("format=avif", Some("without loss"))]
+	#[case("format=jpg", Some("without loss"))]
+	#[case("format=avif quality=\"14:80\"", Some("for every zoom level"))]
+	#[case("format=avif quality=100", Some("has no lossless encoding"))]
+	#[case("format=avif quality=90", None)]
+	#[case("format=jpg quality=\"90,14:80\"", None)]
+	#[case("format=webp", None)]
+	#[case("", None)]
+	#[tokio::test]
+	async fn elevation_tiles_into_a_format_without_lossless_need_a_quality(
+		#[case] format_args: &str,
+		#[case] refused_with: Option<&str>,
+	) {
+		let factory = PipelineFactory::new_dummy();
+		let vpl = format!("from_debug format=png | meta_update schema=\"dem/mapbox\" | raster_format {format_args}");
+		let result = factory.operation_from_vpl(&vpl).await;
+		match refused_with {
+			Some(needle) => {
+				let Err(error) = result else {
+					panic!("should be refused: {vpl}");
+				};
+				let message = format!("{error:#}");
+				assert!(message.contains(needle), "{message}");
+			}
+			None => assert!(result.is_ok(), "{:#}", result.err().unwrap()),
+		}
+
+		// For a source that is not elevation data, the encoder's default is fine.
+		let plain = format!("from_debug format=png | raster_format {format_args}");
+		let refused = factory.operation_from_vpl(&plain).await.is_err();
+		assert_eq!(refused, format_args.contains("quality=100"), "{plain}");
 	}
 
 	#[tokio::test]

@@ -338,6 +338,23 @@ impl TileFormat {
 		self.to_type() == TileType::Raster
 	}
 
+	/// Whether an image can be stored in this format without loss: `PNG`
+	/// always is, `WEBP` is at quality 100. `AVIF` and `JPG` cannot here —
+	/// their encoders refuse quality 100.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileFormat;
+	///
+	/// assert!(TileFormat::WEBP.can_be_lossless());
+	/// assert!(!TileFormat::JPG.can_be_lossless());
+	/// ```
+	#[must_use]
+	pub fn can_be_lossless(&self) -> bool {
+		matches!(self, PNG | WEBP)
+	}
+
 	/// Check if this format represents vector data (MVT tiles).
 	///
 	/// Returns `true` only for `MVT` (Mapbox Vector Tiles).

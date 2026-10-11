@@ -125,7 +125,8 @@ pub struct Subcommand {
 	/// set the output tile format, e.g. "webp", "webp,80", "avif,90,50"
 	///
 	/// Elevation tiles (tile schema "dem/…") are converted without loss unless
-	/// a quality is given: their channels are heights.
+	/// a quality is given: their channels are heights. "avif" and "jpg" have
+	/// no lossless encoding, so for elevation tiles they need a quality.
 	#[arg(long, value_name = "format[,quality][,effort]", display_order = 3)]
 	tile_format: Option<String>,
 

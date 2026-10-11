@@ -45,8 +45,7 @@ use std::{path::Path, sync::Arc};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use versatiles_core::{
-	GeoBBox, GeoCrop, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileRemap, TileSchema,
-	TileStream,
+	GeoBBox, GeoCrop, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileRemap, TileStream,
 };
 use versatiles_derive::context;
 
@@ -334,13 +333,27 @@ impl TilesConvertReader {
 			// of a channel, and with it a height. Whoever wants that has to
 			// ask for it. Only where the format really changes: tiles already
 			// in the target format are passed on as they are, and should be.
-			let elevation = matches!(
-				reader.tilejson().tile_schema,
-				Some(TileSchema::RasterDEMMapbox | TileSchema::RasterDEMTerrarium | TileSchema::RasterDEMVersatiles)
-			);
+			let schema = reader.tilejson().tile_schema;
+			let elevation = schema.is_some_and(|schema| schema.is_elevation());
 			if elevation && tile_format != source_format && cp.format_quality.is_none() {
+				// Where "without loss" is not on offer, the choice is the
+				// user's to make, not ours to make silently — and not the
+				// encoder's to refuse at the first tile, deep inside a stream.
+				ensure!(
+					tile_format.can_be_lossless(),
+					"cannot convert elevation tiles ('{}') to '{tile_format}' without loss: \
+					 '{tile_format}' has no lossless encoding. Use 'webp' or 'png', \
+					 or give a quality below 100 to accept that the heights change",
+					schema.map_or_else(String::new, |schema| schema.to_string())
+				);
 				cp.format_quality = Some(100);
 			}
+
+			// Refused here rather than by the encoder, for the same reason.
+			ensure!(
+				tile_format.can_be_lossless() || cp.format_quality != Some(100),
+				"'{tile_format}' has no lossless encoding: quality has to be below 100"
+			);
 		}
 
 		if let Some(tile_compression) = cp.tile_compression {
@@ -464,7 +477,7 @@ mod tests {
 		GeoBBox, TileBBox,
 		TileCompression::*,
 		TileFormat::{self, *},
-		TilePyramid,
+		TilePyramid, TileSchema,
 	};
 
 	use super::*;
@@ -814,6 +827,47 @@ mod tests {
 			quality_of_converted_tile(get_mock_reader(PNG, Uncompressed), to_webp(None)).await?,
 			None
 		);
+		Ok(())
+	}
+
+	/// AVIF and JPEG have no lossless encoding. Asked to convert elevation
+	/// tiles into one of them without a quality, the converter used to pick
+	/// "lossless" and leave the encoder to refuse it at the first tile, which
+	/// surfaced as a panic. Now it says so before a tile is read.
+	#[rstest]
+	#[case(AVIF)]
+	#[case(JPG)]
+	#[tokio::test]
+	async fn elevation_tiles_into_a_format_without_lossless_need_a_quality(#[case] format: TileFormat) -> Result<()> {
+		let to = |format_quality| TilesConverterParameters {
+			tile_format: Some(format),
+			format_quality,
+			..Default::default()
+		};
+
+		let error = TilesConvertReader::new_from_reader(get_elevation_reader(), to(None))
+			.await
+			.unwrap_err();
+		let message = format!("{error:#}");
+		assert!(message.contains("without loss"), "{message}");
+		assert!(message.contains("dem/mapbox"), "{message}");
+		assert!(message.contains("give a quality below 100"), "{message}");
+
+		// With a quality, the loss is asked for.
+		assert_eq!(
+			quality_of_converted_tile(get_elevation_reader(), to(Some(90))).await?,
+			Some(90)
+		);
+		// Any other raster source keeps the encoder's default.
+		assert_eq!(
+			quality_of_converted_tile(get_mock_reader(PNG, Uncompressed), to(None)).await?,
+			None
+		);
+		// And quality 100 is refused for every source, here and not by the encoder.
+		let error = TilesConvertReader::new_from_reader(get_mock_reader(PNG, Uncompressed), to(Some(100)))
+			.await
+			.unwrap_err();
+		assert!(format!("{error:#}").contains("has no lossless encoding"), "{error:#}");
 		Ok(())
 	}
 

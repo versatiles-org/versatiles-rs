@@ -527,7 +527,7 @@ Set `force_reencode=true` to re-encode those tiles as well, e.g. to shrink an ex
 
 `quality` and `quality_translucent` take a zoom-dependent list as well as a single number. In `quality="70,14:50,15:20"` the first value is the default and each `zoom:value` pair applies from that zoom level upwards — so zoom 0 to 13 use 70, zoom 14 uses 50, and zoom 15 and above use 20. `quality` is ignored for PNG, which is always lossless.
 
-For elevation tiles (tile schema `dem/…`), `quality` defaults to `100`: their channels are heights, and a lossy encoder would change them.
+For elevation tiles (tile schema `dem/…`), `quality` defaults to `100`: their channels are heights, and a lossy encoder would change them. `avif` and `jpg` have no lossless encoding, so converting elevation tiles into one of them needs a `quality` for every zoom level.
 
 `quality_translucent` is typically `100`: lossy encoders handle an alpha channel badly. Setting it makes every tile that is encoded be checked for opacity.
 

@@ -134,6 +134,23 @@ impl TileSchema {
 			Unknown => TileType::Unknown,
 		}
 	}
+
+	/// Whether the tiles hold elevation data: heights stored in the color
+	/// channels of an image, which a lossy encoder would change.
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::TileSchema;
+	/// assert!(TileSchema::RasterDEMMapbox.is_elevation());
+	/// assert!(!TileSchema::RasterRGB.is_elevation());
+	/// ```
+	#[must_use]
+	pub fn is_elevation(&self) -> bool {
+		matches!(
+			self,
+			TileSchema::RasterDEMMapbox | TileSchema::RasterDEMTerrarium | TileSchema::RasterDEMVersatiles
+		)
+	}
 }
 
 impl std::fmt::Display for TileSchema {
