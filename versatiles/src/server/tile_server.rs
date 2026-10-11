@@ -612,7 +612,20 @@ mod tests {
 		server.start().await?;
 		let port = server.port();
 
-		for path in ["99/0/0", "3/99/0", "3/0/99", "a/b/c", "3/-1/0", "3/1/x"] {
+		for path in [
+			"99/0/0",
+			"3/99/0",
+			"3/0/99",
+			"a/b/c",
+			"3/-1/0",
+			"3/1/x",
+			// Not the shape of a tile path, though a coordinate can be read out
+			// of each of them.
+			"3/1/2garbage",
+			"3/1/2.",
+			"3/1/2/",
+			"3/1/2/extra",
+		] {
 			let response = reqwest::get(format!("http://{IP}:{port}/tiles/cheese/{path}"))
 				.await
 				.expect("request should complete");

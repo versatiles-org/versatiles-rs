@@ -535,8 +535,9 @@ versatiles serve [osm]tiles.versatiles
 versatiles serve tiles.versatiles[osm]
 ```
 
-Access tiles at `http://localhost:8080/tiles/{id}/{z}/{x}/{y}` (an extension
-such as `.pbf` may be appended) and the TileJSON at
+Access tiles at `http://localhost:8080/tiles/{id}/{z}/{x}/{y}` (a file
+extension such as `.pbf` may be appended to `{y}`; nothing else may) and the
+TileJSON at
 `http://localhost:8080/tiles/{id}/tiles.json`.
 
 **Static content serving:**

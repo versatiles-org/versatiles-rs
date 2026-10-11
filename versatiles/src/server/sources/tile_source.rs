@@ -55,14 +55,20 @@ impl ServerTileSource {
 	#[context("getting tile data: url={url}")]
 	pub async fn get_data(&self, url: &Url) -> Result<TileResponse> {
 		let parts: Vec<String> = url.as_vec();
+		// The segments as they arrive here. `parts` has the empty ones removed,
+		// which is right for finding `meta.json` and wrong for a tile: it makes
+		// `3/1/2/` the same request as `3/1/2`. (Doubled slashes are gone by
+		// now; `Url` collapses them.)
+		let segments: Vec<&str> = url.str.trim_start_matches('/').split('/').collect();
 
-		if parts.len() >= 3 {
+		if segments.len() >= 3 {
 			// Coordinates that cannot exist are a request for a tile this source
 			// does not have, not a fault on our side (#280). Answered as "not
 			// found", like a zoom level above the source's maximum, and at debug
 			// level: a 500 with a WARN line per request let any client fill the
-			// log by asking for zoom 99.
-			let coord = match parse_tile_coord(&parts) {
+			// log by asking for zoom 99. The same goes for a path that is not
+			// the shape of a tile path at all.
+			let coord = match parse_tile_coord(&segments) {
 				Ok(coord) => coord,
 				Err(error) => {
 					log::debug!("no tile '{url}' in '{}': {error:#}", self.id);
@@ -163,19 +169,44 @@ impl ServerTileSource {
 	}
 }
 
-/// Reads the tile coordinate from the first three segments of a path, `z/x/y`.
+/// Reads the tile coordinate from a tile path: exactly `z/x/y`, three numbers,
+/// where `y` may carry a file extension (`12/2200/1343.pbf`), which is ignored.
 ///
-/// `y` may carry an extension (`12/2200/1343.pbf`), which is ignored.
-fn parse_tile_coord(parts: &[String]) -> Result<TileCoord> {
-	use anyhow::Context as _;
+/// Anything else is not a tile path. This used to read the first three
+/// segments and the leading digits of the third, so `3/1/2garbage`,
+/// `3/1/2@2x.png` and `3/1/2/whatever/else` were all the tile `3/1/2` — each a
+/// different URL for the same answer, and none of them what its sender meant.
+fn parse_tile_coord(segments: &[&str]) -> Result<TileCoord> {
+	use anyhow::{Context as _, bail, ensure};
 
-	let level = parts[0].parse::<u8>().context("value for z is not a number")?;
-	let x = parts[1].parse::<u32>().context("value for x is not a number")?;
+	let [z, x, y] = segments else {
+		bail!("a tile path has three segments, z/x/y, not {}", segments.len());
+	};
 
-	let y: String = parts[2].chars().take_while(|c| c.is_numeric()).collect();
-	let y = y.parse::<u32>().context("value for y is not a number")?;
+	// Digits only: `parse` alone would take `+3` for a number as well.
+	fn number<T: std::str::FromStr>(text: &str, name: &str) -> Result<T> {
+		ensure!(
+			!text.is_empty() && text.bytes().all(|b| b.is_ascii_digit()),
+			"value for {name} is not a number"
+		);
+		text
+			.parse()
+			.ok()
+			.with_context(|| format!("value for {name} is too large"))
+	}
 
-	TileCoord::new(level, x, y)
+	let y = match y.split_once('.') {
+		Some((y, extension)) => {
+			ensure!(
+				!extension.is_empty() && extension.bytes().all(|b| b.is_ascii_alphanumeric()),
+				"'.{extension}' is not a file extension"
+			);
+			y
+		}
+		None => y,
+	};
+
+	TileCoord::new(number(z, "z")?, number(x, "x")?, number(y, "y")?)
 }
 
 // Debug implementation for ServerTileSource
@@ -313,6 +344,31 @@ mod tests {
 			"15/17600/10745",
 		] {
 			assert_eq!(check_status(c, url).await, 404, "{url}");
+		}
+
+		// A path that is not the shape of a tile path is not a tile either,
+		// however much of a coordinate can be read out of it.
+		for suffix in [
+			"garbage",
+			".",
+			"@2x.png",
+			".pbf.gz",
+			".p-f",
+			"/",
+			"/extra",
+			"/extra/segments",
+		] {
+			let url = format!("{coord}{suffix}");
+			assert_eq!(check_status(c, &url).await, 404, "{url}");
+		}
+		for url in ["+12/2200/1343", "12/+2200/1343", "١٢/2200/1343"] {
+			assert_eq!(check_status(c, url).await, 404, "{url}");
+		}
+
+		// An extension is fine, whatever it says.
+		for extension in ["", ".pbf", ".mvt", ".png", ".PBF", ".x1"] {
+			let url = format!("{coord}{extension}");
+			assert_eq!(check_status(c, &url).await, 200, "{url}");
 		}
 
 		// Inside the zoom range but outside Berlin: an empty tile (#281).
