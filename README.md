@@ -487,6 +487,7 @@ outside the covered area) is answered by tile type:
 | Tile inside the zoom range, without data        | 204    | 404    |
 | Zoom level outside the tile source's zoom range | 404    | 404    |
 | Coordinates that cannot exist, unknown source   | 404    | 404    |
+| The tile cannot be read                         | 500    | 500    |
 
 - A vector tile without data gets `204 No Content` and the `Cache-Control` of
   a tile. A map shows the same either way, and unlike a 404 it leaves no
@@ -496,6 +497,10 @@ outside the covered area) is answered by tile type:
   drawn as a transparent tile. A raster source with gaps at its high zoom
   levels keeps working that way. To fill such gaps on the server instead, see
   `raster_overscale` in `versatiles help pipeline`.
+- A tile that exists but cannot be read (a remote source that stopped
+  answering, a damaged file) gets `500 Internal Server Error`, without a
+  `Cache-Control`, and the reason goes to the log. It is not a missing tile,
+  and must not be kept as one by a proxy.
 
 `--minimal-recompression`, `--disable-api` and `--follow-symlinks` can be given
 on their own or with `true`/`false`; left out, the configuration file decides.

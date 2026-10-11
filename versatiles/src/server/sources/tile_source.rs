@@ -72,24 +72,21 @@ impl ServerTileSource {
 
 			log::debug!("get tile, prefix: {}, coord: {}", self.prefix, coord.to_json());
 
-			// Get tile data
-			let tile = self.reader.tile(&coord).await;
-
-			// A tile that cannot be produced is answered as "not found", because
-			// that is what a client can do something about. The reason is not
-			// the client's business but it is very much the operator's, and
-			// discarding it left a 404 as the only evidence that anything went
-			// wrong — indistinguishable from a hole in the data.
+			// A tile that cannot be produced is a fault of the server, and is
+			// passed on as one: the handler answers it with a 500 and logs why.
 			//
-			// Not as an empty tile, though (#281): that answer is cacheable for
-			// as long as a tile is, and a source that hiccuped once would stay
-			// blank in every cache in front of it.
-			if let Err(error) = &tile {
-				log::warn!("could not produce tile {} of '{}': {error:#}", coord.to_json(), self.id);
-				return Ok(TileResponse::NotFound);
-			}
+			// It used to be answered as "not found". A client takes that for
+			// "there is no tile here" — a map shows an empty tile, or one from a
+			// lower zoom level — and a proxy keeps the answer, so a source that
+			// hiccuped once left holes behind for as long as a 404 is cached,
+			// and neither the user nor any monitoring saw a fault.
+			let tile = self
+				.reader
+				.tile(&coord)
+				.await
+				.with_context(|| format!("could not produce tile {} of '{}'", coord.to_json(), self.id))?;
 
-			return Ok(match tile? {
+			return Ok(match tile {
 				Some(tile) => TileResponse::Data(SourceResponse {
 					blob: tile.into_blob(&self.compression)?,
 					compression: self.compression,

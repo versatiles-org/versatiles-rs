@@ -675,6 +675,71 @@ mod tests {
 		Ok(())
 	}
 
+	/// A source that announces tiles and fails to deliver any of them: a
+	/// remote file that stopped answering, or a damaged one.
+	#[derive(Debug)]
+	struct BrokenSource(MockReader);
+
+	#[async_trait::async_trait]
+	impl TileSource for BrokenSource {
+		fn source_type(&self) -> Arc<versatiles_container::SourceType> {
+			self.0.source_type()
+		}
+
+		fn metadata(&self) -> &TileSourceMetadata {
+			self.0.metadata()
+		}
+
+		fn tilejson(&self) -> &versatiles_core::TileJSON {
+			self.0.tilejson()
+		}
+
+		async fn tile_stream(
+			&self,
+			_bbox: versatiles_core::TileBBox,
+		) -> Result<versatiles_core::TileStream<'static, versatiles_container::Tile>> {
+			anyhow::bail!("the disk is on fire")
+		}
+	}
+
+	/// A tile that cannot be read is a fault of the server. Answered with a
+	/// 404, it looked like a place without a tile to the client, and a proxy
+	/// kept that answer.
+	#[tokio::test]
+	async fn a_tile_that_cannot_be_read_is_a_server_error() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		let broken = BrokenSource(MockReader::new_mock_profile(MRP::Pbf)?);
+		server.add_tile_source("broken".to_string(), Arc::new(broken)).await?;
+		let healthy = MockReader::new_mock_profile(MRP::Pbf)?.into_shared();
+		server.add_tile_source("healthy".to_string(), healthy).await?;
+		server.start().await?;
+		let port = server.port();
+		let get = async |path: &str| {
+			reqwest::get(format!("http://{IP}:{port}/tiles/{path}"))
+				.await
+				.expect("request should complete")
+		};
+
+		let response = get("broken/3/1/2").await;
+		assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+		assert_eq!(
+			response.headers().get("cache-control"),
+			None,
+			"an error is not to be kept"
+		);
+		// The reason is for the log, not for whoever asked.
+		assert_eq!(response.text().await?, "Internal Server Error");
+
+		// What does not need the tiles still works, and so does everything else.
+		assert_eq!(get("broken/tiles.json").await.status(), StatusCode::OK);
+		assert_eq!(get("broken/99/0/0").await.status(), StatusCode::NOT_FOUND);
+		assert_eq!(get("healthy/3/1/2").await.status(), StatusCode::OK);
+
+		server.stop().await;
+
+		Ok(())
+	}
+
 	#[tokio::test]
 	#[should_panic(expected = "already exists")]
 	async fn same_prefix_twice() {
