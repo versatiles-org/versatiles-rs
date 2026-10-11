@@ -30,10 +30,11 @@
 //! ### 1. No source has a tile → `None`
 //! No output tile is emitted. No processing occurs.
 //!
-//! ### 2. Every contributing tile is an upscale → `None`
-//! Even if sources deliver created tiles, the result is discarded when no
-//! source contributed a tile of its own. A downstream `raster_overscale`
-//! handles these coordinates more efficiently.
+//! ### 2. No source has a tile of its own here → `None`
+//! Even if sources deliver created tiles, nothing is emitted where no source
+//! has a tile of its own. A downstream `raster_overscale` handles these
+//! coordinates more efficiently. Where some source has one, the blend is
+//! emitted — also when that tile ends up hidden beneath an opaque upscale.
 //!
 //! ### 3. Exactly one source has a tile (passthrough)
 //! The tile passes through **without decoding or re-encoding** as long as
@@ -187,12 +188,20 @@ struct Operation {
 /// was created by upscaling (no source has a tile of its own at this coordinate). The latter
 /// enforces the "all overscaled → empty" policy at per-tile granularity.
 ///
+/// The blend stops at the first layer that leaves it opaque, since nothing
+/// beneath can show. A layer beneath may still be the one with a tile of its
+/// own, and is then never asked. `has_own_tile` says what is known about the
+/// coordinate beforehand, so that such a tile is emitted: without it, an
+/// upscaled opaque layer on top turned every tile of the layers under it into
+/// a hole.
+///
 /// # Arguments
 /// * `coord` - The tile coordinate to fetch
 /// * `entries` - The layers that can have a tile here, first on top
-async fn tile(coord: TileCoord, entries: Vec<SourceEntry>) -> Result<Option<(TileCoord, Tile)>> {
+/// * `has_own_tile` - Whether some layer is known to have a tile of its own here
+async fn tile(coord: TileCoord, entries: Vec<SourceEntry>, has_own_tile: bool) -> Result<Option<(TileCoord, Tile)>> {
 	let mut tile = Option::<Tile>::None;
-	let mut has_native = false;
+	let mut has_native = has_own_tile;
 
 	for entry in &entries {
 		if let Some((mut tile_bg, own)) = entry.tile(&coord).await? {
@@ -441,10 +450,16 @@ async fn cell_stream(
 			let entries = entries.clone();
 			let native_coords = native_coords.clone();
 			async move {
-				if native_coords.is_some_and(|coords| !coords.contains(&c)) {
-					return None;
-				}
-				let tile = tile(c, entries).await.unwrap();
+				// With layers that create tiles, the coordinates listed are the
+				// ones where some layer has a tile of its own; everywhere else
+				// there is nothing to emit. Without such layers, whatever a
+				// layer delivers is its own.
+				let has_own_tile = match &native_coords {
+					Some(coords) if !coords.contains(&c) => return None,
+					Some(_) => true,
+					None => false,
+				};
+				let tile = tile(c, entries, has_own_tile).await.unwrap();
 				if let Some((_coord, mut tile)) = tile {
 					tile.change_format(tile_format, None, None).unwrap();
 					return Some((c, tile));
@@ -701,7 +716,7 @@ mod tests {
 			.collect();
 
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = tile(coord, entries).await.unwrap();
+		let result = tile(coord, entries, false).await.unwrap();
 		let color = result.unwrap().1.as_image().unwrap().average_color();
 		assert_eq!(rgba_to_hex(&color), expected);
 	}
@@ -774,7 +789,7 @@ mod tests {
 	async fn test_tile_empty_sources_returns_none() {
 		let entries: Vec<SourceEntry> = vec![];
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = tile(coord, entries).await.unwrap();
+		let result = tile(coord, entries, false).await.unwrap();
 		assert!(result.is_none());
 	}
 
@@ -806,7 +821,7 @@ mod tests {
 		}
 
 		let coord = TileCoord::new(3, 0, 0).unwrap();
-		let result = tile(coord, entries).await.unwrap();
+		let result = tile(coord, entries, false).await.unwrap();
 		assert_eq!(result.is_some(), expect_some);
 	}
 
@@ -844,7 +859,7 @@ mod tests {
 		];
 
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = tile(coord, entries).await.unwrap();
+		let result = tile(coord, entries, false).await.unwrap();
 
 		// Should return a tile (the foreground replaces the empty background)
 		assert!(result.is_some());
@@ -1485,9 +1500,11 @@ mod tests {
 		);
 	}
 
-	/// Opaque overscaled foreground short-circuits the loop before reaching the
-	/// native background. Since all contributing sources are overscaled, the
-	/// per-tile policy returns None — a downstream `raster_overscale` handles it.
+	/// An opaque upscaled layer on top ends the blend before the layer beneath,
+	/// which has a tile of its own here, is asked. The tile is emitted all the
+	/// same: the place has a tile, and what shows is the layer on top. This
+	/// used to return nothing, in v5.0.0 too, which left a hole wherever a
+	/// low-resolution opaque layer lay over a high-resolution one.
 	#[tokio::test]
 	async fn test_auto_overscale_opaque_overscaled_foreground() {
 		let color = auto_overscale_color_test(
@@ -1498,9 +1515,7 @@ mod tests {
 			5,
 		)
 		.await;
-		// Opaque overscaled foreground breaks the loop before the native source is
-		// reached, so all contributing tiles are overscaled → returns None.
-		assert_eq!(color, None);
+		assert_eq!(color, Some("00FF00FF".to_string()));
 	}
 
 	// ============================================================================
@@ -1701,17 +1716,23 @@ mod tests {
 	}
 
 	/// The coordinates listed are the ones a tile is emitted at: where some
-	/// layer has a tile of its own, and nowhere else.
+	/// layer has a tile of its own, and nowhere else. Whichever way round the
+	/// layers lie: with the low-resolution one on top, its upscale hides the
+	/// region's own tiles, and they are emitted all the same.
+	#[rstest]
+	#[case::region_on_top(
+		"from_color color=FF0000 format=png tile_size=256 | filter level_max=5 bbox=[10,10,40,40]",
+		"from_color color=0000FF format=png tile_size=256 | filter level_max=2"
+	)]
+	#[case::world_on_top(
+		"from_color color=0000FF format=png tile_size=256 | filter level_max=2",
+		"from_color color=FF0000 format=png tile_size=256 | filter level_max=5 bbox=[10,10,40,40]"
+	)]
 	#[tokio::test]
-	async fn coordinates_are_listed_where_tiles_are_emitted() -> Result<()> {
+	async fn coordinates_are_listed_where_tiles_are_emitted(#[case] top: &str, #[case] bottom: &str) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
-			.operation_from_vpl(
-				r"from_stacked_raster auto_overscale=true [
-					from_color color=FF0000 format=png tile_size=256 | filter level_max=5 bbox=[10,10,40,40],
-					from_color color=0000FF format=png tile_size=256 | filter level_max=2
-				]",
-			)
+			.operation_from_vpl(&format!("from_stacked_raster auto_overscale=true [ {top}, {bottom} ]"))
 			.await?;
 
 		for level in [2u8, 4, 5] {
@@ -1744,6 +1765,40 @@ mod tests {
 				"level {level}: {} tiles",
 				tiles.len()
 			);
+		}
+		Ok(())
+	}
+
+	/// A layer that is opaque and has a gap inside its own levels, over a
+	/// layer with tiles of its own. In the gap the upper layer delivers an
+	/// upscale of what it has below, which is opaque and ends the blend. The
+	/// tile is emitted: the lower layer has one there.
+	#[tokio::test]
+	async fn an_opaque_layer_with_a_gap_does_not_leave_a_hole() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		// Red: everywhere to level 2, and in the west to level 4. Blue beneath:
+		// everywhere to level 4.
+		let op = factory
+			.operation_from_vpl(
+				r"from_stacked_raster auto_overscale=true [
+					from_stacked_raster [
+						from_color color=FF0000 format=png tile_size=256 | filter level_max=4 bbox=[-170,-60,-10,60],
+						from_color color=FF0000 format=png tile_size=256 | filter level_max=2
+					],
+					from_color color=0000FF format=png tile_size=256 | filter level_max=4
+				]",
+			)
+			.await?;
+
+		for level in [3u8, 4] {
+			let bbox = TileBBox::new_full(level)?;
+			let tiles = op.tile_stream(bbox).await?.to_vec().await;
+			assert_eq!(tiles.len(), 1 << (2 * level), "level {level}: every tile is there");
+			assert_eq!(op.tile_coord_stream(bbox).await?.to_vec().await.len(), tiles.len());
+			// Red everywhere: its own tiles in the west, upscaled in the east.
+			for (coord, tile) in tiles {
+				assert_eq!(tile.into_image()?.average_color(), [255, 0, 0], "{coord:?}");
+			}
 		}
 		Ok(())
 	}
