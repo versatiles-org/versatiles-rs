@@ -61,3 +61,64 @@ async fn e2e_serve_shuts_down_gracefully_on(#[case] signal: &str) {
 	// The port is closed, so a proxy in front sees a refused connection.
 	assert!(client.get(format!("{host}/tiles/index.json")).send().await.is_err());
 }
+
+// --- with a request in flight ---
+
+/// How long the slow source takes for each of its answers. Long enough that a
+/// tile request is still running a good while after it was sent; short enough
+/// that the server, which needs a few answers to open the source, is up soon.
+const SOURCE_DELAY_MS: u64 = 400;
+
+/// A server whose only source answers slowly, and a tile request that is on
+/// its way through it.
+async fn server_with_a_request_in_flight() -> (Child, tokio::task::JoinHandle<reqwest::Result<reqwest::StatusCode>>) {
+	let source = format!(
+		"[berlin]{}",
+		TestHttpServer::shared().slow_url("berlin.pmtiles", SOURCE_DELAY_MS)
+	);
+	let (host, child) = spawn_server(&[&source], "/tiles/index.json").await;
+
+	let request = tokio::spawn(async move {
+		let response = reqwest::get(format!("{host}/tiles/berlin/12/2200/1343")).await?;
+		let status = response.status();
+		response.bytes().await?;
+		Ok(status)
+	});
+	// Let it reach the server and get as far as waiting for the source.
+	tokio::time::sleep(Duration::from_millis(SOURCE_DELAY_MS / 4)).await;
+	assert!(!request.is_finished(), "the request should still be running");
+
+	(child, request)
+}
+
+/// The point of the graceful shutdown (#282): a request that is being
+/// answered when the signal arrives is answered, and then the server exits.
+#[tokio::test]
+async fn e2e_serve_finishes_a_request_that_is_in_flight() {
+	let (mut child, request) = server_with_a_request_in_flight().await;
+
+	send_signal(&child, "-TERM");
+	let status = request
+		.await
+		.unwrap()
+		.expect("the request should be answered, not cut off");
+	assert_eq!(status, 200);
+
+	let exit = wait_for_exit(&mut child, Duration::from_secs(3)).await;
+	assert!(exit.success(), "expected a clean exit, got {exit}");
+}
+
+/// Ctrl+C twice gets out at once: the second signal does not wait for the
+/// request, and the exit code says the shutdown was not a clean one.
+#[tokio::test]
+async fn e2e_serve_exits_at_once_on_a_second_signal() {
+	let (mut child, request) = server_with_a_request_in_flight().await;
+
+	send_signal(&child, "-INT");
+	tokio::time::sleep(Duration::from_millis(50)).await;
+	send_signal(&child, "-INT");
+
+	let exit = wait_for_exit(&mut child, Duration::from_millis(SOURCE_DELAY_MS / 2)).await;
+	assert_eq!(exit.code(), Some(1), "expected the forced exit, got {exit}");
+	assert!(request.await.unwrap().is_err(), "the request was cut off");
+}

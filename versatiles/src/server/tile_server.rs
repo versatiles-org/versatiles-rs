@@ -688,6 +688,65 @@ mod tests {
 		Ok(())
 	}
 
+	/// A source that takes its time over every tile.
+	#[derive(Debug)]
+	struct SlowSource(MockReader, std::time::Duration);
+
+	#[async_trait::async_trait]
+	impl TileSource for SlowSource {
+		fn source_type(&self) -> Arc<versatiles_container::SourceType> {
+			self.0.source_type()
+		}
+
+		fn metadata(&self) -> &TileSourceMetadata {
+			self.0.metadata()
+		}
+
+		fn tilejson(&self) -> &versatiles_core::TileJSON {
+			self.0.tilejson()
+		}
+
+		async fn tile_stream(
+			&self,
+			bbox: versatiles_core::TileBBox,
+		) -> Result<versatiles_core::TileStream<'static, versatiles_container::Tile>> {
+			tokio::time::sleep(self.1).await;
+			self.0.tile_stream(bbox).await
+		}
+	}
+
+	/// `stop` lets a request that is being answered finish, and returns only
+	/// when it has. This is what the server's graceful shutdown rests on, and
+	/// what the Node bindings call directly.
+	#[tokio::test]
+	async fn stop_waits_for_a_request_that_is_in_flight() -> Result<()> {
+		let delay = std::time::Duration::from_millis(300);
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		let slow = SlowSource(MockReader::new_mock_profile(MRP::Pbf)?, delay);
+		server.add_tile_source("slow".to_string(), Arc::new(slow)).await?;
+		server.start().await?;
+		let port = server.port();
+
+		let sent = std::time::Instant::now();
+		let request = tokio::spawn(reqwest::get(format!("http://{IP}:{port}/tiles/slow/3/1/2")));
+		tokio::time::sleep(delay / 4).await;
+		assert!(!request.is_finished(), "the request should still be running");
+
+		server.stop().await;
+		assert!(sent.elapsed() >= delay, "stop returned before the request was answered");
+
+		let response = request.await?.expect("the request should be answered, not cut off");
+		assert_eq!(response.status(), StatusCode::OK);
+
+		// And nothing new is accepted afterwards.
+		assert!(
+			reqwest::get(format!("http://{IP}:{port}/tiles/slow/3/1/2"))
+				.await
+				.is_err()
+		);
+		Ok(())
+	}
+
 	/// A source that announces tiles and fails to deliver any of them: a
 	/// remote file that stopped answering, or a damaged one.
 	#[derive(Debug)]

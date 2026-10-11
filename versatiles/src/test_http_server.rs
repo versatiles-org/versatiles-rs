@@ -62,7 +62,25 @@ impl TestHttpServer {
 	pub fn url(&self, file: &str) -> String {
 		format!("http://127.0.0.1:{}/{file}", self.port)
 	}
+
+	/// URL for the same file, with every request to it answered only after
+	/// `delay_ms`: a remote source that is slow, for tests that need a request
+	/// to still be running when something else happens.
+	#[must_use]
+	#[allow(
+		dead_code,
+		reason = "this file is compiled into two test targets, and only the end-to-end one uses this; \
+		          `expect` would be unfulfilled there"
+	)]
+	pub fn slow_url(&self, file: &str, delay_ms: u64) -> String {
+		format!("http://127.0.0.1:{}/{SLOW_PREFIX}{delay_ms}-{file}", self.port)
+	}
 }
+
+/// What a file name starts with to have its requests delayed:
+/// `delay-<milliseconds>-<file>`. A prefix, not a query, so that the name
+/// still ends in the file's extension for whoever picks a reader by it.
+const SLOW_PREFIX: &str = "delay-";
 
 /// Handle one connection: a single `GET`, optionally with a `Range` header.
 fn handle_connection(mut stream: TcpStream) {
@@ -99,6 +117,13 @@ fn handle_connection(mut stream: TcpStream) {
 	});
 
 	let name = target.split('?').next().unwrap_or_default().trim_start_matches('/');
+	let name = match name.strip_prefix(SLOW_PREFIX).and_then(|rest| rest.split_once('-')) {
+		Some((delay_ms, file)) => {
+			thread::sleep(std::time::Duration::from_millis(delay_ms.parse().unwrap_or(0)));
+			file
+		}
+		None => name,
+	};
 	if method != "GET" || name.is_empty() || name.contains("..") || name.contains('/') {
 		let _ = respond_status(&mut stream, 400, "Bad Request");
 		return;
