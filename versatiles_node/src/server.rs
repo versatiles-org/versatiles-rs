@@ -351,9 +351,10 @@ impl TileServer {
 
 	/// Stop the HTTP server gracefully
 	///
-	/// Gracefully shuts down the HTTP server, completing any in-flight requests
-	/// before closing. After stopping, the server can be restarted by calling
-	/// `start()` again.
+	/// Gracefully shuts down the HTTP server: it stops accepting connections
+	/// and lets the requests it is answering finish, for up to 5 seconds. A
+	/// request that takes longer than that is cut off. After stopping, the
+	/// server can be restarted by calling `start()` again.
 	///
 	/// If the server is not running, this method does nothing and returns successfully.
 	///

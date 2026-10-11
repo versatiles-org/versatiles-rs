@@ -417,7 +417,8 @@ impl TileServer {
 		Ok(())
 	}
 
-	/// Trigger graceful shutdown and wait for the server task to finish (with timeout).
+	/// Trigger graceful shutdown and wait for the server task to finish: no new
+	/// connections, and up to 5 seconds for the requests in flight.
 	///
 	/// Idempotent: if the server is not running, this returns immediately.
 	pub async fn stop(&mut self) {
