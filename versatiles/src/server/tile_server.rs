@@ -669,6 +669,15 @@ mod tests {
 			"3/1/2.",
 			"3/1/2/",
 			"3/1/2/extra",
+			// A second spelling of a tile that exists.
+			"03/1/2",
+			"3/01/2",
+			"3/1/02",
+			"3/1/02.pbf",
+			// The metadata has one address each, and nothing below it.
+			"meta.json/",
+			"tiles.json/x",
+			"meta.json/3/1",
 		] {
 			let response = reqwest::get(format!("http://{IP}:{port}/tiles/cheese/{path}"))
 				.await
@@ -678,6 +687,15 @@ mod tests {
 				StatusCode::NOT_FOUND,
 				"{path} should be 404, not a server error"
 			);
+		}
+
+		// Zero itself is a number without a leading zero.
+		for path in ["3/1/2", "3/0/0", "2/0/1.pbf"] {
+			let response = reqwest::get(format!("http://{IP}:{port}/tiles/cheese/{path}"))
+				.await
+				.expect("request should complete");
+			// 200, or 204 where the mock has no data: not a refused path.
+			assert!(response.status().is_success(), "{path} should be served");
 		}
 
 		server.stop().await;

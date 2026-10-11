@@ -59,10 +59,9 @@ impl ServerTileSource {
 	// against the client's `Accept-Encoding` afterwards, in `handlers::ok_data`.
 	#[context("getting tile data: url={url}")]
 	pub async fn get_data(&self, url: &Url) -> Result<TileResponse> {
-		let parts: Vec<String> = url.as_vec();
-		// The segments as they arrive here. `parts` has the empty ones removed,
-		// which is right for finding `meta.json` and wrong for a tile: it makes
-		// `3/1/2/` the same request as `3/1/2`. (Doubled slashes are gone by
+		// The segments as they arrive here, empty ones included: with those
+		// removed, `3/1/2/` would be the same request as `3/1/2`, and
+		// `meta.json/` the same as `meta.json`. (Doubled slashes are gone by
 		// now; `Url` collapses them.)
 		let segments: Vec<&str> = url.str.trim_start_matches('/').split('/').collect();
 
@@ -106,10 +105,7 @@ impl ServerTileSource {
 				None if self.is_empty_tile(coord.level) => TileResponse::Empty,
 				None => TileResponse::NotFound,
 			});
-		} else if parts
-			.first()
-			.is_some_and(|name| name == "meta.json" || name == "tiles.json")
-		{
+		} else if matches!(segments[..], ["meta.json" | "tiles.json"]) {
 			// Get metadata
 			let tile_json = self.build_tile_json().await?;
 
@@ -193,6 +189,12 @@ fn parse_tile_coord(segments: &[&str]) -> Result<TileCoord> {
 		ensure!(
 			!text.is_empty() && text.bytes().all(|b| b.is_ascii_digit()),
 			"value for {name} is not a number"
+		);
+		// One spelling per tile: `012/5/7` would be a second URL for `12/5/7`,
+		// and a cache in front would keep both.
+		ensure!(
+			text == "0" || !text.starts_with('0'),
+			"value for {name} has a leading zero"
 		);
 		text
 			.parse()
