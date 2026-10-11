@@ -8,8 +8,9 @@ use super::TileCover;
 impl TileCover {
 	/// Returns the union of this cover and `other`.
 	///
-	/// - `Bbox` ∪ `Bbox` → `Bbox` (bounding rectangle of both; may over-approximate).
-	/// - Any case involving a `Tree` → `Tree` (exact).
+	/// Always a `Tree`, and always exact: the union of two rectangles is in
+	/// general not a rectangle, and their bounding rectangle would cover tiles
+	/// that neither of them does.
 	///
 	/// # Errors
 	/// Returns an error if the zoom levels differ or a quadtree operation fails.
