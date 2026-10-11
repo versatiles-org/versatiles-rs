@@ -210,7 +210,7 @@ impl TileJSON {
 	/// Any type implementing [`PyramidInfo`] can be passed here (e.g. [`crate::TilePyramid`]).
 	pub fn update_from_pyramid<P: PyramidInfo>(&mut self, pyramid: &P) {
 		if self.bounds.is_none() {
-			self.bounds = pyramid.geo_bbox();
+			self.bounds = pyramid.geo_extent();
 		}
 
 		if let Some(z) = pyramid.level_min() {
@@ -785,7 +785,7 @@ mod tests {
 	use approx::assert_relative_eq;
 
 	use super::*;
-	use crate::TilePyramid;
+	use crate::{TileBBox, TilePyramid};
 
 	/// Creates a minimal valid `TileJSON` object in the form of `JsonObject`.
 	fn make_test_json_object() -> JsonObject {
@@ -854,6 +854,27 @@ mod tests {
 		// Intersection => [-10, -5, 0, 2]
 		let b = tj.bounds.expect("Should have bounds");
 		assert_relative_eq!(b.as_array().as_slice(), [-10.0_f64, -5.0, 0.0, 2.0].as_slice());
+	}
+
+	/// A tileset with worldwide low levels and one region on top used to get
+	/// the box around the region as its bounds, so a client that honours
+	/// bounds never asked for the rest of the world.
+	#[test]
+	fn bounds_from_a_pyramid_take_every_level_into_account() {
+		let mut pyramid = TilePyramid::new_full_up_to(3);
+		pyramid
+			.insert_bbox(&TileBBox::from_min_and_max(6, 33, 21, 34, 22).unwrap())
+			.unwrap();
+
+		let mut tj = TileJSON::default();
+		tj.update_from_pyramid(&pyramid);
+
+		let bounds = tj.bounds.expect("Should have updated bounds");
+		assert_relative_eq!(
+			bounds.as_array().as_slice(),
+			[-180.0_f64, -85.05112877980659, 180.0, 85.05112877980659].as_slice()
+		);
+		assert_eq!(tj.zoom_max(), Some(6));
 	}
 
 	#[test]

@@ -139,7 +139,7 @@ impl TilesWriter for VersaTilesWriter {
 			.ok_or(anyhow!("invalid maxzoom"))?;
 		let bbox = tilejson
 			.bounds
-			.or(tile_pyramid.geo_bbox())
+			.or(tile_pyramid.geo_extent())
 			.ok_or(anyhow!("invalid geo bounding box"))?;
 		let mut header = FileHeader::new(*parameters.tile_format(), tile_compression, [zoom_min, zoom_max], &bbox)?;
 

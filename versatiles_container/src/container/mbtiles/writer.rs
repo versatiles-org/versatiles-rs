@@ -174,7 +174,9 @@ impl TilesWriter for MBTilesWriter {
 		let tilejson = reader.tilejson();
 		// Fall back to pyramid-derived values when the tilejson doesn't carry them.
 		let pyramid = reader.tile_pyramid().await.ok();
-		let bounds = tilejson.bounds.or_else(|| pyramid.as_ref().and_then(|p| p.geo_bbox()));
+		let bounds = tilejson
+			.bounds
+			.or_else(|| pyramid.as_ref().and_then(|p| p.geo_extent()));
 		if let Some(bbox) = bounds {
 			writer.set_metadata(
 				"bounds",

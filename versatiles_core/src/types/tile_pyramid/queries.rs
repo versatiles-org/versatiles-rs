@@ -95,6 +95,52 @@ impl TilePyramid {
 		self.levels[max_level as usize].to_geo_bbox()
 	}
 
+	/// Returns the geographic bounding box of the data in this pyramid, taking
+	/// every level into account.
+	///
+	/// This is what bounds are derived from when a tileset declares none. It
+	/// starts from [`geo_bbox`](Self::geo_bbox), the envelope of the highest
+	/// level, which is the tightest one: a tile there is small. Then it looks
+	/// at each lower level and asks whether that envelope accounts for it:
+	///
+	/// - If every tile of the level reaches into the box, the level shows the
+	///   same data at a coarser grid and adds nothing. This is what keeps a
+	///   single tile at level 0 from turning the bounds of a city into the
+	///   whole world.
+	/// - If the level has a tile that lies outside the box, it holds data the
+	///   higher levels do not, and the box grows by the envelope of that level.
+	///
+	/// The second case is a tileset with worldwide imagery at its low levels
+	/// and aerial imagery for some regions on top. The highest level alone
+	/// gave it the box around those regions, so a client that honours bounds
+	/// never asked for the rest of the world.
+	///
+	/// Returns `None` if the pyramid is empty.
+	#[must_use]
+	pub fn geo_extent(&self) -> Option<GeoBBox> {
+		let level_max = self.level_max()?;
+		let mut extent = self.levels[level_max as usize].to_geo_bbox()?;
+
+		for cover in self.levels[..level_max as usize].iter().rev() {
+			if cover.is_empty() {
+				continue;
+			}
+			// The tiles of this level that reach into the box. A cover inside
+			// that rectangle has no tile outside the box.
+			//
+			// Computed once per level: for a quadtree cover the bounding box is
+			// a walk over the whole tree.
+			let cover_bbox = cover.to_bbox();
+			let accounted_for =
+				TileBBox::from_geo_bbox(cover.level(), &extent).is_ok_and(|reached| reached.includes_bbox(&cover_bbox));
+			if !accounted_for && let Some(envelope) = cover_bbox.to_geo_bbox() {
+				extent.extend(&envelope);
+			}
+		}
+
+		Some(extent)
+	}
+
 	/// Returns the *minimal* geographic bounding box such that a tile client which
 	/// selects tiles by bbox *overlap* (e.g. MapLibre) requests every tile at
 	/// every zoom level — including any border ring added by [`buffer`](Self::buffer).
@@ -249,6 +295,77 @@ mod tests {
 	fn iter_skips_empty_levels() {
 		let p = pyramid_from_bboxes(&[bbox(3, 0, 0, 3, 3), bbox(5, 0, 0, 5, 5)]);
 		assert_eq!(p.iter().filter(|c| !c.is_empty()).count(), 2);
+	}
+
+	// --- geo_extent ---
+
+	/// The envelope of one level, for comparing against.
+	fn envelope(b: TileBBox) -> GeoBBox {
+		b.to_geo_bbox().unwrap()
+	}
+
+	#[test]
+	fn extent_is_none_when_empty() {
+		assert!(TilePyramid::new_empty().geo_extent().is_none());
+	}
+
+	/// One small region at every level: the single tiles at the low levels
+	/// cover far more than the region, and must not widen the bounds.
+	#[test]
+	fn extent_of_one_region_is_the_envelope_of_its_highest_level() {
+		let liechtenstein = GeoBBox::new(9.47, 47.05, 9.64, 47.27).unwrap();
+		let p = TilePyramid::from_geo_bbox(0, 14, &liechtenstein).unwrap();
+		assert_eq!(p.level_ref(0).count_tiles(), 1);
+		assert_eq!(p.geo_extent(), p.geo_bbox());
+	}
+
+	#[test]
+	fn extent_of_a_full_pyramid_is_the_world() {
+		let p = TilePyramid::new_full_up_to(6);
+		assert_eq!(p.geo_extent(), p.geo_bbox());
+		assert_eq!(p.geo_extent().unwrap().x_min, -180.0);
+	}
+
+	/// Worldwide at the low levels, one region on top: the highest level alone
+	/// gives the box around the region, which leaves out most of the data.
+	#[test]
+	fn extent_grows_by_a_level_that_holds_tiles_elsewhere() {
+		let region = bbox(6, 33, 21, 34, 22);
+		let p = pyramid_from_bboxes(&[
+			TileBBox::new_full(0).unwrap(),
+			TileBBox::new_full(3).unwrap(),
+			bbox(5, 16, 10, 17, 11),
+			region,
+		]);
+		assert_eq!(p.geo_bbox(), Some(envelope(region)));
+		assert_eq!(p.geo_extent(), Some(envelope(TileBBox::new_full(3).unwrap())));
+	}
+
+	/// Two regions that end at different levels: both belong to the extent,
+	/// the single tile at level 0 does not make it the world.
+	#[test]
+	fn extent_covers_regions_that_end_at_different_levels() {
+		let low = bbox(5, 2, 3, 3, 4);
+		let high = bbox(7, 100, 60, 101, 61);
+		let p = pyramid_from_bboxes(&[TileBBox::new_full(0).unwrap(), low, high]);
+
+		let mut expected = envelope(high);
+		expected.extend(&envelope(low));
+		assert_eq!(p.geo_extent(), Some(expected));
+		assert!(expected.x_min > -180.0 && expected.x_max < 180.0);
+	}
+
+	/// A lower-level tile next to the box shares an edge with it and nothing
+	/// else, so it holds data the box does not cover.
+	#[test]
+	fn extent_grows_by_a_neighbouring_tile_that_only_shares_an_edge() {
+		let high = bbox(4, 8, 8, 9, 9);
+		let neighbour = bbox(3, 5, 4, 5, 4);
+		let p = pyramid_from_bboxes(&[neighbour, high]);
+
+		let mut expected = envelope(high);
+		expected.extend(&envelope(neighbour));
+		assert_eq!(p.geo_extent(), Some(expected));
 	}
 
 	#[test]

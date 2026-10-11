@@ -12,9 +12,9 @@ use crate::GeoBBox;
 /// Implement this trait to allow a pyramid type to be used with
 /// [`TileJSON::update_from_pyramid`](crate::TileJSON).
 pub trait PyramidInfo {
-	/// Returns the geographic bounding box covering all tiles in the pyramid,
-	/// or `None` if the pyramid is empty.
-	fn geo_bbox(&self) -> Option<GeoBBox>;
+	/// Returns the geographic bounding box of the data in the pyramid, taking
+	/// every level into account, or `None` if the pyramid is empty.
+	fn geo_extent(&self) -> Option<GeoBBox>;
 
 	/// Returns the minimum (lowest) non-empty zoom level, or `None` if empty.
 	fn level_min(&self) -> Option<u8>;

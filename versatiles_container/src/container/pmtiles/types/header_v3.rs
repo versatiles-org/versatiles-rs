@@ -43,7 +43,7 @@ impl HeaderV3 {
 
 		let bbox = tilejson
 			.bounds
-			.or_else(|| tile_pyramid.geo_bbox())
+			.or_else(|| tile_pyramid.geo_extent())
 			.expect("bounds available from tilejson or pyramid");
 		let center = tilejson.center.or_else(|| tile_pyramid.geo_center());
 
