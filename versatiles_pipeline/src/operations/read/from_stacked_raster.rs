@@ -345,102 +345,114 @@ impl TileSource for Operation {
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("from_stacked_raster::tile_stream {bbox:?}");
 
-		// Keep the layers that can have a tile in the bbox, created ones included.
-		let mut entries: Vec<SourceEntry> = Vec::new();
-		let mut any_own = false;
-		for entry in &self.sources {
-			if entry.source().tile_pyramid().await?.intersects_bbox(&bbox) {
-				any_own |= entry.own().tile_pyramid().await?.intersects_bbox(&bbox);
-				entries.push(entry.clone());
-			}
-		}
-
-		// No layer has a tile of its own here: whatever could be blended would
-		// be upscales only. Return an empty stream. A downstream
-		// `raster_overscale` on the blended output handles these tiles more
-		// efficiently by upscaling one blended tile instead of N individual
-		// tiles, producing identical results.
-		if !any_own {
-			return Ok(TileStream::empty());
-		}
-
 		let tile_format = *self.metadata.tile_format();
+		let sources = self.sources.clone();
 
-		// If the bounding box is big, split into a grid and process each cell recursively
-		const MAX_BBOX_SIZE: u32 = 32;
-		if bbox.width() > MAX_BBOX_SIZE || bbox.height() > MAX_BBOX_SIZE {
-			let sub_bboxes: Vec<TileBBox> = bbox.iter_grid(MAX_BBOX_SIZE).collect();
-			let mut streams = Vec::with_capacity(sub_bboxes.len());
-			for sub_bbox in sub_bboxes {
-				streams.push(self.tile_stream(sub_bbox).await?);
-			}
-			return Ok(TileStream::from_streams(stream::iter(
-				streams.into_iter().map(futures::future::ready),
-			)));
+		if bbox.width() <= MAX_BBOX_SIZE && bbox.height() <= MAX_BBOX_SIZE {
+			return cell_stream(sources, bbox, tile_format).await;
 		}
 
-		// If any layer can deliver created tiles, pre-compute which coordinates
-		// have a tile of some source's own, to avoid expensive blending work
-		// for coordinates where everything would be an upscale.
-		if entries.iter().any(SourceEntry::creates_tiles) {
-			let mut native_coords = HashSet::new();
-			for entry in &entries {
-				let own = entry.own();
-				if own.tile_pyramid().await?.intersects_bbox(&bbox) {
-					let mut stream = own.tile_coord_stream(bbox).await?;
-					while let Some((coord, ())) = stream.next().await {
-						native_coords.insert(coord);
-					}
-				}
-			}
-
-			if native_coords.is_empty() {
-				return Ok(TileStream::empty());
-			}
-
-			let native_coords = Arc::new(native_coords);
-			// Bound per-coordinate concurrency by the tile budget: blending holds one
-			// (decoded, potentially large) raster tile per source per in-flight coordinate.
-			let concurrency = super::gathering::coord_concurrency(entries.len());
-			return Ok(TileStream::from_bbox_async_parallel_bounded(
-				bbox,
-				concurrency,
-				move |c| {
-					let entries = entries.clone();
-					let native_coords = Arc::clone(&native_coords);
-					async move {
-						if !native_coords.contains(&c) {
-							return None;
-						}
-						let tile = tile(c, entries).await.unwrap();
-						if let Some((_coord, mut tile)) = tile {
-							tile.change_format(tile_format, None, None).unwrap();
-							return Some((c, tile));
-						}
-						tile
-					}
-				},
-			));
-		}
-
-		// Default: process tile by tile (all-native path)
-		let concurrency = super::gathering::coord_concurrency(entries.len());
-		Ok(TileStream::from_bbox_async_parallel_bounded(
-			bbox,
-			concurrency,
-			move |c| {
-				let entries = entries.clone();
+		// A big bbox is answered cell by cell, and a cell is only looked at
+		// when its turn comes. Each cell remembers which of its coordinates
+		// have a tile; set up for all cells at once, that was every
+		// coordinate of the request in memory before the first tile — half a
+		// gigabyte for one level at zoom 12, and four times that per level.
+		let cells: Vec<TileBBox> = bbox.iter_grid(MAX_BBOX_SIZE).collect();
+		Ok(TileStream::from_streams_bounded(
+			stream::iter(cells.into_iter().map(move |cell| {
+				let sources = sources.clone();
 				async move {
-					let tile = tile(c, entries).await.unwrap();
-					if let Some((_coord, mut tile)) = tile {
-						tile.change_format(tile_format, None, None).unwrap();
-						return Some((c, tile));
+					match cell_stream(sources, cell, tile_format).await {
+						Ok(stream) => stream,
+						Err(error) => {
+							log::error!("Error reading stacked raster tiles in {cell:?}: {error:#}");
+							TileStream::empty()
+						}
 					}
-					tile
 				}
-			},
+			})),
+			CELLS_IN_ADVANCE,
 		))
 	}
+}
+
+/// A request for more tiles than this along one edge is answered in cells of
+/// this size.
+const MAX_BBOX_SIZE: u32 = 32;
+
+/// How many cells of a big request are set up ahead of the one being read.
+const CELLS_IN_ADVANCE: usize = 4;
+
+/// The blended tiles of one cell: a bbox of at most [`MAX_BBOX_SIZE`] tiles
+/// along each edge.
+async fn cell_stream(
+	sources: Vec<SourceEntry>,
+	bbox: TileBBox,
+	tile_format: TileFormat,
+) -> Result<TileStream<'static, Tile>> {
+	// Keep the layers that can have a tile in the bbox, created ones included.
+	let mut entries: Vec<SourceEntry> = Vec::new();
+	let mut any_own = false;
+	for entry in &sources {
+		if entry.source().tile_pyramid().await?.intersects_bbox(&bbox) {
+			any_own |= entry.own().tile_pyramid().await?.intersects_bbox(&bbox);
+			entries.push(entry.clone());
+		}
+	}
+
+	// No layer has a tile of its own here: whatever could be blended would
+	// be upscales only. Return an empty stream. A downstream
+	// `raster_overscale` on the blended output handles these tiles more
+	// efficiently by upscaling one blended tile instead of N individual
+	// tiles, producing identical results.
+	if !any_own {
+		return Ok(TileStream::empty());
+	}
+
+	// If any layer can deliver created tiles, pre-compute which coordinates
+	// have a tile of some source's own, to avoid expensive blending work
+	// for coordinates where everything would be an upscale.
+	let native_coords = if entries.iter().any(SourceEntry::creates_tiles) {
+		let mut native_coords = HashSet::new();
+		for entry in &entries {
+			let own = entry.own();
+			if own.tile_pyramid().await?.intersects_bbox(&bbox) {
+				let mut stream = own.tile_coord_stream(bbox).await?;
+				while let Some((coord, ())) = stream.next().await {
+					native_coords.insert(coord);
+				}
+			}
+		}
+		if native_coords.is_empty() {
+			return Ok(TileStream::empty());
+		}
+		Some(Arc::new(native_coords))
+	} else {
+		None
+	};
+
+	// Bound per-coordinate concurrency by the tile budget: blending holds one
+	// (decoded, potentially large) raster tile per source per in-flight coordinate.
+	let concurrency = super::gathering::coord_concurrency(entries.len());
+	Ok(TileStream::from_bbox_async_parallel_bounded(
+		bbox,
+		concurrency,
+		move |c| {
+			let entries = entries.clone();
+			let native_coords = native_coords.clone();
+			async move {
+				if native_coords.is_some_and(|coords| !coords.contains(&c)) {
+					return None;
+				}
+				let tile = tile(c, entries).await.unwrap();
+				if let Some((_coord, mut tile)) = tile {
+					tile.change_format(tile_format, None, None).unwrap();
+					return Some((c, tile));
+				}
+				tile
+			}
+		},
+	))
 }
 
 crate::operations::macros::define_read_factory!("from_stacked_raster", Args, Operation);
@@ -1564,6 +1576,93 @@ mod tests {
 
 		let result = auto_overscale_color_test(&layers, 5).await;
 		assert!(result.is_some(), "expected tile when source {native_index} is native");
+	}
+
+	// ============================================================================
+	// Big requests
+	// ============================================================================
+
+	/// A source that counts how often its coordinates are listed.
+	#[derive(Debug)]
+	struct CountingSource(DummyImageSource, Arc<std::sync::atomic::AtomicUsize>);
+
+	#[async_trait]
+	impl TileSource for CountingSource {
+		fn source_type(&self) -> Arc<SourceType> {
+			self.0.source_type()
+		}
+
+		fn metadata(&self) -> &TileSourceMetadata {
+			self.0.metadata()
+		}
+
+		fn tilejson(&self) -> &TileJSON {
+			self.0.tilejson()
+		}
+
+		async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+			self.0.tile(coord).await
+		}
+
+		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+			self.0.tile_stream(bbox).await
+		}
+
+		async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+			self.1.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+			self.0.tile_coord_stream(bbox).await
+		}
+	}
+
+	/// A whole level is answered cell by cell, and a cell is only set up when
+	/// its turn is near. Setting up all of them first held every coordinate
+	/// of the request in memory before the first tile: 486 MB for one level
+	/// at zoom 12, where v5.0.0 needed 35 MB.
+	#[tokio::test]
+	async fn a_big_request_is_set_up_cell_by_cell() -> Result<()> {
+		use std::sync::atomic::Ordering::Relaxed;
+
+		let level = 8u8;
+		let listed = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+		let pyramid = TilePyramid::new_full_up_to(level);
+		let source = DummyImageSource::from_color(&[255, 0, 0, 128], 4, TileFormat::PNG, Some(pyramid.clone()))?;
+		let filled = FillOverscale::new(Box::new(CountingSource(source, Arc::clone(&listed))), Some(level)).await?;
+
+		let op = Operation {
+			metadata: TileSourceMetadata::new(
+				TileFormat::PNG,
+				TileCompression::Uncompressed,
+				Traversal::new_any(),
+				Some(pyramid),
+			),
+			sources: vec![SourceEntry::Filled(Arc::new(filled))],
+			source_types: vec![],
+			tilejson: TileJSON::default(),
+		};
+
+		// 256 × 256 tiles: 64 cells.
+		let bbox = TileBBox::new_full(level)?;
+		let cells = bbox.iter_grid(MAX_BBOX_SIZE).count();
+		assert_eq!(cells, 64);
+
+		let mut stream = op.tile_stream(bbox).await?;
+		assert_eq!(listed.load(Relaxed), 0, "nothing is set up before the stream is read");
+
+		assert!(stream.next().await.is_some());
+		let after_first_tile = listed.load(Relaxed);
+		assert!(
+			after_first_tile <= CELLS_IN_ADVANCE + 2,
+			"{after_first_tile} of {cells} cells were set up for the first tile"
+		);
+
+		// And all of it still arrives.
+		let mut count = 1;
+		while stream.next().await.is_some() {
+			count += 1;
+		}
+		assert_eq!(count, 256 * 256);
+		assert_eq!(listed.load(Relaxed), cells);
+		Ok(())
 	}
 
 	// ============================================================================
