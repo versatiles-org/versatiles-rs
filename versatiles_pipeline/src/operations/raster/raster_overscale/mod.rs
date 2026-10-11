@@ -39,13 +39,13 @@ mod fill;
 mod mask;
 mod scale;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use versatiles_container::TileSource;
 use versatiles_core::ZoomLevel;
 use versatiles_derive::context;
 
 pub use self::fill::FillOverscale;
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{PipelineFactory, operations::removed::refuse_removed_parameters, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Creates the raster tiles a source lacks by upscaling the tiles it has.
@@ -83,33 +83,14 @@ pub struct Args {
 	pub level_max: Option<ZoomLevel>,
 }
 
-/// Parameters `raster_overscale` had before it filled gaps (#284), and what to
-/// do in their place.
-const REMOVED_PARAMETERS: [(&str, &str); 2] = [
-	(
-		"level_base",
-		"tiles are created from the nearest lower zoom level the source has; to ignore its higher levels, put `filter level_max=…` in front",
-	),
-	(
-		"enable_climbing",
-		"tiles are always created from the nearest lower zoom level the source has; remove the parameter",
-	),
-];
-
 /// Builds the operation behind `raster_overscale` in a pipeline.
 pub struct Operation;
 
 impl Operation {
 	#[context("Building raster_overscale operation in VPL node {:?}", vpl_node.name)]
 	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<FillOverscale> {
-		// A parameter that is gone says so, and says what to do. The generic
-		// "does not have a parameter" would leave a pipeline that worked
-		// yesterday with a list of names and no way forward.
-		for (name, advice) in REMOVED_PARAMETERS {
-			if vpl_node.properties.contains_key(name) {
-				bail!("'raster_overscale' no longer has the parameter '{name}': {advice}");
-			}
-		}
+		// A parameter that is gone says so, and says what to do.
+		refuse_removed_parameters(&vpl_node)?;
 		let args = Args::from_vpl_node(&vpl_node)?;
 		FillOverscale::new(source, args.level_max.map(u8::from), factory.runtime()).await
 	}

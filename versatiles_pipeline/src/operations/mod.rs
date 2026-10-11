@@ -10,6 +10,7 @@ mod general;
 pub(crate) mod macros;
 mod raster;
 mod read;
+pub(crate) mod removed;
 pub(crate) mod transform;
 mod vector;
 

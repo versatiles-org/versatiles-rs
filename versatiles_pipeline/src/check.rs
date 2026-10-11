@@ -20,7 +20,7 @@ use std::collections::HashMap;
 
 use crate::{
 	PipelineFactory,
-	operations::{read_operation_factories, transform_operation_factories},
+	operations::{read_operation_factories, removed::removed_parameter_message, transform_operation_factories},
 	vpl::{VPLFieldMeta, VPLNode, VPLPipeline},
 };
 
@@ -196,6 +196,12 @@ fn check_node(
 fn check_properties(node: &VPLNode, fields: &[VPLFieldMeta], path: &[usize], problems: &mut Vec<VplProblem>) {
 	for (key, values) in &node.properties {
 		let Some(field) = fields.iter().find(|f| &f.name == key) else {
+			// A parameter that is gone gets the advice the build gives, not a
+			// list of the names that are left.
+			if let Some(message) = removed_parameter_message(&node.name, key) {
+				problems.push(VplProblem::about(path, key, message));
+				continue;
+			}
 			let known = fields
 				.iter()
 				.filter(|f| !f.is_sources)
@@ -292,6 +298,35 @@ mod tests {
 			found[0].starts_with("'from_debug' has no parameter 'nonsense'. Available: "),
 			"{found:?}"
 		);
+	}
+
+	/// `convert --dry-run` used to answer these with the list of parameters
+	/// that are left, where the build says what to do instead.
+	#[test]
+	fn a_removed_parameter_gets_the_advice_of_the_build() {
+		for (vpl, advice) in [
+			(
+				"from_debug format=png | raster_overscale level_base=2",
+				"filter level_max",
+			),
+			(
+				"from_debug format=png | raster_overscale enable_climbing=true",
+				"remove the parameter",
+			),
+			(
+				"from_debug format=pbf | vector_overzoom level_base=2",
+				"filter level_max",
+			),
+			(
+				"from_debug format=pbf | vector_overzoom enable_climbing=true",
+				"remove the parameter",
+			),
+		] {
+			let found = problems(vpl);
+			assert_eq!(found.len(), 1, "{found:?}");
+			assert!(found[0].contains("no longer has the parameter"), "{found:?}");
+			assert!(found[0].contains(advice), "{found:?}");
+		}
 	}
 
 	#[test]

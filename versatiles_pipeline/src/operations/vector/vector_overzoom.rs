@@ -35,7 +35,7 @@
 
 use std::{fmt::Debug, sync::Arc};
 
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use geo::MapCoords;
 use geo_types::{Coord, Geometry, MultiPolygon, Polygon};
@@ -49,7 +49,7 @@ use versatiles_geometry::{
 	vector_tile::{VectorTile, VectorTileLayer},
 };
 
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{PipelineFactory, operations::removed::refuse_removed_parameters, vpl::VPLNode};
 
 /// Default clip buffer in tile-extent units. Matches tippecanoe's default of 5 pixels
 /// at 256-px tile size scaled to the standard MVT extent of 4096 (5 * 4096 / 256 = 80).
@@ -83,18 +83,6 @@ pub struct Args {
 	pub buffer: Option<u32>,
 }
 
-/// Parameters `vector_overzoom` used to have, and what to do in their place.
-const REMOVED_PARAMETERS: [(&str, &str); 2] = [
-	(
-		"level_base",
-		"tiles are created from the source's highest zoom level; to use a lower one, put `filter level_max=…` in front",
-	),
-	(
-		"enable_climbing",
-		"a tile the source lacks at its highest zoom level is an empty one, and nothing is created from further down; remove the parameter",
-	),
-];
-
 /// The vector overzoom operation state.
 #[derive(Clone)]
 pub struct Operation {
@@ -127,11 +115,7 @@ impl Operation {
 		Self: Sized + TileSource,
 	{
 		// A parameter that is gone says so, and says what to do.
-		for (name, advice) in REMOVED_PARAMETERS {
-			if vpl_node.properties.contains_key(name) {
-				bail!("'vector_overzoom' no longer has the parameter '{name}': {advice}");
-			}
-		}
+		refuse_removed_parameters(&vpl_node)?;
 		let args = Args::from_vpl_node(&vpl_node)?;
 		Self::new(source, args.level_max.map(u8::from), args.buffer)
 	}
