@@ -190,8 +190,8 @@ fn parse_tile_coord(segments: &[&str]) -> Result<TileCoord> {
 			!text.is_empty() && text.bytes().all(|b| b.is_ascii_digit()),
 			"value for {name} is not a number"
 		);
-		// One spelling per tile: `012/5/7` would be a second URL for `12/5/7`,
-		// and a cache in front would keep both.
+		// `012/5/7` would be a second URL for `12/5/7`, and a cache in front
+		// would keep both.
 		ensure!(
 			text == "0" || !text.starts_with('0'),
 			"value for {name} has a leading zero"

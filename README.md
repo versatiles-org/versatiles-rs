@@ -470,7 +470,7 @@ versatiles serve tiles.versatiles
 | `-c, --config`            | YAML configuration file                                | -       |
 | `-s, --static`            | Serve static content from a folder or tar (repeatable) | -       |
 | `--minimal-recompression` | Fast serving (less compression)                        | false   |
-| `--disable-api`           | Disable `/api` endpoints                               | false   |
+| `--disable-api`           | Do not serve the source list at `/tiles/index.json`    | false   |
 | `--follow-symlinks`       | Let a symlink in a static folder point outside it      | false   |
 | `--cache-control`         | `Cache-Control` header for tiles and static files      | 4 weeks |
 | `--auto-shutdown`         | Shut down automatically after N milliseconds           | -       |
@@ -479,7 +479,9 @@ versatiles serve tiles.versatiles
 weeks, right for a public tile server. Set something shorter when the tiles
 behind a URL change. The header is sent with everything the server answers
 with data: tiles, the 204 of an empty tile, `tiles.json` and static files. It
-is not sent with a 404 or an error.
+is not sent with a 404 or an error. The list of tile sources at
+`/tiles/index.json` is the exception: it always carries the default of four
+weeks.
 
 **Tiles without data:**
 
@@ -503,13 +505,15 @@ outside the covered area) is answered by tile type:
   drawn as a transparent tile. A raster source with gaps at its high zoom
   levels keeps working that way. To fill such gaps on the server instead, see
   `raster_overscale` in `versatiles help pipeline`.
-- A tile that exists but cannot be read (a remote source that answers with
-  an error, a damaged file) gets `500 Internal Server Error`, without the
+- A tile that exists but cannot be read (a damaged file, a remote source
+  that refuses the request) gets `500 Internal Server Error`, without the
   `Cache-Control` of a tile, and the reason goes to the log. It is not a
   missing tile, and must not be kept as one by a proxy.
-- A request that is not answered within 15 seconds (a remote source that
-  stopped answering), or that arrives while the server has more requests than
-  it can queue, gets `503 Service Unavailable` with `Retry-After: 2`.
+- A request that is not answered within 15 seconds, or that arrives while the
+  server has more requests than it can queue, gets `503 Service Unavailable`
+  with `Retry-After: 2`. That is what a remote source looks like that stopped
+  answering, and also one that answers with a server error: the request to it
+  is repeated until the 15 seconds are over.
 
 Headers set under `extra_response_headers` in the configuration file are added
 to every response, the 404, 500 and 503 included. A `Cache-Control` set there
@@ -611,7 +615,7 @@ When started with `-c`, the server reloads its configuration without downtime on
 kill -HUP $(pidof versatiles)
 ```
 
-Tile sources are updated incrementally: an unchanged source is left alone, and a changed one is opened first and then swapped in, so it stays available throughout. If a source cannot be opened, the previous one keeps serving, the error is logged, and the next reload tries again. Static sources are handled the same way, and the new list is swapped in at once. In-flight requests always complete against the version they started with.
+Tile sources are updated incrementally: an unchanged source is left alone, and a changed one is opened first and then swapped in, so it stays available throughout. If a source cannot be opened, the previous one keeps serving, the error is logged, and the next reload tries again. Static sources are handled the same way, and the new list is swapped in at once; where several static sources share a URL prefix and one of them cannot be built, none of the old ones is kept for it, because the prefix does not say which one it replaces. In-flight requests always complete against the version they started with.
 
 Tile and static sources given on the command line stay, and so do the command line's settings: a reload applies them on top of the file again, as the start did. Of the settings, only `follow_symlinks` takes effect on a reload; the others need a restart. A config that names two tile sources for the same URL is refused as a whole: the error is logged and the server keeps running as it is.
 
@@ -1252,7 +1256,7 @@ VersaTiles can be used as a command-line tool or integrated into Rust projects a
 
 ## Versioning
 
-Version numbers follow semantic versioning for what you build on: the container formats, the commands `convert`, `probe` and `serve` with their documented options, and the URLs of tiles and TileJSON. These change in a major release only.
+Version numbers follow semantic versioning for what you build on: the container formats, the commands `convert`, `probe` and `serve` with their documented options, and the URLs of tiles and TileJSON as documented (`/tiles/{name}/{z}/{x}/{y}`, `/tiles/{name}/tiles.json`). These change in a major release only.
 
 The pipeline language and its operations, the status codes of error cases and the Rust API may change in a minor release. Such a change is listed under "Upgrading" in the [release notes](https://github.com/versatiles-org/versatiles-rs/releases), and a removed parameter is an error that names its replacement. If you depend on the Rust crates, pin the minor version (`versatiles = "~5.1"`). The details are in [RELEASING.md](./RELEASING.md#version-strategy).
 

@@ -279,7 +279,10 @@ of the project that are its public contract:
 - the container formats: a file written by one version is read by every later
   one of the same major version;
 - the commands `convert`, `probe` and `serve` and their documented options;
-- the URLs the server serves tiles and TileJSON under.
+- the URLs the server serves tiles and TileJSON under, as documented:
+  `/tiles/{name}/{z}/{x}/{y}` with an optional extension, and
+  `/tiles/{name}/tiles.json`. Other spellings that happen to be answered are
+  not part of it.
 
 A breaking change to any of these needs a major release.
 
