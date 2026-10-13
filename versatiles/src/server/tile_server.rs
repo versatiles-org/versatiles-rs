@@ -768,30 +768,46 @@ mod tests {
 		Ok(())
 	}
 
-	/// A source that takes its time over every tile.
+	/// A source that takes its time over every tile, and says when a request
+	/// for one has reached it.
 	#[derive(Debug)]
-	struct SlowSource(MockReader, std::time::Duration);
+	struct SlowSource {
+		reader: MockReader,
+		delay: std::time::Duration,
+		arrived: tokio::sync::Notify,
+	}
+
+	impl SlowSource {
+		fn new(delay: std::time::Duration) -> Result<Arc<Self>> {
+			Ok(Arc::new(Self {
+				reader: MockReader::new_mock_profile(MRP::Pbf)?,
+				delay,
+				arrived: tokio::sync::Notify::new(),
+			}))
+		}
+	}
 
 	#[async_trait::async_trait]
 	impl TileSource for SlowSource {
 		fn source_type(&self) -> Arc<versatiles_container::SourceType> {
-			self.0.source_type()
+			self.reader.source_type()
 		}
 
 		fn metadata(&self) -> &TileSourceMetadata {
-			self.0.metadata()
+			self.reader.metadata()
 		}
 
 		fn tilejson(&self) -> &versatiles_core::TileJSON {
-			self.0.tilejson()
+			self.reader.tilejson()
 		}
 
 		async fn tile_stream(
 			&self,
 			bbox: versatiles_core::TileBBox,
 		) -> Result<versatiles_core::TileStream<'static, versatiles_container::Tile>> {
-			tokio::time::sleep(self.1).await;
-			self.0.tile_stream(bbox).await
+			self.arrived.notify_one();
+			tokio::time::sleep(self.delay).await;
+			self.reader.tile_stream(bbox).await
 		}
 	}
 
@@ -802,18 +818,23 @@ mod tests {
 	async fn stop_waits_for_a_request_that_is_in_flight() -> Result<()> {
 		let delay = std::time::Duration::from_millis(300);
 		let mut server = TileServer::new_test(IP, 0, true, false);
-		let slow = SlowSource(MockReader::new_mock_profile(MRP::Pbf)?, delay);
-		server.add_tile_source("slow".to_string(), Arc::new(slow)).await?;
+		let slow = SlowSource::new(delay)?;
+		server.add_tile_source("slow".to_string(), slow.clone()).await?;
 		server.start().await?;
 		let port = server.port();
 
-		let sent = std::time::Instant::now();
+		// Waiting for the request to arrive, not for some time to pass: a slow
+		// machine takes longer to send it than any fixed pause allows for.
 		let request = tokio::spawn(reqwest::get(format!("http://{IP}:{port}/tiles/slow/3/1/2")));
-		tokio::time::sleep(delay / 4).await;
+		slow.arrived.notified().await;
+		let arrived = std::time::Instant::now();
 		assert!(!request.is_finished(), "the request should still be running");
 
 		server.stop().await;
-		assert!(sent.elapsed() >= delay, "stop returned before the request was answered");
+		assert!(
+			arrived.elapsed() >= delay,
+			"stop returned before the request was answered"
+		);
 
 		let response = request.await?.expect("the request should be answered, not cut off");
 		assert_eq!(response.status(), StatusCode::OK);
@@ -836,17 +857,17 @@ mod tests {
 		let limit = std::time::Duration::from_millis(150);
 		let mut server = TileServer::new_test(IP, 0, true, false);
 		server.shutdown_timeout = limit;
-		let slow = SlowSource(MockReader::new_mock_profile(MRP::Pbf)?, delay);
-		server.add_tile_source("slow".to_string(), Arc::new(slow)).await?;
+		let slow = SlowSource::new(delay)?;
+		server.add_tile_source("slow".to_string(), slow.clone()).await?;
 		server.start().await?;
 		let port = server.port();
 
-		let sent = std::time::Instant::now();
 		let request = tokio::spawn(reqwest::get(format!("http://{IP}:{port}/tiles/slow/3/1/2")));
-		tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+		slow.arrived.notified().await;
+		let arrived = std::time::Instant::now();
 
 		server.stop().await;
-		let stopped_after = sent.elapsed();
+		let stopped_after = arrived.elapsed();
 		assert!(stopped_after >= limit, "stop did not wait: {stopped_after:?}");
 		assert!(stopped_after < delay, "stop waited for the request: {stopped_after:?}");
 		assert!(!request.is_finished(), "the request should still be running");
@@ -860,7 +881,7 @@ mod tests {
 
 		let response = request.await?.expect("the request should still be answered");
 		assert_eq!(response.status(), StatusCode::OK);
-		assert!(sent.elapsed() >= delay);
+		assert!(arrived.elapsed() >= delay);
 		Ok(())
 	}
 
@@ -877,11 +898,8 @@ mod tests {
 			HeaderName::from_static("x-robots-tag"),
 			HeaderValue::from_static("noindex"),
 		)];
-		let slow = SlowSource(
-			MockReader::new_mock_profile(MRP::Pbf)?,
-			std::time::Duration::from_secs(2),
-		);
-		server.add_tile_source("slow".to_string(), Arc::new(slow)).await?;
+		let slow = SlowSource::new(std::time::Duration::from_secs(2))?;
+		server.add_tile_source("slow".to_string(), slow).await?;
 		server.start().await?;
 		let port = server.port();
 
