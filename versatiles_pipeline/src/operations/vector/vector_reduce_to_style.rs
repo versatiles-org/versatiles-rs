@@ -391,6 +391,24 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn a_computed_property_name_keeps_every_property_of_its_layer() {
+		// `debug_x` reads a name built at runtime, so any of its properties may be the one; `debug_y`
+		// reads one by name and keeps only that.
+		let properties = surviving(
+			r#"{"layers":[
+				{"id":"a","source-layer":"debug_x","layout":{"text-field":["get",["concat","ch","ar"]]}},
+				{"id":"b","source-layer":"debug_y","paint":{"c":["get","index"]}}
+			]}"#,
+		)
+		.await
+		.unwrap();
+		assert_eq!(
+			properties,
+			["debug_x/char", "debug_x/index", "debug_x/x", "debug_y/index"]
+		);
+	}
+
+	#[tokio::test]
 	async fn a_legacy_geometry_type_filter_keeps_the_features() -> Result<()> {
 		// `$type` is the geometry type, not a property. Read as one, no feature has it, and the
 		// layer the style draws would be emptied.

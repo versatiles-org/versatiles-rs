@@ -33,7 +33,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, Result, bail, ensure};
 use versatiles_core::json::{JsonObject, JsonValue};
 
-use super::ir::{KeepEntry, LayerRequirement, Predicate, Requirement};
+use super::ir::{KeepEntry, LayerRequirement, Predicate, Properties, Requirement};
 
 /// The zoom range one group of style layers is drawn in, already clamped to the tileset.
 type ZoomRange = (u8, u8);
@@ -89,11 +89,13 @@ fn source_name(source: Option<&String>) -> String {
 ///
 /// `tileset_layers` is empty when the tileset does not list its layers; the checks against it are
 /// then skipped.
+///
+/// Returns the selected style layers and the ID of their source, `None` when they name none.
 fn select_layers<'a>(
 	layers: &[&'a JsonObject],
 	source: Option<&str>,
 	tileset_layers: &BTreeSet<String>,
-) -> Result<Vec<&'a JsonObject>> {
+) -> Result<(Vec<&'a JsonObject>, Option<String>)> {
 	// Source → its style layers that draw tile data, and the source-layers they draw.
 	let mut sources: BTreeMap<Option<String>, (Vec<&JsonObject>, BTreeSet<String>)> = BTreeMap::new();
 	for layer in layers {
@@ -120,8 +122,8 @@ fn select_layers<'a>(
 			.join(", ")
 	};
 
-	let (selected, drawn) = if let Some(id) = source {
-		let Some(entry) = sources.get(&Some(id.to_string())) else {
+	let (selected_id, (selected, drawn)) = if let Some(id) = source {
+		let Some(entry) = sources.get_key_value(&Some(id.to_string())) else {
 			bail!(
 				"no style layer draws source-layers from source {id:?}. The style draws them from: {}",
 				list()
@@ -146,7 +148,7 @@ fn select_layers<'a>(
 				list()
 			);
 		}
-		sources.values().next().expect("checked non-empty above")
+		sources.iter().next().expect("checked non-empty above")
 	};
 
 	ensure!(
@@ -157,7 +159,29 @@ fn select_layers<'a>(
 		tileset_layers.iter().cloned().collect::<Vec<_>>().join(", ")
 	);
 
-	Ok(selected.clone())
+	Ok((selected.clone(), selected_id.clone()))
+}
+
+/// The property a style source promotes to the feature ID, per source-layer.
+///
+/// MapLibre reads it for `feature-state` (hover, selection) and for `["id"]`, without the style
+/// ever naming it in a `get`, so it has to be kept on top of what the layers read. `promoteId` is
+/// either one name for every source-layer or an object naming one per source-layer.
+fn promoted_id(style: &JsonObject, source: Option<&str>, source_layer: &str) -> Option<String> {
+	let Some(JsonValue::Object(sources)) = style.get("sources") else {
+		return None;
+	};
+	let Some(JsonValue::Object(definition)) = sources.get(source?) else {
+		return None;
+	};
+	match definition.get("promoteId")? {
+		JsonValue::String(name) => Some(name.clone()),
+		JsonValue::Object(per_layer) => match per_layer.get(source_layer)? {
+			JsonValue::String(name) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 /// What a style needs from a tileset whose deepest level is `maxzoom`.
@@ -196,7 +220,7 @@ pub fn from_style(
 		Some(_) => bail!("the style's `layers` is not an array"),
 		None => bail!("the style has no `layers`"),
 	};
-	let layers = select_layers(&layers, source, tileset_layers)?;
+	let (layers, source) = select_layers(&layers, source, tileset_layers)?;
 
 	let usage = fields::usage(&layers);
 
@@ -270,7 +294,10 @@ pub fn from_style(
 			})
 			.collect();
 
-		let mut properties = usage.get(&source_layer).cloned().unwrap_or_default();
+		let fields::Fields {
+			names: mut properties,
+			all,
+		} = usage.get(&source_layer).cloned().unwrap_or_default();
 
 		// Every property a predicate reads must survive the reduction, or the filter that needs it
 		// evaluates `has(props.k)` against a feature that no longer carries it and drops the whole
@@ -283,10 +310,16 @@ pub fn from_style(
 			}
 		}
 
+		properties.extend(promoted_id(style, source.as_deref(), &source_layer));
+
 		requirement_layers.insert(
 			source_layer,
 			LayerRequirement {
-				properties: properties.into_iter().collect(),
+				properties: if all {
+					Properties::All
+				} else {
+					Properties::Listed(properties.into_iter().collect())
+				},
 				keep,
 			},
 		);
@@ -329,8 +362,16 @@ mod tests {
 		from_style(json, maxzoom, None, &BTreeSet::new()).unwrap()
 	}
 
+	/// The listed properties of a layer; a layer keeping all of them fails the test.
+	fn listed(properties: &Properties) -> &[String] {
+		match properties {
+			Properties::Listed(names) => names,
+			Properties::All => panic!("expected a list of properties, found all of them"),
+		}
+	}
+
 	fn properties(requirement: &Requirement, layer: &str) -> Vec<String> {
-		requirement.layers[layer].properties.clone()
+		listed(&requirement.layers[layer].properties).to_vec()
 	}
 
 	// ── the vendored styles ──
@@ -373,7 +414,7 @@ mod tests {
 		let translations: Vec<String> = requirement
 			.layers
 			.values()
-			.flat_map(|layer| layer.properties.iter())
+			.flat_map(|layer| listed(&layer.properties).iter())
 			.filter(|property| property.starts_with("name_") || property.starts_with("name:"))
 			.cloned()
 			.collect();
@@ -387,7 +428,7 @@ mod tests {
 		let requirement = from(&style("colorful.json"), 14);
 		for (name, layer) in &requirement.layers {
 			let read = predicate_fields(&requirement, name);
-			let kept: BTreeSet<String> = layer.properties.iter().cloned().collect();
+			let kept: BTreeSet<String> = listed(&layer.properties).iter().cloned().collect();
 			assert!(
 				read.is_subset(&kept),
 				"{name}: predicates read {:?} which the reduction would strip",
@@ -604,6 +645,67 @@ mod tests {
 		assert!(message.contains("none of this tileset's layers"), "got: {message}");
 		assert!(message.contains("draws: water"), "got: {message}");
 		assert!(message.contains("has: buildings, streets"), "got: {message}");
+	}
+
+	// ── properties that cannot be listed ──
+
+	#[test]
+	fn a_computed_property_name_keeps_every_property_of_that_layer() {
+		let requirement = from(
+			r#"{"layers":[
+				{"id":"a","source-layer":"places","layout":{"text-field":["get",["concat","name_","de"]]}},
+				{"id":"b","source-layer":"water","paint":{"c":["get","kind"]}}
+			]}"#,
+			14,
+		);
+		assert_eq!(requirement.layers["places"].properties, Properties::All);
+		assert_eq!(
+			properties(&requirement, "water"),
+			["kind"],
+			"other layers are unaffected"
+		);
+	}
+
+	#[test]
+	fn a_promoted_id_is_kept() {
+		// `feature-state` needs it, and no `get` names it.
+		let requirement = from(
+			r#"{"sources":{"s":{"type":"vector","promoteId":"osm_id"}},"layers":[
+				{"id":"a","source":"s","source-layer":"water","paint":{"c":["get","kind"]}},
+				{"id":"b","source":"s","source-layer":"land"}
+			]}"#,
+			14,
+		);
+		assert_eq!(properties(&requirement, "water"), ["kind", "osm_id"]);
+		assert_eq!(properties(&requirement, "land"), ["osm_id"]);
+	}
+
+	#[test]
+	fn a_promoted_id_per_source_layer_is_kept_where_it_applies() {
+		let requirement = from(
+			r#"{"sources":{"s":{"type":"vector","promoteId":{"water":"water_id"}}},"layers":[
+				{"id":"a","source":"s","source-layer":"water"},
+				{"id":"b","source":"s","source-layer":"land"}
+			]}"#,
+			14,
+		);
+		assert_eq!(properties(&requirement, "water"), ["water_id"]);
+		assert_eq!(properties(&requirement, "land"), Vec::<String>::new());
+	}
+
+	#[test]
+	fn another_sources_promoted_id_is_not_kept() {
+		let requirement = from_style(
+			r#"{"sources":{"s":{"type":"vector"},"t":{"type":"vector","promoteId":"other_id"}},"layers":[
+				{"id":"a","source":"s","source-layer":"water"},
+				{"id":"b","source":"t","source-layer":"water"}
+			]}"#,
+			14,
+			Some("s"),
+			&BTreeSet::new(),
+		)
+		.unwrap();
+		assert_eq!(properties(&requirement, "water"), Vec::<String>::new());
 	}
 
 	// ── malformed input ──

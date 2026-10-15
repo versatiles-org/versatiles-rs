@@ -25,6 +25,6 @@ mod render;
 mod simplify;
 pub mod style;
 
-pub use ir::{KeepEntry, LayerRequirement, Literal, Predicate, Requirement};
+pub use ir::{KeepEntry, LayerRequirement, Literal, Predicate, Properties, Requirement};
 pub use render::{feature_expressions, layer_names, operations, property_regex};
 pub use style::from_style;

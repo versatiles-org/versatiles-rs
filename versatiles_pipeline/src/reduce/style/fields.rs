@@ -5,7 +5,7 @@
 //! later. So this errs toward naming a property the style does not read: an extra property
 //! survives the reduction, which costs bytes, where a missed one costs data.
 //!
-//! Three spellings are read:
+//! Four spellings are read:
 //!
 //! 1. **`["get", "kind"]`** — the modern expression form, anywhere in `filter`, `paint` or
 //!    `layout`.
@@ -13,6 +13,13 @@
 //!    `["==", "kind", "motorway"]`. Nothing in the grammar marks it as a field; it is one because
 //!    the operator says so, which is why [`LEGACY_FIELD_OPS`] has to be enumerated.
 //! 3. **`{token}` inside a `layout` string** — `"text-field": "{ref}"`. See below.
+//! 4. **The `property` of a legacy function** — `{"property": "kind", "stops": […]}`, the
+//!    data-driven styling that predates expressions.
+//!
+//! Some expressions read properties whose names cannot be listed: `["get", ["concat", "name_",
+//! lang]]` computes the name, and `["properties"]` hands over all of them. A layer using either
+//! keeps **every** property ([`Fields::all`]), because any name left off the list would be one the
+//! style might read.
 //!
 //! ## Why tokens are read, and why from all of `layout`
 //!
@@ -39,29 +46,79 @@ use versatiles_core::json::{JsonObject, JsonValue};
 /// `all` / `any` / `none` are deliberately absent: they take sub-filters, not a field name.
 const LEGACY_FIELD_OPS: &[&str] = &["==", "!=", "<", "<=", ">", ">=", "in", "!in", "has", "!has"];
 
-/// Every field an expression reads, by either array spelling.
+/// The properties a style layer, or a source-layer's style layers together, read.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Fields {
+	/// The properties named.
+	pub names: BTreeSet<String>,
+	/// Whether properties are also read by a name that cannot be listed, so that all of them have
+	/// to stay.
+	pub all: bool,
+}
+
+impl Fields {
+	/// Adds what another layer reads.
+	pub fn extend(&mut self, other: Fields) {
+		self.names.extend(other.names);
+		self.all |= other.all;
+	}
+}
+
+/// Every field an expression reads, by any spelling.
 ///
 /// Applied to `paint` and `layout` as well as `filter`, where a legacy operator cannot occur. The
 /// shape it matches there — an operator string followed by a bare string — is not something the
 /// modern grammar produces, since expression operands are themselves expressions or literals
 /// wrapped in `["literal", …]`. A false positive only adds a property name, which widens.
-fn fields_in(value: &JsonValue, out: &mut BTreeSet<String>) {
-	let JsonValue::Array(array) = value else { return };
-	let items = array.as_vec();
+///
+/// Objects are walked too. A legacy function is one, and expressions nest inside objects as well:
+/// the options of `["format", …, {"text-color": ["get", "colour"]}]` are expressions in their own
+/// right. Walking the occasional `["literal", {…}]` as well only finds names that need not stay.
+fn fields_in(value: &JsonValue, out: &mut Fields) {
+	match value {
+		JsonValue::Array(array) => {
+			let items = array.as_vec();
 
-	if let [JsonValue::String(op), JsonValue::String(name), ..] = items.as_slice() {
-		if op == "get" && items.len() == 2 {
-			out.insert(name.clone());
-		}
-		// `$type` and `$id` in a legacy filter are the geometry type and the feature ID, which no
-		// tile stores as a property.
-		if LEGACY_FIELD_OPS.contains(&op.as_str()) && !super::filter::LEGACY_SPECIAL_KEYS.contains(&name.as_str()) {
-			out.insert(name.clone());
-		}
-	}
+			match items.as_slice() {
+				// The whole property map, to a name chosen at runtime or to anything at all.
+				[JsonValue::String(op)] if op == "properties" => out.all = true,
+				// `["get", "k"]` and modern `["has", "k"]` name it. A three-argument form reads from
+				// the object in its third argument instead; when that is `["properties"]`, the walk
+				// below finds it.
+				[JsonValue::String(op), name, rest @ ..] if op == "get" || op == "has" => match name {
+					JsonValue::String(name) if rest.is_empty() => {
+						out.names.insert(name.clone());
+					}
+					JsonValue::String(_) => {}
+					// A name computed at runtime: any property may be the one it reads.
+					_ => out.all = true,
+				},
+				_ => {}
+			}
 
-	for item in items {
-		fields_in(item, out);
+			if let [JsonValue::String(op), JsonValue::String(name), ..] = items.as_slice()
+				// `$type` and `$id` in a legacy filter are the geometry type and the feature ID,
+				// which no tile stores as a property.
+				&& LEGACY_FIELD_OPS.contains(&op.as_str())
+				&& !super::filter::LEGACY_SPECIAL_KEYS.contains(&name.as_str())
+			{
+				out.names.insert(name.clone());
+			}
+
+			for item in items {
+				fields_in(item, out);
+			}
+		}
+		JsonValue::Object(object) => {
+			// A legacy function: `{"property": "kind", "type": "categorical", "stops": […]}`.
+			if let Some(JsonValue::String(name)) = object.get("property") {
+				out.names.insert(name.clone());
+			}
+			for (_, item) in object.iter() {
+				fields_in(item, out);
+			}
+		}
+		_ => {}
 	}
 }
 
@@ -100,8 +157,8 @@ fn tokens_of_layout(value: &JsonValue, out: &mut BTreeSet<String>) {
 }
 
 /// The properties one style layer reads.
-pub fn fields_of_layer(layer: &JsonObject) -> BTreeSet<String> {
-	let mut fields = BTreeSet::new();
+pub fn fields_of_layer(layer: &JsonObject) -> Fields {
+	let mut fields = Fields::default();
 
 	if let Some(filter) = layer.get("filter") {
 		fields_in(filter, &mut fields);
@@ -115,7 +172,7 @@ pub fn fields_of_layer(layer: &JsonObject) -> BTreeSet<String> {
 	}
 	// Only `layout` carries tokens — `paint` has no string-valued property MapLibre expands.
 	if let Some(layout) = layer.get("layout") {
-		tokens_of_layout(layout, &mut fields);
+		tokens_of_layout(layout, &mut fields.names);
 	}
 
 	fields
@@ -124,8 +181,8 @@ pub fn fields_of_layer(layer: &JsonObject) -> BTreeSet<String> {
 /// Source-layer → the properties the style reads from it.
 ///
 /// Style layers with no `source-layer` draw no tile data and are skipped.
-pub fn usage(layers: &[&JsonObject]) -> BTreeMap<String, BTreeSet<String>> {
-	let mut used: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+pub fn usage(layers: &[&JsonObject]) -> BTreeMap<String, Fields> {
+	let mut used: BTreeMap<String, Fields> = BTreeMap::new();
 
 	for layer in layers {
 		let Ok(Some(source_layer)) = layer.string("source-layer") else {
@@ -149,7 +206,13 @@ mod tests {
 	}
 
 	fn fields(json: &str) -> Vec<String> {
-		fields_of_layer(&layer(json)).into_iter().collect()
+		let fields = fields_of_layer(&layer(json));
+		assert!(!fields.all, "expected a list of names: {json}");
+		fields.names.into_iter().collect()
+	}
+
+	fn reads_all(json: &str) -> bool {
+		fields_of_layer(&layer(json)).all
 	}
 
 	#[test]
@@ -236,6 +299,68 @@ mod tests {
 		let used = usage(&[&a, &b, &c]);
 
 		assert_eq!(used.len(), 1, "the layer without a source-layer draws no data");
-		assert_eq!(used["streets"].iter().cloned().collect::<Vec<_>>(), ["kind", "ref"]);
+		assert_eq!(
+			used["streets"].names.iter().cloned().collect::<Vec<_>>(),
+			["kind", "ref"]
+		);
+	}
+
+	#[test]
+	fn a_computed_property_name_keeps_them_all() {
+		assert!(reads_all(
+			r#"{"layout":{"text-field":["get",["concat","name_","de"]]}}"#
+		));
+		assert!(reads_all(r#"{"filter":["has",["get","which"]]}"#));
+	}
+
+	#[test]
+	fn the_whole_property_map_keeps_them_all() {
+		assert!(reads_all(r#"{"layout":{"text-field":["get","name",["properties"]]}}"#));
+		assert!(reads_all(r#"{"paint":{"c":["to-string",["properties"]]}}"#));
+	}
+
+	#[test]
+	fn a_get_from_a_literal_object_reads_no_property() {
+		// The third argument is the object read from, and here it is not the feature's.
+		assert_eq!(
+			fields(r##"{"paint":{"c":["get","k",["literal",{"k":"#fff"}]]}}"##),
+			Vec::<String>::new()
+		);
+	}
+
+	#[test]
+	fn a_listable_layer_does_not_keep_them_all() {
+		assert!(!reads_all(
+			r#"{"filter":["has","kind"],"layout":{"text-field":["get","name"]}}"#
+		));
+	}
+
+	#[test]
+	fn reads_the_property_of_a_legacy_function() {
+		assert_eq!(
+			fields(r##"{"paint":{"fill-color":{"property":"kind","type":"categorical","stops":[["a","#f00"]]}}}"##),
+			["kind"]
+		);
+		assert_eq!(
+			fields(r#"{"layout":{"icon-image":{"property":"icon","type":"identity"}}}"#),
+			["icon"]
+		);
+	}
+
+	#[test]
+	fn reads_expressions_inside_format_options() {
+		assert_eq!(
+			fields(r#"{"layout":{"text-field":["format",["get","name"],{"text-color":["get","colour"]}]}}"#),
+			["colour", "name"]
+		);
+	}
+
+	#[test]
+	fn usage_keeps_them_all_if_one_layer_does() {
+		let a = layer(r#"{"source-layer":"streets","filter":["has","kind"]}"#);
+		let b = layer(r#"{"source-layer":"streets","layout":{"text-field":["get",["concat","name_","de"]]}}"#);
+		let used = usage(&[&a, &b]);
+		assert!(used["streets"].all);
+		assert!(used["streets"].names.contains("kind"));
 	}
 }

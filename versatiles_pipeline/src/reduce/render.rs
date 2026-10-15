@@ -12,7 +12,7 @@
 use std::collections::BTreeMap;
 
 use super::{
-	ir::{KeepEntry, Requirement},
+	ir::{KeepEntry, Properties, Requirement},
 	predicate,
 };
 use crate::vpl::VPLNode;
@@ -81,13 +81,19 @@ pub fn layer_names(requirement: &Requirement) -> Vec<String> {
 ///
 /// One regex over `layer/property`, which is what `vector_filter_properties` matches against. A
 /// layer whose `properties` list is empty contributes no alternative and so loses every property
-/// while keeping its geometry — the case where a layer is drawn as shape alone.
+/// while keeping its geometry — the case where a layer is drawn as shape alone. A layer that keeps
+/// all of them contributes `layer/.*`.
 #[must_use]
 pub fn property_regex(requirement: &Requirement) -> String {
 	let mut alternatives: Vec<String> = Vec::new();
 	for (layer, requirements) in &requirement.layers {
-		for property in &requirements.properties {
-			alternatives.push(regex::escape(&format!("{layer}/{property}")));
+		match &requirements.properties {
+			Properties::All => alternatives.push(format!("{}.*", regex::escape(&format!("{layer}/")))),
+			Properties::Listed(properties) => {
+				for property in properties {
+					alternatives.push(regex::escape(&format!("{layer}/{property}")));
+				}
+			}
 		}
 	}
 
@@ -285,7 +291,7 @@ mod tests {
 			layers: [(
 				"a".to_string(),
 				crate::reduce::LayerRequirement {
-					properties: vec!["k".to_string()],
+					properties: Properties::Listed(vec!["k".to_string()]),
 					keep: Vec::new(),
 				},
 			)]

@@ -27,11 +27,24 @@ pub struct Requirement {
 /// What one source-layer has to keep.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LayerRequirement {
-	/// Property names the style reads from this layer, sorted. Empty means the layer is drawn using
-	/// geometry alone, so every property can go.
-	pub properties: Vec<String>,
+	/// The properties the style reads from this layer.
+	pub properties: Properties,
 	/// Zoom-scoped predicates, **OR-ed together**: a feature is needed if any entry matches.
 	pub keep: Vec<KeepEntry>,
+}
+
+/// The properties a source-layer has to keep.
+///
+/// An enum rather than a list with a flag beside it, so that nothing reading a requirement can
+/// strip properties by overlooking the flag.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Properties {
+	/// Every property: the style reads one by a name that cannot be listed — computed at runtime, or
+	/// through the whole property map.
+	All,
+	/// These property names, sorted. Empty means the layer is drawn using geometry alone, so every
+	/// property can go.
+	Listed(Vec<String>),
 }
 
 /// One (zoom range, predicate) pair. Every part is optional, and absent means "unbounded".
