@@ -23,7 +23,17 @@
 //! the zoom at which the tiles must actually carry the feature.
 //!
 //! That is why [`from_style`] insists on being told the tileset maximum. The operation reads it
-//! from the pyramid of the source it wraps, which is the only place that knows it.
+//! from the pyramid of the source it wraps, which is the only place that knows it. When the style's
+//! source declares a lower `maxzoom`, that one wins: MapLibre never requests a tile above it and
+//! overzooms the tiles at it instead, so those are the tiles that must carry the feature.
+//!
+//! A tile zoom is the map zoom rounded down — MapLibre floors it for vector sources — so a layer
+//! drawn from map zoom 12.5 is drawn from z12 tiles, and one hidden from 10.5 still draws z10 tiles.
+//!
+//! This assumes the map loads one tile zoom for the whole view. A view pitched beyond about 60°,
+//! one with terrain, and the globe projection give each tile its own zoom — lower toward the
+//! horizon, higher close to the camera — but still draw a layer by the *map* zoom. A feature this
+//! drops from a tile outside the layer's zoom range is then missing where such a tile is drawn.
 
 mod fields;
 mod filter;
@@ -38,28 +48,32 @@ use super::ir::{KeepEntry, LayerRequirement, Predicate, Properties, Requirement}
 /// The zoom range one group of style layers is drawn in, already clamped to the tileset.
 type ZoomRange = (u8, u8);
 
-/// Reads a style layer's zoom bounds, clamped to what the tiles actually carry.
-///
-/// A style layer's `maxzoom` is **exclusive** in MapLibre — the layer is hidden at zooms greater
-/// than or equal to it — and is read here as inclusive. That keeps one zoom level more than the
-/// style draws, which is the widening direction, and it avoids an off-by-one that would drop the
-/// deepest level of every bounded layer.
-fn zoom_range(layer: &JsonObject, maxzoom: u8) -> Result<ZoomRange> {
-	let read = |key: &str| -> Result<Option<u8>> {
-		let Some(value) = layer.number(key)? else {
-			return Ok(None);
-		};
-		ensure!(
-			value.fract() == 0.0 && (0.0..=30.0).contains(&value),
-			"{key} must be a whole number between 0 and 30, found {value}"
-		);
-		#[expect(
-			clippy::cast_possible_truncation,
-			clippy::cast_sign_loss,
-			reason = "the ensure! above admits only whole numbers in 0..=30"
-		)]
-		Ok(Some(value as u8))
+/// Reads a zoom from a style object, as the tile zoom it falls in: rounded down.
+fn tile_zoom(object: &JsonObject, key: &str) -> Result<Option<u8>> {
+	let Some(value) = object.number(key)? else {
+		return Ok(None);
 	};
+	ensure!(
+		(0.0..=30.0).contains(&value),
+		"{key} must be a number between 0 and 30, found {value}"
+	);
+	#[expect(
+		clippy::cast_possible_truncation,
+		clippy::cast_sign_loss,
+		reason = "the ensure! above admits only numbers in 0..=30, and `floor` makes them whole"
+	)]
+	Ok(Some(value.floor() as u8))
+}
+
+/// Reads a style layer's zoom bounds as tile zooms, clamped to what the tiles actually carry.
+///
+/// Both are rounded down, because that is the tile zoom MapLibre loads at a map zoom: a layer
+/// drawn from 12.5 is drawn from z12 tiles. A style layer's `maxzoom` is **exclusive** in MapLibre
+/// — the layer is hidden at zooms greater than or equal to it — and is read here as inclusive. For a
+/// fractional one that is exact (hidden from 10.5, still drawn at 10.4, from z10 tiles); for a whole
+/// one it keeps one zoom level more than the style draws, which is the widening direction.
+fn zoom_range(layer: &JsonObject, maxzoom: u8) -> Result<ZoomRange> {
+	let read = |key: &str| tile_zoom(layer, key);
 
 	let min = read("minzoom")?.unwrap_or(0).min(maxzoom);
 	let max = read("maxzoom")?.unwrap_or(maxzoom).min(maxzoom);
@@ -162,19 +176,24 @@ fn select_layers<'a>(
 	Ok((selected.clone(), selected_id.clone()))
 }
 
+/// The definition of a style source in the style's `sources`, if it has one.
+fn source_definition<'a>(style: &'a JsonObject, source: Option<&str>) -> Option<&'a JsonObject> {
+	let Some(JsonValue::Object(sources)) = style.get("sources") else {
+		return None;
+	};
+	match sources.get(source?)? {
+		JsonValue::Object(definition) => Some(definition),
+		_ => None,
+	}
+}
+
 /// The property a style source promotes to the feature ID, per source-layer.
 ///
 /// MapLibre reads it for `feature-state` (hover, selection) and for `["id"]`, without the style
 /// ever naming it in a `get`, so it has to be kept on top of what the layers read. `promoteId` is
 /// either one name for every source-layer or an object naming one per source-layer.
 fn promoted_id(style: &JsonObject, source: Option<&str>, source_layer: &str) -> Option<String> {
-	let Some(JsonValue::Object(sources)) = style.get("sources") else {
-		return None;
-	};
-	let Some(JsonValue::Object(definition)) = sources.get(source?) else {
-		return None;
-	};
-	match definition.get("promoteId")? {
+	match source_definition(style, source)?.get("promoteId")? {
 		JsonValue::String(name) => Some(name.clone()),
 		JsonValue::Object(per_layer) => match per_layer.get(source_layer)? {
 			JsonValue::String(name) => Some(name.clone()),
@@ -221,6 +240,12 @@ pub fn from_style(
 		None => bail!("the style has no `layers`"),
 	};
 	let (layers, source) = select_layers(&layers, source, tileset_layers)?;
+	let maxzoom = match source_definition(style, source.as_deref()) {
+		Some(definition) => tile_zoom(definition, "maxzoom")
+			.with_context(|| format!("in style source {}", source_name(source.as_ref())))?
+			.map_or(maxzoom, |source_max| source_max.min(maxzoom)),
+		None => maxzoom,
+	};
 
 	let usage = fields::usage(&layers);
 
@@ -476,6 +501,57 @@ mod tests {
 		// deepest level of every bounded layer.
 		let requirement = from(r#"{"layers":[{"id":"a","source-layer":"water","maxzoom":10}]}"#, 14);
 		assert_eq!(requirement.layers["water"].keep[0].maxzoom, Some(10));
+	}
+
+	#[test]
+	fn a_fractional_zoom_is_the_tile_zoom_it_falls_in() {
+		// Drawn from map zoom 12.5 means drawn from z12 tiles; hidden from 10.5 means still drawn
+		// at 10.4, from z10 tiles.
+		let requirement = from(
+			r#"{"layers":[{"id":"a","source-layer":"water","minzoom":12.5,"maxzoom":13.5}]}"#,
+			14,
+		);
+		let entry = &requirement.layers["water"].keep[0];
+		assert_eq!((entry.minzoom, entry.maxzoom), (Some(12), Some(13)));
+	}
+
+	#[test]
+	fn a_lower_source_maxzoom_is_where_the_tiles_stop() {
+		// MapLibre requests nothing above the source's maxzoom and overzooms z12 instead, so a layer
+		// drawn from 13 must be kept in the z12 tiles, although the tileset goes on to z14.
+		let requirement = from(
+			r#"{"sources":{"s":{"type":"vector","maxzoom":12}},"layers":[
+				{"id":"a","source":"s","source-layer":"water","minzoom":13}
+			]}"#,
+			14,
+		);
+		let entry = &requirement.layers["water"].keep[0];
+		assert_eq!((entry.minzoom, entry.maxzoom), (Some(12), None));
+	}
+
+	#[test]
+	fn a_higher_source_maxzoom_does_not_raise_the_tilesets() {
+		let requirement = from(
+			r#"{"sources":{"s":{"type":"vector","maxzoom":18}},"layers":[
+				{"id":"a","source":"s","source-layer":"addresses","minzoom":17}
+			]}"#,
+			14,
+		);
+		assert_eq!(requirement.layers["addresses"].keep[0].minzoom, Some(14));
+	}
+
+	#[test]
+	fn a_broken_source_maxzoom_names_the_source() {
+		let error = from_style(
+			r#"{"sources":{"s":{"type":"vector","maxzoom":"high"}},"layers":[
+				{"id":"a","source":"s","source-layer":"water"}
+			]}"#,
+			14,
+			None,
+			&BTreeSet::new(),
+		)
+		.unwrap_err();
+		assert!(format!("{error:#}").contains(r#"style source "s""#), "got: {error:#}");
 	}
 
 	#[test]
@@ -739,7 +815,7 @@ mod tests {
 	#[test]
 	fn a_broken_zoom_names_the_style_layer() {
 		let error = from_style(
-			r#"{"layers":[{"id":"oops","source-layer":"w","minzoom":14.5}]}"#,
+			r#"{"layers":[{"id":"oops","source-layer":"w","minzoom":-1}]}"#,
 			14,
 			None,
 			&BTreeSet::new(),
