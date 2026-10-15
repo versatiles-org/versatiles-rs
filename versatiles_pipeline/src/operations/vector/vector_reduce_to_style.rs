@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use anyhow::Result;
 use regex::Regex;
@@ -36,12 +36,20 @@ use crate::{
 /// MapLibre overzooms, so a style drawing addresses from z17 against a tileset
 /// that stops at z14 must keep them in the z14 tiles, not drop them.
 ///
+/// Only the style layers drawing one of the style's sources count. A style that
+/// draws a single vector source uses that one; a style drawing several needs
+/// `source`, because nothing in it says which of them this tileset is.
+///
 /// **The reduction may keep features the style never draws; it never drops one
 /// it does.** Anything in the style that cannot be read widens toward keeping.
+/// What would reduce the tileset to nothing is refused instead: a style that
+/// draws none of the tileset's layers, or several sources without `source`.
 struct Args {
 	/// Path or URL of the MapLibre style JSON the tileset should be reduced to.
 	#[vpl(accepts = "json")]
 	style: FileLocation,
+	/// ID of the style source this tileset is. Defaults to the style's only vector source.
+	source: Option<String>,
 }
 
 /// Everything a style asks of a tileset, compiled once and applied per tile.
@@ -154,7 +162,12 @@ impl Runner {
 			.level_max()
 			.context("the source has no tiles, so there is no maximum zoom to clamp the style's zooms to")?;
 
-		let requirement = from_style(&json, maxzoom).with_context(|| format!("reading style {}", args.style))?;
+		// The layers the tileset says it has, to tell which source it is and to refuse a style that
+		// draws none of them. A tileset that lists none leaves both to the style.
+		let tileset_layers: BTreeSet<String> = source.tilejson().vector_layers.0.keys().cloned().collect();
+
+		let requirement = from_style(&json, maxzoom, args.source.as_deref(), &tileset_layers)
+			.with_context(|| format!("reading style {}", args.style))?;
 
 		Ok(TransformOp::new(
 			source,
@@ -374,6 +387,54 @@ mod tests {
 		assert!(
 			err.chain().any(|e| e.to_string().contains("'style' is required")),
 			"got: {err:?}"
+		);
+	}
+
+	/// `from_debug` drawn as `debug`, next to an `overlay` source that also has a `debug_x`.
+	const TWO_SOURCES: &str = r#"{"layers":[
+		{"id":"a","source":"debug","source-layer":"debug_x","paint":{"fill-color":["get","char"]}},
+		{"id":"b","source":"overlay","source-layer":"debug_x","paint":{"fill-color":["get","index"]}},
+		{"id":"c","source":"overlay","source-layer":"debug_y"}
+	]}"#;
+
+	#[tokio::test]
+	async fn a_style_with_several_sources_needs_one_named() {
+		let dir = tempfile::tempdir().unwrap();
+		let err = operation(&dir, TWO_SOURCES).await.unwrap_err();
+		assert!(format!("{err:#}").contains("Set `source`"), "got: {err:#}");
+	}
+
+	#[tokio::test]
+	async fn the_named_source_alone_decides_what_stays() -> Result<()> {
+		// `overlay` reads `index` from `debug_x`; only `debug`'s `char` may survive.
+		let dir = tempfile::tempdir().unwrap();
+		let path = style_file(&dir, TWO_SOURCES);
+		let operation = PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!(
+				"from_debug format=mvt | vector_reduce_to_style style=\"{path}\" source=\"debug\""
+			))
+			.await?;
+		let layers: Vec<&String> = operation.tilejson().vector_layers.0.keys().collect();
+		assert_eq!(layers, ["debug_x"]);
+		assert_eq!(
+			operation.tilejson().vector_layers.0["debug_x"]
+				.fields
+				.keys()
+				.collect::<Vec<_>>(),
+			["char"]
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn a_style_for_another_tileset_is_refused() {
+		let dir = tempfile::tempdir().unwrap();
+		let err = operation(&dir, r#"{"layers":[{"id":"a","source":"s","source-layer":"streets"}]}"#)
+			.await
+			.unwrap_err();
+		assert!(
+			format!("{err:#}").contains("none of this tileset's layers"),
+			"got: {err:#}"
 		);
 	}
 

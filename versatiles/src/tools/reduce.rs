@@ -40,6 +40,11 @@ pub struct Subcommand {
 	#[arg(long, short = 's', value_name = "file", verbatim_doc_comment)]
 	style: PathBuf,
 
+	/// ID of the style's source that the input tileset is, e.g. "versatiles-shortbread".
+	/// Required when the style draws more than one vector source.
+	#[arg(long, value_name = "id", verbatim_doc_comment)]
+	source: Option<String>,
+
 	/// print the rendered VPL pipeline and exit, without reading or writing any tiles
 	#[arg(long, verbatim_doc_comment)]
 	print: bool,
@@ -105,17 +110,25 @@ fn build_pipeline(arguments: &Subcommand) -> Result<VPLPipeline> {
 		.to_str()
 		.ok_or_else(|| anyhow::anyhow!("the style path is not valid UTF-8: {:?}", arguments.style))?;
 
+	let mut reduce = vec![("style", style)];
+	if let Some(source) = &arguments.source {
+		reduce.push(("source", source));
+	}
+
 	Ok(VPLPipeline::new(vec![
-		node("from_container", "filename", &arguments.input_file),
-		node("vector_reduce_to_style", "style", style),
+		node("from_container", &[("filename", &arguments.input_file)]),
+		node("vector_reduce_to_style", &reduce),
 	]))
 }
 
-/// A VPL node with a single property.
-fn node(name: &str, key: &str, value: &str) -> VPLNode {
+/// A VPL node with the given properties.
+fn node(name: &str, properties: &[(&str, &str)]) -> VPLNode {
 	VPLNode {
 		name: name.to_string(),
-		properties: [(key.to_string(), vec![value.to_string()])].into_iter().collect(),
+		properties: properties
+			.iter()
+			.map(|(key, value)| ((*key).to_string(), vec![(*value).to_string()]))
+			.collect(),
 		sources: Vec::new(),
 	}
 }
@@ -134,10 +147,15 @@ mod tests {
 
 	/// The pipeline `--print` would write, without going through stdout.
 	fn pipeline_for(input: &str, style: &str) -> String {
+		pipeline_with_source(input, style, None)
+	}
+
+	fn pipeline_with_source(input: &str, style: &str, source: Option<&str>) -> String {
 		let arguments = Subcommand {
 			input_file: input.to_string(),
 			output_file: None,
 			style: PathBuf::from(style),
+			source: source.map(str::to_string),
 			print: true,
 		};
 		build_pipeline(&arguments).unwrap().to_string()
@@ -163,6 +181,17 @@ mod tests {
 			.map(|p| p.message)
 			.collect();
 		assert_eq!(problems, Vec::<String>::new(), "in: {text}");
+	}
+
+	#[test]
+	fn the_source_is_passed_on_only_when_given() {
+		let style = testdata("styles/colorful.json");
+		let without = pipeline_for("in.versatiles", &style);
+		assert!(!without.contains("source="), "got: {without}");
+
+		let with = pipeline_with_source("in.versatiles", &style, Some("versatiles-shortbread"));
+		assert!(with.contains("source=versatiles-shortbread"), "got: {with}");
+		assert!(versatiles_pipeline::vpl::parse_vpl(&with).is_ok(), "got: {with}");
 	}
 
 	#[test]

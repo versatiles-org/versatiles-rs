@@ -204,6 +204,7 @@ vector_overzoom.buffer: Option<u32> | optional | default=80 | bounds=[0,42949672
 
 vector_reduce_to_style [transform]
 vector_reduce_to_style.style: FileLocation | required | accepts=suggested[json]
+vector_reduce_to_style.source: Option<String> | optional
 
 vector_repair [transform]
 vector_repair.drop_offenders: Option<bool> | optional | default=false
