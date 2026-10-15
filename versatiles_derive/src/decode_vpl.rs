@@ -69,8 +69,8 @@ enum ParsedFrom {
 /// Which types name a file, and which of them state their own accepted set.
 ///
 /// Keyed on `TypeMapping::pattern` rather than being a column on it: a column
-/// would say `false` on 54 of the 58 entries in order to say something about
-/// the four that name a path.
+/// would say `false` on nearly every entry in order to say something about the
+/// few that name a path.
 ///
 /// `Some(ty)` is a type owning `EXTENSIONS` whose `TryFrom` refuses everything
 /// else, so its metadata is `Accepts::Only` and the field must not restate it.
@@ -81,6 +81,8 @@ enum ParsedFrom {
 const PATH_TYPES: &[(&str, PathKind)] = &[
 	("FilePath", PathKind::Undeclared),
 	("Option<FilePath>", PathKind::Undeclared),
+	("FileLocation", PathKind::Undeclared),
+	("Option<FileLocation>", PathKind::Undeclared),
 	("ContainerLocation", PathKind::Undeclared),
 	("Option<ContainerLocation>", PathKind::Undeclared),
 	("GeoDataPath", PathKind::Stated("GeoDataPath")),
@@ -459,9 +461,11 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		parsed_from: ParsedFrom::Str,
 	},
 	// Where the data is. `FilePath` refuses a URL, which each of its arguments
-	// already refused on `to_path_buf` — after building. `ContainerLocation`
-	// refuses nothing, because a container may live anywhere, and carries the
-	// distinction its doc comment used to carry alone (#260).
+	// already refused on `to_path_buf` — after building. `FileLocation` takes a
+	// path or an http, https or sftp URL of one file read whole.
+	// `ContainerLocation` refuses nothing, because a container may live
+	// anywhere, and carries the distinction its doc comment used to carry alone
+	// (#260).
 	TypeMapping {
 		pattern: "FilePath",
 		display_name: "path",
@@ -479,6 +483,28 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		method_name: "property_enum_option",
 		is_required: false,
 		generic_param: Some("FilePath"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "FileLocation",
+		display_name: "path or URL",
+		method_name: "property_enum_required",
+		is_required: true,
+		generic_param: Some("FileLocation"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<FileLocation>",
+		display_name: "path or URL",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("FileLocation"),
 		generic_param2: None,
 		is_enum: false,
 		has_bounds: false,

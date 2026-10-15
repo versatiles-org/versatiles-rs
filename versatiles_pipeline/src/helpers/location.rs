@@ -1,10 +1,16 @@
-//! The two kinds of "where the data is" a VPL argument can name.
+//! The kinds of "where the data is" a VPL argument can name.
 
-use std::path::{Path, PathBuf};
+use std::{
+	path::{Path, PathBuf},
+	sync::Arc,
+};
 
-use anyhow::{Result, bail, ensure};
-use versatiles_container::DataLocation;
-use versatiles_core::TileFormat;
+use anyhow::{Context, Result, bail, ensure};
+use versatiles_container::{DataLocation, open_url_reader};
+use versatiles_core::{
+	Blob, TileFormat,
+	io::{location_for_display, url_for_display},
+};
 
 use crate::PipelineFactory;
 
@@ -76,6 +82,138 @@ impl TryFrom<&str> for FilePath {
 			LocationKind::Url => bail!("'{text}' is a URL, and this argument takes a path to a file"),
 			LocationKind::Stdin => bail!("'-' reads from standard input, which this argument cannot do"),
 			LocationKind::Inline => bail!("'{text}' is inline data, and this argument takes a path to a file"),
+		}
+	}
+}
+
+/// One file, on disk or behind a URL, that an operation reads whole.
+///
+/// `FilePath` with a URL let in: `http`, `https`, and `sftp` when the binary
+/// has it — the schemes a container may come from, so "path or URL" means one
+/// thing across the language. Standard input and inline data stay refused:
+/// stdin may already be the container's, and inline text is not a file.
+///
+/// Like `FilePath`, parsing is by inspection only — `check` must not reach
+/// the network any more than it may block on a pipe. Whether the URL answers
+/// is found out when the pipeline is built.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileLocation(String);
+
+/// What [`FileLocation::open`] hands to a reader: a local file stays a path,
+/// so it can be streamed, and a remote one arrives as bytes.
+///
+/// `Arc`, because a `Blob` is a `Vec<u8>` and a reader that needs its own
+/// handle would otherwise copy the whole file.
+#[derive(Clone, Debug)]
+#[cfg_attr(
+	not(test),
+	expect(dead_code, reason = "no operation reads a FileInput yet; from_csv and from_geo will")
+)]
+pub enum FileInput {
+	/// A local file, resolved against the VPL document's directory.
+	Path(PathBuf),
+	/// The content of a remote file.
+	Bytes(Arc<Blob>),
+}
+
+#[cfg_attr(
+	not(test),
+	expect(
+		dead_code,
+		reason = "no operation takes a FileLocation yet; the next commits switch them over"
+	)
+)]
+impl FileLocation {
+	/// The location resolved against the VPL document's directory.
+	fn resolve(&self, factory: &PipelineFactory) -> Result<DataLocation> {
+		factory.resolve_location(&self.unresolved())
+	}
+
+	/// The location as written. A relative path stays relative.
+	fn unresolved(&self) -> DataLocation {
+		match classify(&self.0) {
+			LocationKind::Url => match reqwest::Url::parse(&self.0) {
+				Ok(url) => DataLocation::Url(url),
+				Err(_) => unreachable!("'{}' was classified as a URL when it was parsed", self.0),
+			},
+			_ => DataLocation::Path(PathBuf::from(&self.0)),
+		}
+	}
+
+	/// The file's whole content.
+	///
+	/// # Errors
+	///
+	/// Errors when the file cannot be read: a missing file, a URL that does
+	/// not answer with success, or a body over `VERSATILES_MAX_HTTP_BODY_BYTES`.
+	pub async fn read_all(&self, factory: &PipelineFactory) -> Result<Blob> {
+		match self.resolve(factory)? {
+			DataLocation::Path(path) => Blob::load_from_file(&path).with_context(|| format!("reading {}", path.display())),
+			DataLocation::Url(url) => fetch(&url, factory).await,
+			DataLocation::Blob(_) => unreachable!("a FileLocation never resolves to inline data"),
+		}
+	}
+
+	/// The file for a reader that streams: a local file as its path, a remote
+	/// one fetched into memory.
+	///
+	/// # Errors
+	///
+	/// As [`read_all`](Self::read_all), for a URL. A local path is not
+	/// opened here, so a missing file is the reader's to report.
+	pub async fn open(&self, factory: &PipelineFactory) -> Result<FileInput> {
+		match self.resolve(factory)? {
+			DataLocation::Path(path) => Ok(FileInput::Path(path)),
+			DataLocation::Url(url) => Ok(FileInput::Bytes(Arc::new(fetch(&url, factory).await?))),
+			DataLocation::Blob(_) => unreachable!("a FileLocation never resolves to inline data"),
+		}
+	}
+
+	/// The last segment of the path or of the URL's path, for defaults such as
+	/// a layer name. `None` when there is none, as for `https://example.org/`.
+	#[must_use]
+	pub fn file_name(&self) -> Option<String> {
+		self.unresolved().filename().ok().filter(|name| !name.is_empty())
+	}
+}
+
+/// Fetches a remote file whole, saying so in the log: a large download has no
+/// progress bar, and without a line before it the build looks stuck.
+async fn fetch(url: &reqwest::Url, factory: &PipelineFactory) -> Result<Blob> {
+	let display = url_for_display(url);
+	log::info!("downloading {display}");
+	let start = std::time::Instant::now();
+	let reader = open_url_reader(url, None, &factory.runtime()).await?;
+	let blob = reader.read_all().await?;
+	log::info!("downloaded {display}: {} bytes in {:.1?}", blob.len(), start.elapsed());
+	Ok(blob)
+}
+
+impl std::fmt::Display for FileLocation {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str(&location_for_display(&self.0))
+	}
+}
+
+impl TryFrom<&str> for FileLocation {
+	type Error = anyhow::Error;
+
+	fn try_from(text: &str) -> Result<Self> {
+		ensure!(!text.trim().is_empty(), "a file location cannot be empty");
+
+		match classify(text) {
+			LocationKind::Path => Ok(Self(text.to_string())),
+			LocationKind::Url => {
+				let scheme = reqwest::Url::parse(text).map(|url| url.scheme().to_string())?;
+				ensure!(
+					matches!(scheme.as_str(), "http" | "https" | "sftp"),
+					"'{}' is a {scheme} URL; a file can be read from an http, https or sftp URL",
+					location_for_display(text)
+				);
+				Ok(Self(text.to_string()))
+			}
+			LocationKind::Stdin => bail!("'-' reads from standard input, which this argument cannot do"),
+			LocationKind::Inline => bail!("'{text}' is inline data, and this argument takes a path or a URL"),
 		}
 	}
 }
@@ -427,9 +565,107 @@ mod tests {
 		assert!(error.to_string().contains(expected), "got: {error}");
 	}
 
+	#[rstest]
+	#[case::relative("data/style.json")]
+	#[case::absolute("/srv/styles/style.json")]
+	#[case::http("http://example.org/style.json")]
+	#[case::https("https://example.org/style.json?key=abc")]
+	#[case::sftp("sftp://user@host/styles/style.json")]
+	fn a_file_location_is_a_path_or_a_readable_url(#[case] text: &str) {
+		assert!(FileLocation::try_from(text).is_ok(), "{text} should be accepted");
+	}
+
+	#[rstest]
+	#[case::ftp("ftp://user:secret@host/style.json", "is a ftp URL")]
+	#[case::stdin("-", "standard input")]
+	#[case::inline("(inline)", "inline data")]
+	#[case::empty(" ", "cannot be empty")]
+	fn a_file_location_refuses_what_it_cannot_read(#[case] text: &str, #[case] expected: &str) {
+		let message = FileLocation::try_from(text).expect_err("should be refused").to_string();
+		assert!(message.contains(expected), "got: {message}");
+		assert!(!message.contains("secret"), "the password leaked: {message}");
+	}
+
+	#[test]
+	fn a_file_location_is_shown_without_its_password() {
+		let location = FileLocation::try_from("https://user:secret@example.org/style.json").unwrap();
+		assert_eq!(location.to_string(), "https://user@example.org/style.json");
+	}
+
+	#[rstest]
+	#[case::path("data/cities.csv", Some("cities.csv"))]
+	#[case::url_with_query("https://example.org/a/cities.csv?key=abc", Some("cities.csv"))]
+	#[case::url_without_path("https://example.org/", None)]
+	fn a_file_location_names_its_file(#[case] text: &str, #[case] expected: Option<&str>) {
+		let location = FileLocation::try_from(text).unwrap();
+		assert_eq!(location.file_name().as_deref(), expected);
+	}
+
+	/// Serves `content` at `/file.json`, a 404 everywhere else, and returns the
+	/// base URL.
+	async fn serve(content: &'static str) -> String {
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		let app = axum::Router::new().route("/file.json", axum::routing::get(move || async move { content }));
+		tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+		format!("http://{addr}")
+	}
+
+	fn factory_in(dir: &Path) -> PipelineFactory {
+		PipelineFactory::new_runtime_reader(dir, versatiles_container::TilesRuntime::new_silent())
+	}
+
+	#[tokio::test]
+	async fn a_local_file_is_read_relative_to_the_vpl() {
+		let dir = tempfile::tempdir().unwrap();
+		std::fs::write(dir.path().join("file.json"), "{}").unwrap();
+		let factory = factory_in(dir.path());
+		let location = FileLocation::try_from("file.json").unwrap();
+
+		assert_eq!(location.read_all(&factory).await.unwrap().as_str(), "{}");
+		match location.open(&factory).await.unwrap() {
+			FileInput::Path(path) => assert_eq!(path, dir.path().join("file.json")),
+			FileInput::Bytes(_) => panic!("a local file should stay a path, so it can be streamed"),
+		}
+	}
+
+	#[tokio::test]
+	async fn a_missing_local_file_names_its_path() {
+		let dir = tempfile::tempdir().unwrap();
+		let location = FileLocation::try_from("missing.json").unwrap();
+		let error = location.read_all(&factory_in(dir.path())).await.unwrap_err();
+		assert!(format!("{error:#}").contains("missing.json"), "got: {error:#}");
+	}
+
+	#[tokio::test]
+	async fn a_url_is_fetched() {
+		let base = serve(r#"{"version":8}"#).await;
+		let dir = tempfile::tempdir().unwrap();
+		let factory = factory_in(dir.path());
+		let location = FileLocation::try_from(format!("{base}/file.json").as_str()).unwrap();
+
+		assert_eq!(location.read_all(&factory).await.unwrap().as_str(), r#"{"version":8}"#);
+		match location.open(&factory).await.unwrap() {
+			FileInput::Bytes(blob) => assert_eq!(blob.as_str(), r#"{"version":8}"#),
+			FileInput::Path(path) => panic!("a URL should arrive as bytes, got {path:?}"),
+		}
+	}
+
+	#[tokio::test]
+	async fn a_url_that_is_not_found_says_so_without_its_password() {
+		let base = serve("{}").await.replace("http://", "http://user:secret@");
+		let dir = tempfile::tempdir().unwrap();
+		let location = FileLocation::try_from(format!("{base}/other.json").as_str()).unwrap();
+
+		let message = format!("{:#}", location.read_all(&factory_in(dir.path())).await.unwrap_err());
+		assert!(message.contains("404"), "got: {message}");
+		assert!(!message.contains("secret"), "the password leaked: {message}");
+	}
+
 	#[test]
 	fn an_empty_location_is_refused_either_way() {
 		assert!(ContainerLocation::try_from("").is_err());
+		assert!(FileLocation::try_from("").is_err());
 		assert!(FilePath::try_from("").is_err());
 	}
 }

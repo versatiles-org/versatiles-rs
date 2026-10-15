@@ -84,6 +84,8 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		| "CelExpression"
 		| "FilePath"
 		| "Option<FilePath>"
+		| "FileLocation"
+		| "Option<FileLocation>"
 		| "GeoDataPath"
 		| "TileFilePath"
 		| "ContainerLocation"
