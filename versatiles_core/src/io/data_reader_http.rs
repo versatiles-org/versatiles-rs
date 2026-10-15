@@ -177,6 +177,8 @@ fn host_semaphore(url: &Url) -> Arc<Semaphore> {
 pub struct DataReaderHttp {
 	client: Client,
 	name: String,
+	/// The URL as given, credentials included; only for [`DataReaderTrait::url`].
+	given_url: Url,
 	url: Url,
 	username: Option<String>,
 	password: Option<String>,
@@ -197,6 +199,7 @@ impl TryFrom<&Url> for DataReaderHttp {
 	type Error = anyhow::Error;
 
 	fn try_from(url: &Url) -> Result<DataReaderHttp> {
+		let given_url = url.clone();
 		let mut url = url.clone();
 		let username = if url.username().is_empty() {
 			None
@@ -236,6 +239,7 @@ impl TryFrom<&Url> for DataReaderHttp {
 		Ok(DataReaderHttp {
 			client,
 			name: url.to_string(),
+			given_url,
 			url,
 			username,
 			password,
@@ -539,11 +543,25 @@ impl DataReaderTrait for DataReaderHttp {
 	fn name(&self) -> &str {
 		&self.name
 	}
+
+	fn url(&self) -> Option<&Url> {
+		Some(&self.given_url)
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// The name is safe to print; the URL a relative file is resolved
+	/// against keeps the credentials, so that file is read the same way.
+	#[test]
+	fn the_url_keeps_its_credentials_and_the_name_does_not() {
+		let url = Url::parse("https://user:secret@example.org/pipelines/p.vpl").unwrap();
+		let reader = DataReaderHttp::try_from(&url).unwrap();
+		assert_eq!(reader.url(), Some(&url));
+		assert!(!reader.name().contains("secret"), "got: {}", reader.name());
+	}
 
 	// Test the 'new' method for valid and invalid URLs
 	#[test]

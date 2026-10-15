@@ -12,7 +12,7 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use versatiles_container::{
-	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime,
+	DataLocation, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime,
 };
 use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream, io::DataReader};
 use versatiles_derive::context;
@@ -48,7 +48,7 @@ impl<'a> PipelineReader {
 		let parent = path
 			.parent()
 			.ok_or_else(|| anyhow!("path '{}' has no parent directory", path.display()))?;
-		Self::from_str(&vpl, path_str, parent, runtime)
+		Self::from_str(&vpl, path_str, parent.into(), runtime)
 			.await
 			.with_context(|| format!("failed parsing {path:?} as VPL"))
 	}
@@ -56,18 +56,24 @@ impl<'a> PipelineReader {
 	/// Opens a `PipelineReader` from an arbitrary [`DataReader`] containing VPL.
 	///
 	/// Useful when VPL is packaged in other containers or fetched over the network.
+	/// Relative locations in it are resolved against `dir`: a directory, or the
+	/// URL of the VPL itself, which puts them beside it.
 	#[context("opening VPL from reader '{}'", reader.name())]
-	pub async fn open_data(reader: DataReader, dir: &Path, runtime: TilesRuntime) -> Result<PipelineReader> {
+	pub async fn open_data(
+		reader: DataReader,
+		dir: impl Into<DataLocation>,
+		runtime: TilesRuntime,
+	) -> Result<PipelineReader> {
 		let vpl = reader.read_all().await?.into_string();
-		Self::from_str(&vpl, reader.name(), dir, runtime)
+		Self::from_str(&vpl, reader.name(), dir.into(), runtime)
 			.await
 			.with_context(|| format!("failed parsing {} as VPL", reader.name()))
 	}
 
 	/// Test helper: constructs a `PipelineReader` from a raw VPL string.
 	#[context("opening VPL from string")]
-	pub async fn open_str(vpl: &str, dir: &Path, runtime: TilesRuntime) -> Result<PipelineReader> {
-		Self::from_str(vpl, "from str", dir, runtime).await
+	pub async fn open_str(vpl: &str, dir: impl Into<DataLocation>, runtime: TilesRuntime) -> Result<PipelineReader> {
+		Self::from_str(vpl, "from str", dir.into(), runtime).await
 	}
 
 	/// Constructs a `PipelineReader` from a pre-parsed [`VPLPipeline`].
@@ -77,7 +83,7 @@ impl<'a> PipelineReader {
 	pub async fn from_pipeline(
 		pipeline: VPLPipeline,
 		name: &str,
-		dir: &Path,
+		dir: impl Into<DataLocation>,
 		runtime: TilesRuntime,
 	) -> Result<PipelineReader> {
 		let factory = PipelineFactory::new_runtime_reader(dir, runtime);
@@ -106,7 +112,7 @@ impl<'a> PipelineReader {
 		head: SharedTileSource,
 		tail: Vec<VPLNode>,
 		name: &str,
-		dir: &Path,
+		dir: impl Into<DataLocation>,
 		runtime: TilesRuntime,
 	) -> Result<PipelineReader> {
 		let factory = PipelineFactory::new_runtime_reader(dir, runtime);
@@ -124,7 +130,7 @@ impl<'a> PipelineReader {
 	fn from_str(
 		vpl: &'a str,
 		name: &'a str,
-		dir: &'a Path,
+		dir: DataLocation,
 		runtime: TilesRuntime,
 	) -> BoxFuture<'a, Result<PipelineReader>> {
 		Box::pin(async move {
@@ -140,9 +146,16 @@ impl TilesReader for PipelineReader {
 		Ok(Self::open(path, runtime).await?.into_shared())
 	}
 
+	/// A VPL fetched from a URL resolves its relative locations against that
+	/// URL, so the files it names are read from beside it, and it may not read
+	/// local files at all. One from standard input or memory resolves against
+	/// the current directory.
 	async fn open_reader(reader: DataReader, runtime: TilesRuntime) -> Result<SharedTileSource> {
-		let dir = std::env::current_dir()?;
-		Ok(Self::open_data(reader, &dir, runtime).await?.into_shared())
+		let base = match reader.url() {
+			Some(url) => DataLocation::from(url.clone()),
+			None => DataLocation::from(std::env::current_dir()?),
+		};
+		Ok(Self::open_data(reader, base, runtime).await?.into_shared())
 	}
 }
 
@@ -340,6 +353,116 @@ mod tests {
 		let debug = format!("{reader:?}");
 		assert!(debug.contains("PipelineReader"));
 		assert!(debug.contains("from str"));
+		Ok(())
+	}
+
+	/// Opens `vpl` the way the container registry opens a `.vpl` URL.
+	async fn open_remote(base: &str, vpl: &str) -> Result<SharedTileSource> {
+		let url = reqwest::Url::parse(&format!("{base}/{vpl}"))?;
+		let reader: DataReader = Box::new(versatiles_core::io::DataReaderHttp::try_from(&url)?);
+		PipelineReader::open_reader(reader, TilesRuntime::new_silent()).await
+	}
+
+	/// A relative location in a VPL fetched from a URL is read from beside the
+	/// VPL — here a GeoJSON one level up and a style in the same directory.
+	#[tokio::test]
+	async fn a_remote_vpl_reads_its_relative_files_from_beside_it() -> Result<()> {
+		let base = crate::helpers::test_server::serve_files(vec![
+			(
+				"/pipelines/places.vpl",
+				br#"from_geo filename="../data/places.geojson" layer_name="places" max_zoom=4
+					| vector_reduce_to_style style="style.json""#
+					.to_vec(),
+			),
+			("/data/places.geojson", std::fs::read("../testdata/places.geojson")?),
+			(
+				"/pipelines/style.json",
+				br#"{"version":8,"sources":{},"layers":[{"id":"p","type":"circle","source":"s","source-layer":"places"}]}"#
+					.to_vec(),
+			),
+		])
+		.await;
+
+		let source = open_remote(&base, "pipelines/places.vpl").await?;
+		assert!(source.tilejson().vector_layers.find("places").is_some());
+		Ok(())
+	}
+
+	/// An absolute path in a VPL fetched from a URL names a file at the root of
+	/// its server, as it would in a web page — never a local one, so a VPL from
+	/// somewhere else cannot put this machine's files into its tiles. The file
+	/// used here exists locally and is still not read.
+	#[tokio::test]
+	async fn an_absolute_path_in_a_remote_vpl_names_a_file_on_its_server() -> Result<()> {
+		// On Windows a canonical path is `\\?\C:\…`, which is no URL path at all;
+		// there an absolute path that does not exist locally makes the same point.
+		let local = if cfg!(unix) {
+			std::fs::canonicalize("../testdata/places.geojson")?
+				.to_str()
+				.unwrap()
+				.to_string()
+		} else {
+			"/testdata/places.geojson".to_string()
+		};
+		let vpl = format!(r#"from_geo filename="{local}" layer_name="places""#);
+		let base = crate::helpers::test_server::serve_files(vec![("/p.vpl", vpl.into_bytes())]).await;
+		let message = format!("{:#}", open_remote(&base, "p.vpl").await.err().unwrap());
+		assert!(message.contains("404"), "got: {message}");
+		assert!(message.contains(&format!("'{base}/")), "got: {message}");
+
+		let vpl = br#"from_geo filename="/data/places.geojson" layer_name="places" max_zoom=4"#;
+		let base = crate::helpers::test_server::serve_files(vec![
+			("/pipelines/p.vpl", vpl.to_vec()),
+			("/data/places.geojson", std::fs::read("../testdata/places.geojson")?),
+		])
+		.await;
+		let source = open_remote(&base, "pipelines/p.vpl").await?;
+		assert!(source.tilejson().vector_layers.find("places").is_some());
+		Ok(())
+	}
+
+	/// An absolute SSH key in a remote VPL is a file on its server too, and a
+	/// key is never read from there.
+	#[tokio::test]
+	async fn an_absolute_ssh_key_in_a_remote_vpl_is_refused() -> Result<()> {
+		let vpl = r#"from_container filename="sftp://host/world.versatiles" ssh_identity="/home/me/.ssh/id_ed25519""#;
+		let base = crate::helpers::test_server::serve_files(vec![("/p.vpl", vpl.as_bytes().to_vec())]).await;
+		let message = format!("{:#}", open_remote(&base, "p.vpl").await.err().unwrap());
+		assert!(
+			message.contains("'/home/me/.ssh/id_ed25519' has to be a local file"),
+			"got: {message}"
+		);
+		Ok(())
+	}
+
+	/// An argument that needs a local file cannot be used in a remote VPL at
+	/// all: a relative path names a file on the server.
+	#[tokio::test]
+	async fn a_relative_ssh_key_in_a_remote_vpl_is_refused() -> Result<()> {
+		let vpl = r#"from_container filename="sftp://host/world.versatiles" ssh_identity="id_ed25519""#;
+		let base = crate::helpers::test_server::serve_files(vec![("/p.vpl", vpl.as_bytes().to_vec())]).await;
+		let message = format!("{:#}", open_remote(&base, "p.vpl").await.err().unwrap());
+		assert!(
+			message.contains("'id_ed25519' has to be a local file"),
+			"got: {message}"
+		);
+		Ok(())
+	}
+
+	/// Without a URL — standard input, data in memory — relative locations
+	/// resolve against the current directory, and local files stay readable.
+	#[tokio::test]
+	async fn a_vpl_from_memory_resolves_against_the_current_directory() -> Result<()> {
+		let absolute = std::env::current_dir()?.join("../testdata/places.geojson");
+		let vpl = format!(
+			r#"from_geo filename="{}" layer_name="places" max_zoom=4"#,
+			absolute.to_str().unwrap().replace('\\', "\\\\")
+		);
+		let reader: DataReader = Box::new(versatiles_core::io::DataReaderBlob::from(versatiles_core::Blob::from(
+			vpl.as_str(),
+		)));
+		let source = PipelineReader::open_reader(reader, TilesRuntime::new_silent()).await?;
+		assert!(source.tilejson().vector_layers.find("places").is_some());
 		Ok(())
 	}
 }

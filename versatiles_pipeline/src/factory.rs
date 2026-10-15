@@ -10,7 +10,13 @@
 //! register all built-in read/transform operations. For testing and demos there is also
 //! a "dummy" mode that resolves filenames to synthetic vector/raster sources.
 
-use std::{collections::HashMap, path::PathBuf, sync::LazyLock, time::Instant, vec};
+use std::{
+	collections::HashMap,
+	path::{Path, PathBuf},
+	sync::LazyLock,
+	time::Instant,
+	vec,
+};
 
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
@@ -18,7 +24,7 @@ use futures::future::BoxFuture;
 use itertools::Itertools;
 use regex::Regex;
 use versatiles_container::{DataLocation, TileSource, TilesRuntime};
-use versatiles_core::{TileFormat, TileType};
+use versatiles_core::{TileFormat, TileType, io::url_for_display};
 use versatiles_derive::context;
 
 use crate::{
@@ -343,13 +349,9 @@ impl PipelineFactory {
 		location: DataLocation,
 		ssh_identity: Option<&str>,
 	) -> Result<Box<dyn TileSource>> {
-		let location = location.resolved(&self.dir)?;
+		let location = self.resolve_location(&location)?;
 		let ssh_identity = match ssh_identity {
-			Some(identity) => Some(
-				DataLocation::from(PathBuf::from(identity))
-					.resolved(&self.dir)?
-					.to_path_buf()?,
-			),
+			Some(identity) => Some(self.resolve_local_path(Path::new(identity))?),
 			None => None,
 		};
 		(self.create_reader.as_ref())(location, ssh_identity).await
@@ -483,9 +485,35 @@ impl PipelineFactory {
 	}
 
 	/// Resolves a VPL-referenced location against `dir` and returns a new `DataLocation`.
+	///
+	/// In a VPL loaded from a URL every path becomes a URL, by the rules a
+	/// browser follows: a relative one names a file beside the VPL, an absolute
+	/// one a file at the root of its server. So a VPL from somewhere else can
+	/// never read this machine's files into the tiles it makes.
 	#[context("Failed to resolve location '{location:?}' against base dir")]
 	pub fn resolve_location(&self, location: &DataLocation) -> Result<DataLocation> {
 		location.resolved(&self.dir)
+	}
+
+	/// Resolves a path to a file that has to be local — a GDAL input, an SSH
+	/// key — against `dir`.
+	///
+	/// # Errors
+	///
+	/// Errors when the pipeline was loaded from a URL: every path in it names
+	/// a file on that server, which cannot be read as a local file.
+	pub fn resolve_local_path(&self, path: &Path) -> Result<PathBuf> {
+		match self.resolve_location(&DataLocation::from(path))? {
+			DataLocation::Path(path) => Ok(path),
+			_ => bail!(
+				"'{}' has to be a local file, and this pipeline was loaded from {}, so it would be read from there",
+				path.display(),
+				match &self.dir {
+					DataLocation::Url(base) => url_for_display(base),
+					other => format!("{other:?}"),
+				}
+			),
+		}
 	}
 
 	/// Returns rendered Markdown help listing all registered operations and their docs.

@@ -16,6 +16,8 @@ use crate::{Blob, ByteRange};
 /// per-server connection pool, so many readers of the same server share a
 /// small, fixed number of connections instead of opening one each.
 pub struct DataReaderSftp {
+	/// The URL as given, credentials included; only for [`DataReaderTrait::url`].
+	url: Url,
 	connection: Arc<sftp_pool::Connection>,
 	file_id: u64,
 	size: u64,
@@ -45,6 +47,7 @@ impl DataReaderSftp {
 			.with_context(|| format!("failed to open '{name}'"))?;
 
 		Ok(DataReaderSftp {
+			url: url.clone(),
 			connection,
 			file_id,
 			size,
@@ -150,6 +153,10 @@ impl DataReaderTrait for DataReaderSftp {
 
 	fn name(&self) -> &str {
 		&self.name
+	}
+
+	fn url(&self) -> Option<&Url> {
+		Some(&self.url)
 	}
 }
 

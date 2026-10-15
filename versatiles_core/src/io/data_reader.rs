@@ -95,4 +95,13 @@ pub trait DataReaderTrait: Debug + Send + Sync {
 	///
 	/// * A string slice representing the name of the data source.
 	fn name(&self) -> &str;
+
+	/// The URL this reader reads, as it was given — credentials included, so
+	/// that a file named relative to it can be read the same way. Never print
+	/// it; [`url_for_display`](crate::io::url_for_display) is for that.
+	///
+	/// `None` for a local file or data in memory.
+	fn url(&self) -> Option<&reqwest::Url> {
+		None
+	}
 }

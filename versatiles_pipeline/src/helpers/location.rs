@@ -57,16 +57,14 @@ impl FilePath {
 	///
 	/// # Errors
 	///
-	/// Errors when the result is not a local path: a relative path in a VPL
-	/// loaded from a URL resolves to a URL.
+	/// As [`PipelineFactory::resolve_local_path`]: in a VPL loaded from a URL
+	/// no path is a local file.
 	#[cfg_attr(
 		not(feature = "gdal"),
 		expect(dead_code, reason = "only the GDAL readers resolve a local-only path")
 	)]
 	pub fn resolve(&self, factory: &PipelineFactory) -> Result<PathBuf> {
-		factory
-			.resolve_location(&DataLocation::Path(self.0.clone()))?
-			.to_path_buf()
+		factory.resolve_local_path(&self.0)
 	}
 }
 
