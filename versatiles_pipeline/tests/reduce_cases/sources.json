@@ -417,6 +417,47 @@
     }
   },
   {
+    "name": "the refusal names the sources of one tileset together",
+    "style": {
+      "sources": {
+        "map": {
+          "type": "vector",
+          "url": "https://example.org/tiles.json"
+        },
+        "labels": {
+          "type": "vector",
+          "url": "https://example.org/tiles.json"
+        },
+        "overlay": {
+          "type": "vector",
+          "url": "https://example.org/overlay.json"
+        }
+      },
+      "layers": [
+        {
+          "source": "map",
+          "source-layer": "water"
+        },
+        {
+          "source": "labels",
+          "source-layer": "places"
+        },
+        {
+          "source": "overlay",
+          "source-layer": "water"
+        }
+      ]
+    },
+    "error": "2 tilesets (\"overlay\", \"labels\" and \"map\")"
+  },
+  {
+    "name": "a style without layers is refused",
+    "style": {
+      "version": 8
+    },
+    "error": "no `layers`"
+  },
+  {
     "name": "a style for another tileset is refused",
     "style": [
       {

@@ -257,41 +257,6 @@ mod tests {
 			.await
 	}
 
-	/// The properties surviving in `from_debug`'s tiles, as `layer/property`.
-	async fn surviving(style: &str) -> Result<Vec<String>> {
-		surviving_at(style, 1).await
-	}
-
-	/// The properties surviving in one of `from_debug`'s tiles at `level`, as `layer/property`.
-	async fn surviving_at(style: &str, level: u8) -> Result<Vec<String>> {
-		let dir = tempfile::tempdir().unwrap();
-		let operation = operation(&dir, style).await?;
-
-		let tile = operation
-			.tile_stream(TileBBox::from_min_and_max(level, 0, 0, 0, 0)?)
-			.await?
-			.next()
-			.await
-			.unwrap()
-			.1
-			.into_vector()?;
-
-		let mut properties: Vec<String> = tile
-			.layers
-			.iter()
-			.flat_map(|layer| {
-				let name = layer.name.clone();
-				layer.features.iter().flat_map(move |feature| {
-					let p = feature.decode_properties(layer).unwrap();
-					p.iter().map(|(k, _)| format!("{name}/{k}")).collect::<Vec<_>>()
-				})
-			})
-			.collect();
-		properties.sort();
-		properties.dedup();
-		Ok(properties)
-	}
-
 	#[tokio::test]
 	async fn the_style_can_come_from_a_url() -> Result<()> {
 		let style = r#"{"version":8,"sources":{},"layers":[
@@ -314,90 +279,6 @@ mod tests {
 		let layers: Vec<&str> = tile.layers.iter().map(|layer| layer.name.as_str()).collect();
 		assert_eq!(layers, ["debug_x"]);
 		Ok(())
-	}
-
-	#[tokio::test]
-	async fn it_keeps_only_what_the_style_reads() {
-		// `from_debug` draws layers `debug_x`, `debug_y` and `debug_z`, each carrying `char`,
-		// `index` and `x`. A style that reads one property of one layer should leave exactly that.
-		let properties =
-			surviving(r#"{"layers":[{"id":"a","source-layer":"debug_x","paint":{"fill-color":["get","char"]}}]}"#)
-				.await
-				.unwrap();
-		assert_eq!(properties, ["debug_x/char"]);
-	}
-
-	#[tokio::test]
-	async fn a_property_stays_only_at_the_zooms_it_is_read_at() {
-		// `char` is read at every zoom, `index` only from z5, by a second style layer of the same
-		// source-layer.
-		let style = r#"{"layers":[
-			{"id":"a","source-layer":"debug_x","paint":{"c":["get","char"]}},
-			{"id":"b","source-layer":"debug_x","minzoom":5,"paint":{"c":["get","index"]}}
-		]}"#;
-		assert_eq!(surviving_at(style, 4).await.unwrap(), ["debug_x/char"]);
-		assert_eq!(surviving_at(style, 5).await.unwrap(), ["debug_x/char", "debug_x/index"]);
-	}
-
-	#[tokio::test]
-	async fn the_tilejson_keeps_a_field_kept_at_any_zoom() {
-		// The metadata describes the whole tileset, so `index`, kept from z5, is still listed.
-		let dir = tempfile::tempdir().unwrap();
-		let operation = operation(
-			&dir,
-			r#"{"layers":[
-				{"id":"a","source-layer":"debug_x","paint":{"c":["get","char"]}},
-				{"id":"b","source-layer":"debug_x","minzoom":5,"paint":{"c":["get","index"]}}
-			]}"#,
-		)
-		.await
-		.unwrap();
-		assert_eq!(
-			operation.tilejson().vector_layers.0["debug_x"]
-				.fields
-				.keys()
-				.collect::<Vec<_>>(),
-			["char", "index"]
-		);
-	}
-
-	#[tokio::test]
-	async fn a_layer_drawn_as_geometry_keeps_its_shapes_but_no_properties() {
-		let properties = surviving(r##"{"layers":[{"id":"a","source-layer":"debug_x","paint":{"fill-color":"#fff"}}]}"##)
-			.await
-			.unwrap();
-		assert_eq!(properties, Vec::<String>::new());
-	}
-
-	#[tokio::test]
-	async fn a_token_text_field_is_read_like_any_other_property() {
-		// The regression `reduce::style::fields` exists for, proven end to end through the pipeline.
-		let properties =
-			surviving(r#"{"layers":[{"id":"a","source-layer":"debug_x","layout":{"text-field":"{char}"}}]}"#)
-				.await
-				.unwrap();
-		assert_eq!(properties, ["debug_x/char"]);
-	}
-
-	#[tokio::test]
-	async fn the_tilejson_loses_the_layers_and_fields_the_style_never_reads() {
-		// Whoever reads the reduced container's metadata must not be told about data that is no
-		// longer in it.
-		let dir = tempfile::tempdir().unwrap();
-		let operation = operation(
-			&dir,
-			r#"{"layers":[{"id":"a","source-layer":"debug_x","paint":{"fill-color":["get","char"]}}]}"#,
-		)
-		.await
-		.unwrap();
-
-		let tilejson = operation.tilejson();
-		let layers: Vec<&String> = tilejson.vector_layers.0.keys().collect();
-		assert_eq!(layers, ["debug_x"]);
-		assert_eq!(
-			tilejson.vector_layers.0["debug_x"].fields.keys().collect::<Vec<_>>(),
-			["char"]
-		);
 	}
 
 	#[tokio::test]
@@ -459,13 +340,6 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn a_style_drawing_no_data_is_refused() {
-		let dir = tempfile::tempdir().unwrap();
-		let err = operation(&dir, r#"{"layers":[]}"#).await.unwrap_err();
-		assert!(format!("{err:#}").contains("draws no source-layer"), "got: {err:#}");
-	}
-
-	#[tokio::test]
 	async fn the_style_argument_is_required() {
 		let factory = PipelineFactory::new_dummy();
 		let err = factory
@@ -478,88 +352,12 @@ mod tests {
 		);
 	}
 
-	#[tokio::test]
-	async fn a_computed_property_name_keeps_every_property_of_its_layer() {
-		// `debug_x` reads a name built at runtime, so any of its properties may be the one; `debug_y`
-		// reads one by name and keeps only that.
-		let properties = surviving(
-			r#"{"layers":[
-				{"id":"a","source-layer":"debug_x","layout":{"text-field":["get",["concat","ch","ar"]]}},
-				{"id":"b","source-layer":"debug_y","paint":{"c":["get","index"]}}
-			]}"#,
-		)
-		.await
-		.unwrap();
-		assert_eq!(
-			properties,
-			["debug_x/char", "debug_x/index", "debug_x/x", "debug_y/index"]
-		);
-	}
-
-	#[tokio::test]
-	async fn a_legacy_geometry_type_filter_keeps_the_features() -> Result<()> {
-		// `$type` is the geometry type, not a property. Read as one, no feature has it, and the
-		// layer the style draws would be emptied.
-		let dir = tempfile::tempdir().unwrap();
-		let operation = operation(
-			&dir,
-			r#"{"layers":[{"id":"a","source-layer":"debug_x","filter":["==","$type","Polygon"]}]}"#,
-		)
-		.await?;
-		let tile = operation
-			.tile_stream(TileBBox::new_full(1)?)
-			.await?
-			.next()
-			.await
-			.unwrap()
-			.1
-			.into_vector()?;
-		let layers: Vec<(&str, usize)> = tile
-			.layers
-			.iter()
-			.map(|layer| (layer.name.as_str(), layer.features.len()))
-			.collect();
-		assert_eq!(layers.len(), 1, "got: {layers:?}");
-		assert_eq!(layers[0].0, "debug_x");
-		assert!(layers[0].1 > 0, "the features are kept: {layers:?}");
-		Ok(())
-	}
-
 	/// `from_debug` drawn as `debug`, next to an `overlay` source that also has a `debug_x`.
 	const TWO_SOURCES: &str = r#"{"layers":[
 		{"id":"a","source":"debug","source-layer":"debug_x","paint":{"fill-color":["get","char"]}},
 		{"id":"b","source":"overlay","source-layer":"debug_x","paint":{"fill-color":["get","index"]}},
 		{"id":"c","source":"overlay","source-layer":"debug_y"}
 	]}"#;
-
-	#[tokio::test]
-	async fn a_style_with_several_sources_needs_one_named() {
-		let dir = tempfile::tempdir().unwrap();
-		let err = operation(&dir, TWO_SOURCES).await.unwrap_err();
-		assert!(format!("{err:#}").contains("Set `source`"), "got: {err:#}");
-	}
-
-	#[tokio::test]
-	async fn the_named_source_alone_decides_what_stays() -> Result<()> {
-		// `overlay` reads `index` from `debug_x`; only `debug`'s `char` may survive.
-		let dir = tempfile::tempdir().unwrap();
-		let path = style_file(&dir, TWO_SOURCES);
-		let operation = PipelineFactory::new_dummy()
-			.operation_from_vpl(&format!(
-				"from_debug format=mvt | vector_reduce_to_style style=\"{path}\" source=\"debug\""
-			))
-			.await?;
-		let layers: Vec<&String> = operation.tilejson().vector_layers.0.keys().collect();
-		assert_eq!(layers, ["debug_x"]);
-		assert_eq!(
-			operation.tilejson().vector_layers.0["debug_x"]
-				.fields
-				.keys()
-				.collect::<Vec<_>>(),
-			["char"]
-		);
-		Ok(())
-	}
 
 	#[tokio::test]
 	async fn several_named_sources_count_together() -> Result<()> {
@@ -580,18 +378,6 @@ mod tests {
 			["char", "index"]
 		);
 		Ok(())
-	}
-
-	#[tokio::test]
-	async fn a_style_for_another_tileset_is_refused() {
-		let dir = tempfile::tempdir().unwrap();
-		let err = operation(&dir, r#"{"layers":[{"id":"a","source":"s","source-layer":"streets"}]}"#)
-			.await
-			.unwrap_err();
-		assert!(
-			format!("{err:#}").contains("none of this tileset's layers"),
-			"got: {err:#}"
-		);
 	}
 
 	#[tokio::test]

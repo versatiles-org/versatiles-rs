@@ -697,6 +697,60 @@
     }
   },
   {
+    "name": "another source's promoted ID is not kept",
+    "style": {
+      "sources": {
+        "s": {
+          "type": "vector"
+        },
+        "t": {
+          "type": "vector",
+          "promoteId": "osm_id"
+        }
+      },
+      "layers": [
+        {
+          "source": "s",
+          "source-layer": "w"
+        },
+        {
+          "source": "t",
+          "source-layer": "w"
+        }
+      ]
+    },
+    "source": ["s"],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "osm_id": 7,
+          "kind": "lake"
+        }
+      ],
+      "l": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "osm_id": 9,
+          "wid": 3
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": []
+      }
+    },
+    "kept": {
+      "w": {
+        "1": []
+      }
+    }
+  },
+  {
     "name": "a property read by one style layer stays on every feature of its source-layer",
     "style": [
       {
@@ -839,6 +893,9 @@
           "1": ["kind", "name"]
         }
       }
+    },
+    "fields": {
+      "w": ["kind", "name"]
     }
   },
   {

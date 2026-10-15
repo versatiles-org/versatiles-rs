@@ -371,6 +371,79 @@
     }
   },
   {
+    "name": "a higher source maxzoom does not raise the tileset's",
+    "style": {
+      "sources": {
+        "s": {
+          "type": "vector",
+          "maxzoom": 18
+        }
+      },
+      "layers": [
+        {
+          "source": "s",
+          "source-layer": "water",
+          "minzoom": 17
+        }
+      ]
+    },
+    "zoom": [13, 14],
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ]
+    },
+    "drawn": {
+      "13": {},
+      "14": {
+        "water": {
+          "1": []
+        }
+      }
+    },
+    "kept": {
+      "13": {},
+      "14": {
+        "water": {
+          "1": []
+        }
+      }
+    }
+  },
+  {
+    "name": "a source maxzoom that is not a number is refused, naming the source",
+    "style": {
+      "sources": {
+        "s": {
+          "type": "vector",
+          "maxzoom": "high"
+        }
+      },
+      "layers": [
+        {
+          "source": "s",
+          "source-layer": "water"
+        }
+      ]
+    },
+    "error": "in style source \"s\""
+  },
+  {
+    "name": "a negative layer zoom is refused, naming the layer",
+    "style": [
+      {
+        "id": "oops",
+        "source-layer": "water",
+        "minzoom": -1
+      }
+    ],
+    "error": "oops"
+  },
+  {
     "name": "two sources of one tileset each stop at their own maxzoom",
     "style": {
       "sources": {
