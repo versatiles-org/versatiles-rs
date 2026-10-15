@@ -7,7 +7,7 @@
 //! - Building R-tree spatial indices for efficient distance queries
 //! - Computing signed distances and alpha values for pixel masking
 
-use std::{fs::File, io::BufReader, ops::Range, path::Path};
+use std::ops::Range;
 
 use anyhow::{Result, ensure};
 use geo::BoundingRect;
@@ -161,29 +161,24 @@ impl std::fmt::Debug for MaskGeometry {
 }
 
 impl MaskGeometry {
-	/// Load mask geometry from a GeoJSON file.
+	/// Load mask geometry from a GeoJSON document.
 	///
 	/// # Arguments
-	/// * `path` - Path to the GeoJSON file containing Polygon or MultiPolygon geometries
+	/// * `geojson` - The GeoJSON text, containing Polygon or MultiPolygon geometries
 	/// * `buffer_meters` - Buffer distance in meters (positive = expand, negative = shrink)
 	/// * `blur_meters` - Blur distance in meters for edge softening
 	/// * `blur_function` - Interpolation function for blur
 	///
 	/// # Errors
-	/// Returns an error if the file cannot be read or parsed, or if no valid polygons are found.
-	#[context("Loading mask geometry from GeoJSON file")]
+	/// Returns an error if the document cannot be parsed, or if no valid polygons are found.
+	#[context("Loading mask geometry from GeoJSON")]
 	pub fn from_geojson(
-		path: impl AsRef<Path>,
+		geojson: &[u8],
 		buffer_meters: f64,
 		blur_meters: f64,
 		blur_function: BlurFunction,
 	) -> Result<Self> {
-		let path = path.as_ref();
-		ensure!(path.exists(), "GeoJSON file not found: {}", path.display());
-
-		let file = File::open(path)?;
-		let reader = BufReader::new(file);
-		let collection = read_geojson(reader)?;
+		let collection = read_geojson(geojson)?;
 
 		// Collect all polygons from the GeoJSON
 		let mut polygons_wgs84: Vec<Polygon<f64>> = Vec::new();
@@ -692,7 +687,13 @@ mod tests {
 				[[[20,12],[24,12],[24,16],[20,16],[20,12]]]]}}]}"#,
 			)
 			.unwrap();
-		MaskGeometry::from_geojson(file.path(), buffer, blur, BlurFunction::default()).unwrap()
+		MaskGeometry::from_geojson(
+			&std::fs::read(file.path()).unwrap(),
+			buffer,
+			blur,
+			BlurFunction::default(),
+		)
+		.unwrap()
 	}
 
 	/// The definition of the answer, with no shortcuts at all: every edge is
@@ -786,7 +787,8 @@ mod tests {
 			)
 			.unwrap();
 
-		let err = MaskGeometry::from_geojson(file.path(), 0.0, 0.0, BlurFunction::default()).unwrap_err();
+		let err = MaskGeometry::from_geojson(&std::fs::read(file.path()).unwrap(), 0.0, 0.0, BlurFunction::default())
+			.unwrap_err();
 		let msg = format!("{err:#}");
 		assert!(msg.contains("389298"), "{msg}");
 		assert!(msg.contains("EPSG:4326"), "{msg}");
@@ -809,7 +811,8 @@ mod tests {
 
 		let msg = format!(
 			"{:#}",
-			MaskGeometry::from_geojson(file.path(), 0.0, 0.0, BlurFunction::default()).unwrap_err()
+			MaskGeometry::from_geojson(&std::fs::read(file.path()).unwrap(), 0.0, 0.0, BlurFunction::default())
+				.unwrap_err()
 		);
 		assert!(msg.contains("EPSG::25832"), "{msg}");
 	}
@@ -829,7 +832,9 @@ mod tests {
 			)
 			.unwrap();
 
-		assert!(MaskGeometry::from_geojson(file.path(), 0.0, 0.0, BlurFunction::default()).is_ok());
+		assert!(
+			MaskGeometry::from_geojson(&std::fs::read(file.path()).unwrap(), 0.0, 0.0, BlurFunction::default()).is_ok()
+		);
 	}
 
 	/// A tile lying in the *outer* half of the blur ramp must not be classified

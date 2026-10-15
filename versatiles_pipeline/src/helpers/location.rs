@@ -154,6 +154,19 @@ impl FileLocation {
 		}
 	}
 
+	/// The file's whole content as text.
+	///
+	/// # Errors
+	///
+	/// As [`read_all`](Self::read_all), and when the content is not UTF-8.
+	pub async fn read_to_string(&self, factory: &PipelineFactory) -> Result<String> {
+		self
+			.read_all(factory)
+			.await?
+			.try_into_string()
+			.with_context(|| format!("reading {self} as text"))
+	}
+
 	/// The file for a reader that streams: a local file as its path, a remote
 	/// one fetched into memory.
 	///
@@ -301,15 +314,23 @@ impl std::fmt::Display for GeoDataPath {
 	}
 }
 
-/// A path to a single tile file, refused here if its extension names no format.
+/// A single tile file, on disk or behind a URL, refused here if its extension
+/// names no format.
+///
+/// The extension is that of the last path segment, so a URL's query string
+/// does not get in the way (`tile.png?key=…` is a PNG). A URL without one
+/// names no format and is refused, like a path without one.
 ///
 /// Delegates to [`TileFormat::try_from_str`], so a format added there is
 /// accepted here and reported by the metadata without this list being touched —
 /// the reason it is a function of `TileFormat` rather than a copy of its arms.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TileFilePath(FilePath);
+pub struct TileFileLocation {
+	location: FileLocation,
+	format: TileFormat,
+}
 
-impl TileFilePath {
+impl TileFileLocation {
 	/// Every extension [`TileFormat`] names, lowercase and without the dot.
 	///
 	/// Kept beside `TileFormat::try_from_str` by
@@ -318,34 +339,43 @@ impl TileFilePath {
 		"avif", "bin", "geojson", "jpeg", "jpg", "json", "mvt", "pbf", "png", "svg", "topojson", "webp",
 	];
 
-	/// The path resolved against the VPL document's directory.
+	/// The format the extension names.
+	#[must_use]
+	pub fn format(&self) -> TileFormat {
+		self.format
+	}
+
+	/// The tile file's content.
 	///
 	/// # Errors
 	///
-	/// As [`FilePath::resolve`].
-	pub fn resolve(&self, factory: &PipelineFactory) -> Result<PathBuf> {
-		self.0.resolve(factory)
+	/// As [`FileLocation::read_all`].
+	pub async fn read_all(&self, factory: &PipelineFactory) -> Result<Blob> {
+		self.location.read_all(factory).await
 	}
 }
 
-impl TryFrom<&str> for TileFilePath {
+impl TryFrom<&str> for TileFileLocation {
 	type Error = anyhow::Error;
 
 	fn try_from(text: &str) -> Result<Self> {
-		let path = FilePath::try_from(text)?;
-		TileFormat::try_from_path(path.as_path()).map_err(|_| {
-			anyhow::anyhow!(
-				"'{text}' does not name a tile format; expected .{}",
-				Self::EXTENSIONS.join(" / .")
-			)
-		})?;
-		Ok(Self(path))
+		let location = FileLocation::try_from(text)?;
+		let format = location
+			.file_name()
+			.and_then(|name| TileFormat::try_from_path(Path::new(&name)).ok())
+			.ok_or_else(|| {
+				anyhow::anyhow!(
+					"'{location}' does not name a tile format; expected .{}",
+					Self::EXTENSIONS.join(" / .")
+				)
+			})?;
+		Ok(Self { location, format })
 	}
 }
 
-impl std::fmt::Display for TileFilePath {
+impl std::fmt::Display for TileFileLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		self.0.fmt(f)
+		self.location.fmt(f)
 	}
 }
 
@@ -496,16 +526,21 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case("tile.png")]
-	#[case("tile.pbf")]
-	#[case("tile.MVT")]
-	fn a_tile_file_path_takes_what_tile_format_names(#[case] text: &str) {
-		assert!(TileFilePath::try_from(text).is_ok(), "'{text}' should be accepted");
+	#[case("tile.png", TileFormat::PNG)]
+	#[case("tile.pbf", TileFormat::MVT)]
+	#[case("tile.MVT", TileFormat::MVT)]
+	#[case("https://example.org/tiles/empty.webp", TileFormat::WEBP)]
+	#[case("https://example.org/tile.png?key=abc", TileFormat::PNG)]
+	fn a_tile_file_location_takes_what_tile_format_names(#[case] text: &str, #[case] format: TileFormat) {
+		assert_eq!(TileFileLocation::try_from(text).unwrap().format(), format);
 	}
 
-	#[test]
-	fn a_tile_file_path_refuses_what_names_no_format() {
-		let error = TileFilePath::try_from("tile.txt").expect_err("should be rejected");
+	#[rstest]
+	#[case::unknown_extension("tile.txt")]
+	#[case::no_extension("tile")]
+	#[case::url_without_extension("https://example.org/tile?format=png")]
+	fn a_tile_file_location_refuses_what_names_no_format(#[case] text: &str) {
+		let error = TileFileLocation::try_from(text).expect_err("should be rejected");
 		assert!(
 			error.to_string().contains("does not name a tile format"),
 			"got: {error}"
@@ -517,7 +552,7 @@ mod tests {
 	/// and nothing that parses is left off the list.
 	#[test]
 	fn every_tile_extension_is_offered() {
-		for ext in TileFilePath::EXTENSIONS {
+		for ext in TileFileLocation::EXTENSIONS {
 			assert!(
 				TileFormat::try_from_str(ext).is_ok(),
 				"'{ext}' is offered but names no format"
@@ -527,7 +562,7 @@ mod tests {
 			"avif", "bin", "geojson", "jpeg", "jpg", "json", "mvt", "pbf", "png", "svg", "topojson", "webp",
 		] {
 			assert!(
-				TileFilePath::EXTENSIONS.contains(&ext),
+				TileFileLocation::EXTENSIONS.contains(&ext),
 				"'{ext}' parses as a tile format but is not offered"
 			);
 		}
@@ -601,14 +636,9 @@ mod tests {
 		assert_eq!(location.file_name().as_deref(), expected);
 	}
 
-	/// Serves `content` at `/file.json`, a 404 everywhere else, and returns the
-	/// base URL.
-	async fn serve(content: &'static str) -> String {
-		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-		let addr = listener.local_addr().unwrap();
-		let app = axum::Router::new().route("/file.json", axum::routing::get(move || async move { content }));
-		tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-		format!("http://{addr}")
+	/// Serves `content` at `/file.json`.
+	async fn serve(content: &str) -> String {
+		crate::helpers::test_server::serve_files(vec![("/file.json", content.as_bytes().to_vec())]).await
 	}
 
 	fn factory_in(dir: &Path) -> PipelineFactory {

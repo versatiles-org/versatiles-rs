@@ -9,7 +9,7 @@ use versatiles_geometry::vector_tile::VectorTile;
 
 use crate::{
 	PipelineFactory,
-	helpers::location::FilePath,
+	helpers::location::FileLocation,
 	operations::{
 		transform::{AsTileTransform, TransformOp, VectorTransform},
 		vector::vector_filter_features,
@@ -39,9 +39,9 @@ use crate::{
 /// **The reduction may keep features the style never draws; it never drops one
 /// it does.** Anything in the style that cannot be read widens toward keeping.
 struct Args {
-	/// Path to the MapLibre style JSON the tileset should be reduced to.
+	/// Path or URL of the MapLibre style JSON the tileset should be reduced to.
 	#[vpl(accepts = "json")]
-	style: FilePath,
+	style: FileLocation,
 }
 
 /// Everything a style asks of a tileset, compiled once and applied per tile.
@@ -139,11 +139,11 @@ impl Runner {
 	) -> Result<TransformOp<AsTileTransform<Runner>>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let path = args
+		let json = args
 			.style
-			.resolve(factory)
-			.with_context(|| format!("resolving 'style' path {:?}", args.style))?;
-		let json = std::fs::read_to_string(&path).with_context(|| format!("reading 'style' from {}", path.display()))?;
+			.read_to_string(factory)
+			.await
+			.with_context(|| format!("reading 'style' from {}", args.style))?;
 
 		// The source's own pyramid is the only thing that knows how deep the tiles go, and an
 		// unclamped requirement is the one output that can silently destroy data — see the module
@@ -154,7 +154,7 @@ impl Runner {
 			.level_max()
 			.context("the source has no tiles, so there is no maximum zoom to clamp the style's zooms to")?;
 
-		let requirement = from_style(&json, maxzoom).with_context(|| format!("reading style {}", path.display()))?;
+		let requirement = from_style(&json, maxzoom).with_context(|| format!("reading style {}", args.style))?;
 
 		Ok(TransformOp::new(
 			source,
@@ -223,6 +223,30 @@ mod tests {
 		properties.sort();
 		properties.dedup();
 		Ok(properties)
+	}
+
+	#[tokio::test]
+	async fn the_style_can_come_from_a_url() -> Result<()> {
+		let style = r#"{"version":8,"sources":{},"layers":[
+			{"id":"a","type":"symbol","source":"s","source-layer":"debug_x","layout":{"text-field":["get","char"]}}
+		]}"#;
+		let base = crate::helpers::test_server::serve_files(vec![("/style.json", style.as_bytes().to_vec())]).await;
+		let operation = PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!(
+				"from_debug format=mvt | vector_reduce_to_style style=\"{base}/style.json\""
+			))
+			.await?;
+		let tile = operation
+			.tile_stream(TileBBox::new_full(1)?)
+			.await?
+			.next()
+			.await
+			.unwrap()
+			.1
+			.into_vector()?;
+		let layers: Vec<&str> = tile.layers.iter().map(|layer| layer.name.as_str()).collect();
+		assert_eq!(layers, ["debug_x"]);
+		Ok(())
 	}
 
 	#[tokio::test]

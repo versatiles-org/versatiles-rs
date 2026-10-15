@@ -8,7 +8,7 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-use crate::{PipelineFactory, helpers::location::FilePath, vpl::VPLNode};
+use crate::{PipelineFactory, helpers::location::FileLocation, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overwrites fields of the source's TileJSON metadata.
@@ -49,19 +49,19 @@ struct Args {
 	schema: Option<TileSchema>,
 	/// Complete TileJSON document, as a JSON string. Defaults to the source's metadata.
 	tilejson: Option<TileJSON>,
-	/// Path to a file holding a complete TileJSON document. Defaults to the source's metadata.
+	/// Path or URL of a complete TileJSON document. Defaults to the source's metadata.
 	#[vpl(accepts = "json")]
-	tilejson_file: Option<FilePath>,
+	tilejson_file: Option<FileLocation>,
 	/// Partial TileJSON document to merge on, as a JSON string. Defaults to merging nothing.
 	tilejson_update: Option<TileJSON>,
-	/// Path to a file holding a partial TileJSON document. Defaults to merging nothing.
+	/// Path or URL of a partial TileJSON document. Defaults to merging nothing.
 	#[vpl(accepts = "json")]
-	tilejson_update_file: Option<FilePath>,
+	tilejson_update_file: Option<FileLocation>,
 	/// The `vector_layers` array as a JSON string. Defaults to the source's.
 	vector_layers: Option<VectorLayers>,
-	/// Path to a file holding the `vector_layers` array as JSON. Defaults to the source's.
+	/// Path or URL of the `vector_layers` array as JSON. Defaults to the source's.
 	#[vpl(accepts = "json")]
-	vector_layers_file: Option<FilePath>,
+	vector_layers_file: Option<FileLocation>,
 }
 
 #[derive(Debug)]
@@ -80,14 +80,16 @@ impl Operation {
 
 		// Each JSON document may be supplied inline or via a `*_file` path; normalize
 		// both forms into a single optional JSON string before parsing.
-		let tilejson_arg = load_json_arg(args.tilejson, args.tilejson_file, factory, "tilejson")?;
+		let tilejson_arg = load_json_arg(args.tilejson, args.tilejson_file, factory, "tilejson").await?;
 		let tilejson_update_arg = load_json_arg(
 			args.tilejson_update,
 			args.tilejson_update_file,
 			factory,
 			"tilejson_update",
-		)?;
-		let vector_layers_arg = load_json_arg(args.vector_layers, args.vector_layers_file, factory, "vector_layers")?;
+		)
+		.await?;
+		let vector_layers_arg =
+			load_json_arg(args.vector_layers, args.vector_layers_file, factory, "vector_layers").await?;
 
 		let mut tilejson = match tilejson_arg {
 			Some(tilejson) => tilejson,
@@ -147,35 +149,31 @@ impl Operation {
 	}
 }
 
-/// Resolves a JSON argument that may be supplied either inline or via a `*_file` path.
-///
-/// Returns the JSON text. When the `*_file` form is used, the path is resolved relative to
-/// the VPL file and the file is read to a string. Providing both the inline value and the
-/// file path for the same field is an error.
 /// Resolves the `X` / `X_file` pair into one parsed document.
 ///
 /// The inline half arrives already parsed — its type did that where the value
 /// was decoded, so `check` reports a malformed document without building
-/// anything (#260). The file half cannot: reading a file is I/O, which `check`
-/// promises not to do, so it is read here and parsed by the same `TryFrom`.
-fn load_json_arg<T>(
+/// anything (#260). The file half cannot: reading a file or a URL is I/O, which
+/// `check` promises not to do, so it is read here and parsed by the same
+/// `TryFrom`. A relative path is resolved against the VPL file. Providing both
+/// halves is an error.
+async fn load_json_arg<T>(
 	inline: Option<T>,
-	file: Option<FilePath>,
+	file: Option<FileLocation>,
 	factory: &PipelineFactory,
 	name: &str,
 ) -> Result<Option<T>>
 where
-	T: for<'a> TryFrom<&'a str, Error = anyhow::Error>,
+	T: for<'a> TryFrom<&'a str, Error = anyhow::Error> + Send,
 {
 	match (inline, file) {
 		(Some(_), Some(_)) => bail!("'{name}' and '{name}_file' are mutually exclusive; provide only one"),
 		(Some(value), None) => Ok(Some(value)),
-		(None, Some(path)) => {
-			let path_buf = path
-				.resolve(factory)
-				.with_context(|| format!("resolving '{name}_file' path {path:?}"))?;
-			let content = std::fs::read_to_string(&path_buf)
-				.with_context(|| format!("reading '{name}_file' from {}", path_buf.display()))?;
+		(None, Some(location)) => {
+			let content = location
+				.read_to_string(factory)
+				.await
+				.with_context(|| format!("reading '{name}_file' from {location}"))?;
 			let parsed = T::try_from(content.as_str()).with_context(|| format!("parsing '{name}_file'"))?;
 			Ok(Some(parsed))
 		}
@@ -517,6 +515,19 @@ mod tests {
 			format!("{err:#}").contains("'tilejson' and 'tilejson_file' are mutually exclusive"),
 			"got: {err:#}"
 		);
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_reads_a_file_from_a_url() -> Result<()> {
+		let base =
+			crate::helpers::test_server::serve_files(vec![("/update.json", br#"{"name":"from a URL"}"#.to_vec())]).await;
+		let op = PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!(
+				"from_debug format=mvt | meta_update tilejson_update_file=\"{base}/update.json\""
+			))
+			.await?;
+		assert_eq!(get_str(op.tilejson(), "name").as_deref(), Some("from a URL"));
+		Ok(())
 	}
 
 	#[tokio::test]

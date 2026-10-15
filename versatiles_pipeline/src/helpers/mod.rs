@@ -11,6 +11,8 @@ pub mod overview;
 pub mod overview_cache;
 mod pipeline_reader;
 pub mod separator;
+#[cfg(test)]
+pub mod test_server;
 pub mod tile_error_monitor;
 pub mod tile_format_subset;
 pub mod tile_resize;

@@ -87,7 +87,7 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		| "FileLocation"
 		| "Option<FileLocation>"
 		| "GeoDataPath"
-		| "TileFilePath"
+		| "TileFileLocation"
 		| "ContainerLocation"
 		| "Option<ContainerLocation>"
 		| "HttpUrl"
@@ -583,7 +583,7 @@ mod tests {
 	/// been told about, which is silent: the generated `.d.ts` still builds and
 	/// still type-checks, having quietly stopped describing one parameter. A
 	/// new newtype is exactly the change that lands there — `GeoDataPath` and
-	/// `TileFilePath` both would have, and nothing would have said so.
+	/// `TileFileLocation` both would have, and nothing would have said so.
 	#[test]
 	fn every_parameter_renders_as_a_typescript_type() {
 		let mut missing = Vec::new();

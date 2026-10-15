@@ -409,7 +409,7 @@ fn what_from_geo_offers_is_what_from_geo_reads() {
 
 /// The same, for the tile formats `from_tile` reads.
 ///
-/// `TileFilePath` delegates its parser to `TileFormat`, so this is what keeps
+/// `TileFileLocation` delegates its parser to `TileFormat`, so this is what keeps
 /// the *published* list in step with it: a format added to `TileFormat` and not
 /// to `EXTENSIONS` shows up here rather than as a dialog quietly filtering out
 /// a file that would have opened.

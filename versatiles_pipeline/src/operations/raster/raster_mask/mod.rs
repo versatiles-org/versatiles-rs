@@ -29,7 +29,7 @@ use versatiles_image::DynamicImage;
 
 use crate::{
 	PipelineFactory,
-	helpers::location::FilePath,
+	helpers::location::FileLocation,
 	operations::transform::{TileTransform, TransformOp},
 	vpl::VPLNode,
 };
@@ -41,10 +41,10 @@ use crate::{
 /// as is a `crs` member naming another projection. A mask written lat,lon is in
 /// range and cannot be detected — it masks the wrong part of the world.
 struct Args {
-	/// Path to a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326
-	/// lon/lat degrees.
+	/// Path or URL of a GeoJSON file holding a Polygon or MultiPolygon, in
+	/// EPSG:4326 lon/lat degrees.
 	#[vpl(accepts = "geojson, json")]
-	geojson: FilePath,
+	geojson: FileLocation,
 	/// Distance in meters by which to grow the mask, or shrink it when negative. Defaults to `0`.
 	#[vpl(default = "0")]
 	buffer: Option<f32>,
@@ -91,16 +91,16 @@ impl Operation {
 		// Parse blur function
 		let blur_function = args.blur_function.unwrap_or_default();
 
-		// Resolve GeoJSON path relative to the factory's base path
-		let geojson_path = args.geojson.resolve(factory)?;
+		// A relative path is resolved against the VPL file.
+		let geojson = args.geojson.read_all(factory).await?;
 
-		// Load mask geometry
 		let mask = MaskGeometry::from_geojson(
-			&geojson_path,
+			geojson.as_slice(),
 			f64::from(args.buffer.unwrap_or(0.0)),
 			f64::from(args.blur.unwrap_or(0.0)),
 			blur_function,
-		)?;
+		)
+		.with_context(|| format!("reading the mask {}", args.geojson))?;
 
 		// Clip tile_pyramid to the ground the mask can still tint — the polygon plus the
 		// reach of its buffer and blur — so that tiles it cannot touch are never
@@ -275,7 +275,13 @@ mod tests {
 
 	fn reference_mask(buffer: f64, blur: f64) -> MaskGeometry {
 		let file = reference_geojson();
-		MaskGeometry::from_geojson(file.path(), buffer, blur, BlurFunction::default()).unwrap()
+		MaskGeometry::from_geojson(
+			&std::fs::read(file.path()).unwrap(),
+			buffer,
+			blur,
+			BlurFunction::default(),
+		)
+		.unwrap()
 	}
 
 	#[test]
@@ -397,6 +403,23 @@ mod tests {
 		// The exact count depends on the mask geometry
 		assert!(tiles.len() <= 1);
 
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn the_mask_can_come_from_a_url() -> Result<()> {
+		let geojson = std::fs::read(create_test_geojson().path())?;
+		let base = crate::helpers::test_server::serve_files(vec![("/mask.geojson", geojson)]).await;
+		let op = PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!(
+				"from_debug format=png | raster_mask geojson=\"{base}/mask.geojson\""
+			))
+			.await?;
+
+		// The mask covers 0–10° lon/lat, so the pyramid is clipped to it.
+		let pyramid = op.tile_pyramid().await?;
+		let level = pyramid.level_bbox(4);
+		assert!(level.count_tiles() < 4, "got {level:?}");
 		Ok(())
 	}
 

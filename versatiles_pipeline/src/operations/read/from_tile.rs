@@ -3,30 +3,31 @@
 //! This operation reads a single tile file (PNG, WebP, JPEG, AVIF, or MVT/PBF)
 //! and uses it as a template. All tile requests return clones of this tile.
 //!
-//! The tile format is automatically detected from the file extension.
+//! The tile format is automatically detected from the file extension, also for
+//! a URL.
 //!
 //! ## Examples
 //!
 //! ```text
 //! from_tile filename="background.png"
 //! from_tile filename="water.webp"
-//! from_tile filename="empty.pbf"
+//! from_tile filename="https://example.org/tiles/empty.pbf"
 //! ```
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{Blob, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 
-use crate::{PipelineFactory, helpers::location::TileFilePath, vpl::VPLNode};
+use crate::{PipelineFactory, helpers::location::TileFileLocation, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads one tile file and returns it for every requested coordinate.
 struct Args {
-	/// Path to the tile file; its format comes from the extension.
-	filename: TileFilePath,
+	/// Path or URL of the tile file; its format comes from the extension.
+	filename: TileFileLocation,
 }
 
 /// Implements [`TileSource`] by returning clones of a tile loaded from a file.
@@ -38,9 +39,8 @@ pub struct Operation {
 }
 
 impl Operation {
-	pub fn from_file(path: &Path) -> Result<Self> {
-		let tile_format = TileFormat::try_from_path(path)?;
-		let blob = Blob::load_from_file(path)?;
+	/// A source answering every coordinate with `blob`, read as `tile_format`.
+	pub fn new(blob: Blob, tile_format: TileFormat) -> Self {
 		let tile = Tile::from_blob(blob, TileCompression::Uncompressed, tile_format);
 
 		let metadata = TileSourceMetadata::new(
@@ -56,26 +56,25 @@ impl Operation {
 			tilejson
 		};
 
-		Ok(Self {
+		Self {
 			tile,
 			metadata,
 			tilejson,
-		})
+		}
+	}
+
+	#[cfg(test)]
+	fn from_file(path: &std::path::Path) -> Result<Self> {
+		let tile_format = TileFormat::try_from_path(path)?;
+		Ok(Self::new(Blob::load_from_file(path)?, tile_format))
 	}
 }
 
 impl Operation {
-	// `async` with nothing to await: the signature is fixed by
-	// `define_read_factory!`, which awaits every operation's `build`.
-	#[expect(
-		clippy::unused_async,
-		clippy::unused_async_trait_impl,
-		reason = "the factory trait declares `build` async; this implementation has nothing to await"
-	)]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let path = args.filename.resolve(factory)?;
-		Operation::from_file(&path).map(|op| Box::new(op) as Box<dyn TileSource>)
+		let blob = args.filename.read_all(factory).await?;
+		Ok(Box::new(Operation::new(blob, args.filename.format())))
 	}
 }
 
@@ -159,8 +158,21 @@ mod tests {
 
 	#[test]
 	fn test_from_file_nonexistent() {
-		let result = Operation::from_file(Path::new("/nonexistent/path/file.png"));
+		let result = Operation::from_file(std::path::Path::new("/nonexistent/path/file.png"));
 		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn the_tile_can_come_from_a_url() -> Result<()> {
+		let png = std::fs::read(create_temp_png().path())?;
+		let base = crate::helpers::test_server::serve_files(vec![("/water.png", png.clone())]).await;
+		let op = PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!("from_tile filename=\"{base}/water.png?key=abc\""))
+			.await?;
+		assert_eq!(*op.metadata().tile_format(), TileFormat::PNG);
+		let tile = op.tile(&TileCoord::new(3, 1, 2)?).await?.unwrap();
+		assert_eq!(tile.into_blob(&Uncompressed)?.as_slice(), png.as_slice());
+		Ok(())
 	}
 
 	#[tokio::test]

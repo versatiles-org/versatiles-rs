@@ -392,7 +392,7 @@ Reads one tile file and returns it for every requested coordinate.
 
 ### Parameters
 
-- **`filename`: path (required)** - Path to the tile file; its format comes from the extension.
+- **`filename`: path or URL (required)** - Path or URL of the tile file; its format comes from the extension.
 
 ---
 
@@ -501,11 +501,11 @@ The fields and their meaning follow the TileJSON 3.0.0 specification: <https://g
 - _`name`: String (optional)_ - Name of the tileset. Defaults to the source's.
 - _`schema`: TileSchema (optional)_ - Values: `rgb`, `rgba`, `dem/mapbox`, `dem/terrarium`, `dem/versatiles`, `openmaptiles`, `shortbread@1.0`, `shortbread@1.1`, `other`. What the tiles contain. Defaults to the source's.
 - _`tilejson`: TileJSON as JSON (optional)_ - Complete TileJSON document, as a JSON string. Defaults to the source's metadata.
-- _`tilejson_file`: path (optional)_ - Path to a file holding a complete TileJSON document. Defaults to the source's metadata.
+- _`tilejson_file`: path or URL (optional)_ - Path or URL of a complete TileJSON document. Defaults to the source's metadata.
 - _`tilejson_update`: TileJSON as JSON (optional)_ - Partial TileJSON document to merge on, as a JSON string. Defaults to merging nothing.
-- _`tilejson_update_file`: path (optional)_ - Path to a file holding a partial TileJSON document. Defaults to merging nothing.
+- _`tilejson_update_file`: path or URL (optional)_ - Path or URL of a partial TileJSON document. Defaults to merging nothing.
 - _`vector_layers`: vector_layers as JSON (optional)_ - The `vector_layers` array as a JSON string. Defaults to the source's.
-- _`vector_layers_file`: path (optional)_ - Path to a file holding the `vector_layers` array as JSON. Defaults to the source's.
+- _`vector_layers_file`: path or URL (optional)_ - Path or URL of the `vector_layers` array as JSON. Defaults to the source's.
 
 ---
 
@@ -563,7 +563,7 @@ The mask is not reprojected: coordinates outside the WGS84 range are refused, as
 
 ### Parameters
 
-- **`geojson`: path (required)** - Path to a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326 lon/lat degrees.
+- **`geojson`: path or URL (required)** - Path or URL of a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326 lon/lat degrees.
 - _`buffer`: f32 (optional)_ - Distance in meters by which to grow the mask, or shrink it when negative. Defaults to `0`.
 - _`blur`: f32 (optional)_ - Width in meters of the soft transition at the mask edge. Defaults to `0`.
 - _`blur_function`: BlurFunction (optional)_ - Values: `linear`, `cosine`. Falloff curve across the `blur` band. Defaults to `linear`.
@@ -807,7 +807,7 @@ Zoom levels are clamped to the pyramid of the source it wraps. That matters: Map
 
 ### Parameters
 
-- **`style`: path (required)** - Path to the MapLibre style JSON the tileset should be reduced to.
+- **`style`: path or URL (required)** - Path or URL of the MapLibre style JSON the tileset should be reduced to.
 
 ---
 
