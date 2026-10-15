@@ -872,7 +872,7 @@
         "source-layer": "w",
         "filter": [
           "all",
-          ["==", "kind", "lake"],
+          ["==", ["get", "kind"], "lake"],
           ["match", ["get", "name"], ["A"], true, false]
         ]
       }
@@ -925,7 +925,7 @@
         "source-layer": "w",
         "filter": [
           "any",
-          ["==", "kind", "river"],
+          ["==", ["get", "kind"], "river"],
           ["match", ["get", "name"], ["A"], true, false]
         ]
       }

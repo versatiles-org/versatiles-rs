@@ -75,6 +75,24 @@ cannot skip a check.
    exactly when there is a `widening`.
 4. `fields`, when given.
 
+## Checking `drawn` against MapLibre
+
+```sh
+node scripts/check-reduce-cases.mjs
+```
+
+The `drawn` of a case is written by hand. This script asks MapLibre's own
+style-spec package instead: it evaluates every filter with `featureFilter` at
+the map zooms that load the case's tile, and applies layer zooms, visibility,
+`ref` layers, the source's zoom range and the geometries a layer type draws. It
+reports every case whose drawn features differ. It does not check properties,
+and it skips cases expecting an error, `draws-nothing` widenings and
+`global-state` filters. The package is installed into `target/` on first use.
+
+Write filters in one syntax. MapLibre reads a legacy filter inside an expression
+(`["all", ["==", "kind", "lake"], ["match", …]]`) as comparing two strings, not
+as a legacy filter.
+
 ## Widening kinds
 
 | Kind                        | The reduction keeps more because                                                                     |
