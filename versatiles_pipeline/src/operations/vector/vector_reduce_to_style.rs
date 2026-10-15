@@ -31,22 +31,46 @@ use crate::{
 /// it in one pass instead: chaining twenty operations would decode and re-encode
 /// every tile twenty times to touch one layer each time.
 ///
-/// Zoom levels are clamped to the pyramid of the source it wraps. That matters:
-/// MapLibre overzooms, so a style drawing addresses from z17 against a tileset
-/// that stops at z14 must keep them in the z14 tiles, not drop them.
+/// **What it reads from the style**, for every visible style layer of this
+/// tileset:
+///
+/// - its `source-layer` and its `filter`;
+/// - its `minzoom` and `maxzoom`, as the tile zooms MapLibre loads for them:
+///   rounded down, and clamped to the lower of the tileset's maximum and the
+///   style source's `maxzoom`. MapLibre overzooms, so a style drawing addresses
+///   from z17 keeps them in the z14 tiles of a tileset that stops there;
+/// - every property its `filter`, `paint` and `layout` read — through `get`,
+///   legacy filters, `{token}` strings and legacy `{"property": …}` functions —
+///   at the zooms it is drawn at, and the source's `promoteId` at every zoom.
 ///
 /// Hidden style layers (`"visibility": "none"`) count for nothing: a map that
 /// shows one at runtime needs a style with it visible for the reduction.
 ///
-/// Only the style layers drawing this tileset count. A style that draws a
-/// single vector tileset uses that one; a style drawing several needs `source`,
-/// because nothing in it says which of them this tileset is. Style sources with
-/// the same `url` or `tiles` are one tileset, and naming one names all of them.
+/// **Which tileset.** Only the style layers drawing this tileset count. A style
+/// that draws a single vector tileset uses that one; style sources with the same
+/// `url` or `tiles` are one tileset, and naming one names all of them. A style
+/// drawing several needs `source`, because nothing in it says which of them this
+/// tileset is.
 ///
 /// **The reduction may keep features the style never draws; it never drops one
-/// it does.** Anything in the style that cannot be read widens toward keeping.
+/// it does.** Anything in the style that cannot be read widens toward keeping:
+///
+/// - a filter it cannot read keeps every feature in that layer's zoom range —
+///   `match`, `case`, `coalesce`, the geometry type (`$type`,
+///   `["geometry-type"]`), the feature ID, `zoom`, string operations, and a
+///   modern `in` that tests a substring;
+/// - a property read by a computed name (`["get", ["concat", …]]`) or through
+///   `["properties"]` keeps every property of that source-layer;
+/// - a feature that passes the filter but draws nothing, such as an icon that
+///   resolves to none, is kept, and so is every geometry type, whichever the
+///   layer type draws;
+/// - a property is kept on every feature of its source-layer, not only on the
+///   features of the style layer that reads it, and `to-boolean` keeps `""`,
+///   `0` and `false`.
+///
 /// What would reduce the tileset to nothing is refused instead: a style that
-/// draws none of the tileset's layers, or several tilesets without `source`.
+/// draws none of the tileset's layers, several tilesets without `source`, or
+/// only hidden layers.
 struct Args {
 	/// Path or URL of the MapLibre style JSON the tileset should be reduced to.
 	#[vpl(accepts = "json")]
