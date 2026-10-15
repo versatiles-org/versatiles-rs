@@ -11,7 +11,10 @@ use std::{
 	io::{Read, Write},
 	net::{TcpListener, TcpStream},
 	path::{Path, PathBuf},
-	sync::{Arc, Mutex, OnceLock},
+	sync::{
+		Arc, Mutex, OnceLock,
+		atomic::{AtomicUsize, Ordering},
+	},
 	thread,
 };
 
@@ -36,7 +39,12 @@ fn load_file(name: &str) -> Option<Arc<Vec<u8>>> {
 /// A localhost HTTP server serving `testdata/` files with byte-range support.
 pub struct TestHttpServer {
 	port: u16,
+	/// Requests that have arrived, per slow file name; see [`Self::requests_to`].
+	slow_requests: SlowRequests,
 }
+
+/// Requests that have arrived, per slow file name.
+type SlowRequests = Arc<Mutex<HashMap<String, usize>>>;
 
 impl TestHttpServer {
 	/// Process-wide shared instance — started once, reused by every test.
@@ -49,12 +57,15 @@ impl TestHttpServer {
 	fn start() -> TestHttpServer {
 		let listener = TcpListener::bind("127.0.0.1:0").expect("test HTTP server: bind 127.0.0.1:0");
 		let port = listener.local_addr().expect("test HTTP server: local_addr").port();
+		let slow_requests = SlowRequests::default();
+		let counter = Arc::clone(&slow_requests);
 		thread::spawn(move || {
 			for stream in listener.incoming().flatten() {
-				thread::spawn(move || handle_connection(stream));
+				let counter = Arc::clone(&counter);
+				thread::spawn(move || handle_connection(stream, &counter));
 			}
 		});
-		TestHttpServer { port }
+		TestHttpServer { port, slow_requests }
 	}
 
 	/// URL for a file under `testdata/`, e.g. `url("berlin.pmtiles")`.
@@ -66,6 +77,10 @@ impl TestHttpServer {
 	/// URL for the same file, with every request to it answered only after
 	/// `delay_ms`: a remote source that is slow, for tests that need a request
 	/// to still be running when something else happens.
+	///
+	/// Every call returns a URL of its own, so that [`Self::requests_to`] counts
+	/// only the requests of the test that asked for it, although tests running
+	/// in parallel share this server.
 	#[must_use]
 	#[allow(
 		dead_code,
@@ -73,17 +88,34 @@ impl TestHttpServer {
 		          `expect` would be unfulfilled there"
 	)]
 	pub fn slow_url(&self, file: &str, delay_ms: u64) -> String {
-		format!("http://127.0.0.1:{}/{SLOW_PREFIX}{delay_ms}-{file}", self.port)
+		static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+		let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+		format!("http://127.0.0.1:{}/{SLOW_PREFIX}{delay_ms}-{id}-{file}", self.port)
+	}
+
+	/// How many requests to a [`Self::slow_url`] have arrived, counted when they
+	/// arrive rather than when they are answered. That is what tells a test the
+	/// request it caused has reached the source, which a sleep only hopes.
+	#[must_use]
+	#[allow(
+		dead_code,
+		reason = "this file is compiled into two test targets, and only the end-to-end one uses this; \
+		          `expect` would be unfulfilled there"
+	)]
+	pub fn requests_to(&self, url: &str) -> usize {
+		let name = url.rsplit('/').next().unwrap_or_default();
+		self.slow_requests.lock().unwrap().get(name).copied().unwrap_or(0)
 	}
 }
 
 /// What a file name starts with to have its requests delayed:
-/// `delay-<milliseconds>-<file>`. A prefix, not a query, so that the name
+/// `delay-<milliseconds>-<id>-<file>`. A prefix, not a query, so that the name
 /// still ends in the file's extension for whoever picks a reader by it.
 const SLOW_PREFIX: &str = "delay-";
 
 /// Handle one connection: a single `GET`, optionally with a `Range` header.
-fn handle_connection(mut stream: TcpStream) {
+/// A request to a slow file is counted in `slow_requests` when it arrives.
+fn handle_connection(mut stream: TcpStream, slow_requests: &SlowRequests) {
 	// Read the request head, up to the blank line. GET requests have no body.
 	let mut buf = Vec::new();
 	let mut chunk = [0u8; 2048];
@@ -117,8 +149,13 @@ fn handle_connection(mut stream: TcpStream) {
 	});
 
 	let name = target.split('?').next().unwrap_or_default().trim_start_matches('/');
-	let name = match name.strip_prefix(SLOW_PREFIX).and_then(|rest| rest.split_once('-')) {
+	let slow = name
+		.strip_prefix(SLOW_PREFIX)
+		.and_then(|rest| rest.split_once('-'))
+		.and_then(|(delay_ms, rest)| Some((delay_ms, rest.split_once('-')?.1)));
+	let name = match slow {
 		Some((delay_ms, file)) => {
+			*slow_requests.lock().unwrap().entry(name.to_string()).or_default() += 1;
 			thread::sleep(std::time::Duration::from_millis(delay_ms.parse().unwrap_or(0)));
 			file
 		}

@@ -72,20 +72,31 @@ const SOURCE_DELAY_MS: u64 = 400;
 /// A server whose only source answers slowly, and a tile request that is on
 /// its way through it.
 async fn server_with_a_request_in_flight() -> (Child, tokio::task::JoinHandle<reqwest::Result<reqwest::StatusCode>>) {
-	let source = format!(
-		"[berlin]{}",
-		TestHttpServer::shared().slow_url("berlin.pmtiles", SOURCE_DELAY_MS)
-	);
-	let (host, child) = spawn_server(&[&source], "/tiles/index.json").await;
+	let server = TestHttpServer::shared();
+	let url = server.slow_url("berlin.pmtiles", SOURCE_DELAY_MS);
+	let (host, child) = spawn_server(&[&format!("[berlin]{url}")], "/tiles/index.json").await;
 
+	// Opening the source has already asked it for a few things.
+	let before = server.requests_to(&url);
 	let request = tokio::spawn(async move {
 		let response = reqwest::get(format!("{host}/tiles/berlin/12/2200/1343")).await?;
 		let status = response.status();
 		response.bytes().await?;
 		Ok(status)
 	});
-	// Let it reach the server and get as far as waiting for the source.
-	tokio::time::sleep(Duration::from_millis(SOURCE_DELAY_MS / 4)).await;
+
+	// Wait until the source is asked, which is when the server is answering the
+	// request. A fixed sleep was not enough on a slow runner: the signal came
+	// before the request did, the server had nothing to wait for and exited
+	// cleanly, and the test saw exit code 0 instead of the forced exit.
+	let start = Instant::now();
+	while server.requests_to(&url) == before {
+		assert!(
+			start.elapsed() < Duration::from_secs(10),
+			"the request never reached the source"
+		);
+		tokio::time::sleep(Duration::from_millis(5)).await;
+	}
 	assert!(!request.is_finished(), "the request should still be running");
 
 	(child, request)
