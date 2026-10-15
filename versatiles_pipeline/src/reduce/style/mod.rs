@@ -124,7 +124,23 @@ impl Tileset {
 	}
 }
 
+/// Whether a style layer is hidden: `"visibility": "none"` in its `layout`.
+///
+/// A hidden layer draws nothing, so it keeps nothing. A map that shows it at runtime with
+/// `setLayoutProperty` needs a style with it visible for the reduction. `visibility` cannot be
+/// data-driven, so the plain string is all there is to read.
+fn is_hidden(layer: &JsonObject) -> bool {
+	matches!(
+		layer.get("layout"),
+		Some(JsonValue::Object(layout))
+			if matches!(layout.get("visibility"), Some(JsonValue::String(visibility)) if visibility == "none")
+	)
+}
+
 /// The style layers that draw the tileset being reduced.
+///
+/// Hidden layers ([`is_hidden`]) are left out before anything else: they draw nothing, so they
+/// keep nothing, and do not count as a tileset the style draws either.
 ///
 /// A style may draw several vector tilesets, and only one of them is this one. Counting the
 /// others' layers would merge their filters into this tileset's, and a style whose data layers all
@@ -153,10 +169,15 @@ fn select_layers<'a>(
 	// Every style layer that draws tile data, with the tileset its source reads.
 	let mut data_layers: Vec<(&JsonObject, String)> = Vec::new();
 	let mut tilesets: BTreeMap<String, Tileset> = BTreeMap::new();
+	let mut any_hidden = false;
 	for layer in layers {
 		let Some(source_layer) = layer.string("source-layer")? else {
 			continue;
 		};
+		if is_hidden(layer) {
+			any_hidden = true;
+			continue;
+		}
 		let id = layer.string("source")?;
 		let identity = tileset_identity(style, id.as_ref());
 		let tileset = tilesets.entry(identity.clone()).or_default();
@@ -169,7 +190,12 @@ fn select_layers<'a>(
 		!tilesets.is_empty(),
 		"the style draws no source-layer, so reducing a tileset to it would leave nothing. \
 		 Check that this is a built style with data layers rather than, say, an empty or \
-		 background-only one."
+		 background-only one.{}",
+		if any_hidden {
+			" Its data layers are all hidden (`\"visibility\": \"none\"`), and a hidden layer draws nothing.".to_string()
+		} else {
+			String::new()
+		}
 	);
 
 	let list = || tilesets.values().map(Tileset::name).collect::<Vec<_>>().join(", ");
@@ -903,6 +929,59 @@ mod tests {
 		assert!(message.contains("none of this tileset's layers"), "got: {message}");
 		assert!(message.contains("draws: water"), "got: {message}");
 		assert!(message.contains("has: buildings, streets"), "got: {message}");
+	}
+
+	// ── hidden layers ──
+
+	#[test]
+	fn a_hidden_layer_keeps_nothing() {
+		let requirement = from(
+			r#"{"layers":[
+				{"id":"a","source-layer":"water","paint":{"c":["get","kind"]}},
+				{"id":"b","source-layer":"water","layout":{"visibility":"none"},"paint":{"c":["get","name"]}},
+				{"id":"c","source-layer":"pois","layout":{"visibility":"none"}},
+				{"id":"d","source-layer":"land","layout":{"visibility":"visible"}}
+			]}"#,
+			14,
+		);
+		assert_eq!(requirement.layers.keys().collect::<Vec<_>>(), ["land", "water"]);
+		assert_eq!(properties(&requirement, "water"), ["kind"]);
+	}
+
+	#[test]
+	fn a_hidden_layer_does_not_widen_the_filter() {
+		// The visible layer draws only lakes; the hidden one, unfiltered, would keep everything.
+		let requirement = from(
+			r#"{"layers":[
+				{"id":"a","source-layer":"water","filter":["==","kind","lake"]},
+				{"id":"b","source-layer":"water","layout":{"visibility":"none"}}
+			]}"#,
+			14,
+		);
+		assert!(requirement.layers["water"].keep[0].predicate.is_some());
+	}
+
+	#[test]
+	fn a_hidden_layer_of_another_tileset_needs_no_source() {
+		let requirement = from(
+			r#"{"layers":[
+				{"id":"a","source":"map","source-layer":"water"},
+				{"id":"b","source":"overlay","source-layer":"routes","layout":{"visibility":"none"}}
+			]}"#,
+			14,
+		);
+		assert_eq!(requirement.layers.keys().collect::<Vec<_>>(), ["water"]);
+	}
+
+	#[test]
+	fn a_style_whose_data_layers_are_all_hidden_is_refused() {
+		let message = error(
+			r#"{"layers":[{"id":"a","source-layer":"water","layout":{"visibility":"none"}}]}"#,
+			&[],
+			&[],
+		);
+		assert!(message.contains("draws no source-layer"), "got: {message}");
+		assert!(message.contains("data layers are all hidden"), "got: {message}");
 	}
 
 	// ── properties per zoom ──

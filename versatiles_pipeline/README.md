@@ -819,6 +819,8 @@ The same reduction can be written by hand as `vector_filter_layers`, one `vector
 
 Zoom levels are clamped to the pyramid of the source it wraps. That matters: MapLibre overzooms, so a style drawing addresses from z17 against a tileset that stops at z14 must keep them in the z14 tiles, not drop them.
 
+Hidden style layers (`"visibility": "none"`) count for nothing: a map that shows one at runtime needs a style with it visible for the reduction.
+
 Only the style layers drawing this tileset count. A style that draws a single vector tileset uses that one; a style drawing several needs `source`, because nothing in it says which of them this tileset is. Style sources with the same `url` or `tiles` are one tileset, and naming one names all of them.
 
 **The reduction may keep features the style never draws; it never drops one it does.** Anything in the style that cannot be read widens toward keeping. What would reduce the tileset to nothing is refused instead: a style that draws none of the tileset's layers, or several tilesets without `source`.

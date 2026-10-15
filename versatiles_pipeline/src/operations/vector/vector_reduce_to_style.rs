@@ -35,6 +35,9 @@ use crate::{
 /// MapLibre overzooms, so a style drawing addresses from z17 against a tileset
 /// that stops at z14 must keep them in the z14 tiles, not drop them.
 ///
+/// Hidden style layers (`"visibility": "none"`) count for nothing: a map that
+/// shows one at runtime needs a style with it visible for the reduction.
+///
 /// Only the style layers drawing this tileset count. A style that draws a
 /// single vector tileset uses that one; a style drawing several needs `source`,
 /// because nothing in it says which of them this tileset is. Style sources with

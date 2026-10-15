@@ -426,7 +426,7 @@ versatiles reduce --style colorful.json tiles.versatiles reduced.versatiles
 | `--source`      | ID of the style source the tileset is; required if the style draws several tilesets. Repeatable | `--source versatiles-shortbread` |
 | `--print`       | Print the rendered VPL pipeline and exit, touching no tiles                                     | `--print`                        |
 
-Only the style layers drawing the tileset count. A style that draws one vector tileset needs nothing more; style sources with the same `url` or `tiles` are one tileset, even under different IDs. A style that draws several, say a basemap and an overlay, is refused until `--source` names the one the tileset is, and so is a style that draws none of the tileset's layers: both would otherwise strip the tileset of what the map shows.
+Only the style layers drawing the tileset count. A style that draws one vector tileset needs nothing more; style sources with the same `url` or `tiles` are one tileset, even under different IDs. A style that draws several, say a basemap and an overlay, is refused until `--source` names the one the tileset is, and so is a style that draws none of the tileset's layers: both would otherwise strip the tileset of what the map shows. Hidden style layers (`"visibility": "none"`) count for nothing; a map that shows one at runtime needs a style with it visible for the reduction.
 
 **Seeing the pipeline before running it:**
 
