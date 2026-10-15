@@ -1,0 +1,7 @@
+[
+  {
+    "name": "a style that draws no source-layer is refused",
+    "style": [{ "type": "background" }],
+    "error": "draws no source-layer"
+  }
+]

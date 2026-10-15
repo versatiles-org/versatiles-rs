@@ -1,0 +1,52 @@
+[
+  {
+    "name": "a filter keeps the features it matches and the property it reads",
+    "style": [{ "source-layer": "water", "filter": ["==", "kind", "lake"] }],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        { "id": 1, "kind": "lake", "name": "Wannsee" },
+        { "id": 2, "kind": "river", "name": "Spree" }
+      ]
+    },
+    "drawn": { "water": { "1": ["kind"] } },
+    "kept": { "water": { "1": ["kind"] } }
+  },
+  {
+    "name": "an unsigned integer equals the literal it holds",
+    "style": [
+      { "source-layer": "boundaries", "filter": ["==", "admin_level", 2] }
+    ],
+    "zoom": 14,
+    "tile": {
+      "boundaries": [
+        { "id": 1, "admin_level": { "uint": 2 } },
+        { "id": 2, "admin_level": { "double": 4.0 } }
+      ]
+    },
+    "drawn": { "boundaries": { "1": ["admin_level"] } },
+    "kept": { "boundaries": { "1": ["admin_level"] } }
+  },
+  {
+    "name": "a match filter keeps every feature in its zoom range",
+    "style": [
+      {
+        "source-layer": "water",
+        "filter": ["match", ["get", "kind"], ["lake"], true, false]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        { "id": 1, "kind": "lake" },
+        { "id": 2, "kind": "river" }
+      ]
+    },
+    "drawn": { "water": { "1": ["kind"] } },
+    "kept": { "water": { "1": ["kind"], "2": ["kind"] } },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "`match` is not in the predicate set, so the filter keeps everything."
+    }
+  }
+]

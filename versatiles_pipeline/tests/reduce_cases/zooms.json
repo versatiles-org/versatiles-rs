@@ -1,0 +1,34 @@
+[
+  {
+    "name": "a layer drawn from z12 is dropped below it",
+    "style": [
+      {
+        "source-layer": "water",
+        "minzoom": 12,
+        "paint": { "fill-color": ["get", "kind"] }
+      }
+    ],
+    "zoom": [11, 12],
+    "tile": { "water": [{ "id": 1, "$geometry": "Polygon", "kind": "lake" }] },
+    "drawn": { "11": {}, "12": { "water": { "1": ["kind"] } } },
+    "kept": { "11": {}, "12": { "water": { "1": ["kind"] } } }
+  },
+  {
+    "name": "a lower source maxzoom keeps a layer in the tiles the source stops at",
+    "style": {
+      "sources": { "s": { "type": "vector", "maxzoom": 12 } },
+      "layers": [
+        {
+          "source": "s",
+          "source-layer": "places",
+          "minzoom": 13,
+          "layout": { "text-field": ["get", "name"] }
+        }
+      ]
+    },
+    "zoom": [11, 12],
+    "tile": { "places": [{ "id": 1, "name": "Berlin" }] },
+    "drawn": { "11": {}, "12": { "places": { "1": ["name"] } } },
+    "kept": { "11": {}, "12": { "places": { "1": ["name"] } } }
+  }
+]

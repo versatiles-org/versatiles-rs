@@ -1,0 +1,88 @@
+[
+  {
+    "name": "a layer the style does not draw is dropped",
+    "style": [
+      {
+        "source-layer": "water"
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "kind": "lake"
+        }
+      ],
+      "land": [
+        {
+          "id": 1,
+          "kind": "forest"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": []
+      }
+    },
+    "kept": {
+      "water": {
+        "1": []
+      }
+    }
+  },
+  {
+    "name": "a hidden layer keeps nothing",
+    "style": [
+      {
+        "source-layer": "water",
+        "paint": {
+          "fill-color": ["get", "kind"]
+        }
+      },
+      {
+        "source-layer": "water",
+        "layout": {
+          "visibility": "none"
+        },
+        "paint": {
+          "fill-color": ["get", "name"]
+        }
+      },
+      {
+        "source-layer": "pois",
+        "layout": {
+          "visibility": "none"
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake",
+          "name": "Wannsee"
+        }
+      ],
+      "pois": [
+        {
+          "id": 1,
+          "amenity": "cafe"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": ["kind"]
+      }
+    },
+    "kept": {
+      "water": {
+        "1": ["kind"]
+      }
+    }
+  }
+]

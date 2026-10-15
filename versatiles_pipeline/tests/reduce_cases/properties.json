@@ -1,0 +1,45 @@
+[
+  {
+    "name": "a property read in paint stays and one never read goes",
+    "style": [
+      { "source-layer": "roads", "paint": { "line-width": ["get", "width"] } }
+    ],
+    "zoom": 14,
+    "tile": {
+      "roads": [
+        { "id": 1, "$geometry": "LineString", "width": 3, "surface": "asphalt" }
+      ]
+    },
+    "drawn": { "roads": { "1": ["width"] } },
+    "kept": { "roads": { "1": ["width"] } },
+    "fields": { "roads": ["width"] }
+  },
+  {
+    "name": "a property read by one style layer stays on every feature of its source-layer",
+    "style": [
+      {
+        "source-layer": "labels",
+        "filter": ["==", "kind", "motorway"],
+        "layout": { "text-field": "{ref}" }
+      },
+      { "source-layer": "labels", "layout": { "text-field": ["get", "name"] } }
+    ],
+    "zoom": 14,
+    "tile": {
+      "labels": [
+        { "id": 1, "kind": "motorway", "ref": "A 100", "name": "Stadtring" },
+        { "id": 2, "kind": "residential", "ref": "x", "name": "Kantstraße" }
+      ]
+    },
+    "drawn": {
+      "labels": { "1": ["kind", "name", "ref"], "2": ["kind", "name"] }
+    },
+    "kept": {
+      "labels": { "1": ["kind", "name", "ref"], "2": ["kind", "name", "ref"] }
+    },
+    "widening": {
+      "kind": "property-per-source-layer",
+      "why": "`ref` is read only by the motorway layer, but properties are kept per source-layer."
+    }
+  }
+]

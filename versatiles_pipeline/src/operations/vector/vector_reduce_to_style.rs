@@ -226,6 +226,10 @@ crate::operations::macros::define_transform_factory!("vector_reduce_to_style", A
 
 // ───────────────────────── TESTS ─────────────────────────
 #[cfg(test)]
+#[path = "vector_reduce_to_style_cases.rs"]
+mod cases;
+
+#[cfg(test)]
 mod tests {
 	use pretty_assertions::assert_eq;
 	use versatiles_core::TileBBox;
