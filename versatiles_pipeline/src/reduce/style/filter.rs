@@ -65,11 +65,13 @@ pub const LEGACY_SPECIAL_KEYS: &[&str] = &["$type", "$id"];
 /// position 1 (`["==", "kind", "x"]`, `["has", "service"]`). Both occur in the deployed styles — 45
 /// of `colorful`'s filters use the legacy `has` form — so both are read.
 ///
-/// A bare string is only a field name because this is a *filter*. In a general expression it would
-/// be a string literal, and reading it as a field would be wrong — which is why this is not used
-/// outside filter operand positions. A bare [`LEGACY_SPECIAL_KEYS`] entry names no field at all.
-fn field_of(value: &JsonValue) -> Option<String> {
+/// A bare string is a field name only in a legacy filter. In an expression it is a string literal —
+/// `["==", "kind", "lake"]` inside an expression compares two strings — and reading it as a field
+/// would be wrong, so in [`Syntax::Expression`] it names nothing. A bare [`LEGACY_SPECIAL_KEYS`]
+/// entry names no field at all.
+fn field_of(value: &JsonValue, syntax: Syntax) -> Option<String> {
 	match value {
+		JsonValue::String(_) if syntax == Syntax::Expression => None,
 		JsonValue::String(name) if LEGACY_SPECIAL_KEYS.contains(&name.as_str()) => None,
 		JsonValue::String(name) => Some(name.clone()),
 		JsonValue::Array(array) => match array.as_vec().as_slice() {
@@ -128,12 +130,88 @@ fn combine(args: Vec<Predicate>, build: fn(Vec<Predicate>) -> Predicate) -> Opti
 	}
 }
 
+/// The two grammars a filter can be written in.
+///
+/// MapLibre decides once per filter which one it is, and reads every part of it that way: inside
+/// an expression, `["==", "kind", "lake"]` compares the strings `"kind"` and `"lake"` and is always
+/// false, and `["!=", "kind", "lake"]` is always true. Reading such a part as a legacy filter would
+/// drop features MapLibre draws, so the syntax is decided first, as MapLibre does, and a filter
+/// mixing the two is not read at all.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Syntax {
+	Legacy,
+	Expression,
+}
+
+/// Which syntaxes the parts of a filter are written in, following MapLibre's `classifyFilter`: a
+/// part written the same in both, such as `["has", "k"]` or `true`, counts for neither.
+///
+/// MapLibre's own answer for a mixed filter has changed between versions — newer ones read an
+/// `all` with one expression child as an expression, older ones read it as legacy — which is one
+/// more reason to read a mixed filter as nothing. The walk is stricter than MapLibre's in one way,
+/// in the safe direction: it also looks inside `none` (legacy) and `!` (an expression).
+fn syntaxes(filter: &JsonValue, legacy: &mut bool, expression: &mut bool) {
+	let items = match filter {
+		JsonValue::Boolean(_) => return,
+		JsonValue::Array(array) if !array.as_vec().is_empty() => array.as_vec(),
+		_ => {
+			*legacy = true;
+			return;
+		}
+	};
+	let JsonValue::String(op) = &items[0] else {
+		*expression = true;
+		return;
+	};
+	let op = op.as_str();
+	let string_at = |i: usize| matches!(items.get(i), Some(JsonValue::String(_)));
+	let array_at = |i: usize| matches!(items.get(i), Some(JsonValue::Array(_)));
+	match op {
+		"all" | "any" => {}
+		"has" => match items.len() {
+			2 if matches!(&items[1], JsonValue::String(k) if LEGACY_SPECIAL_KEYS.contains(&k.as_str())) => *legacy = true,
+			2 => {}
+			n if n < 2 => *legacy = true,
+			_ => *expression = true,
+		},
+		"in" if items.len() >= 3 && (!string_at(1) || array_at(2)) => *expression = true,
+		"none" | "in" | "!in" | "!has" => *legacy = true,
+		"==" | "!=" | "<" | "<=" | ">" | ">=" => {
+			if items.len() != 3 || array_at(1) || array_at(2) {
+				*expression = true;
+			} else {
+				*legacy = true;
+			}
+		}
+		// `!`, `match`, `case`, `to-boolean` and every other operator exist only in expressions.
+		_ => *expression = true,
+	}
+	if matches!(op, "all" | "any" | "none" | "!") {
+		for child in &items[1..] {
+			syntaxes(child, legacy, expression);
+		}
+	}
+}
+
 /// A MapLibre filter as a [`Predicate`], or `None` when it cannot be expressed in the closed
 /// vocabulary — which the caller must read as **keep every feature**, never as "keep none".
 ///
 /// Total over the expression grammar: anything unrecognised widens rather than failing, because a
-/// reduction that refuses to build is worse than one that keeps too much.
+/// reduction that refuses to build is worse than one that keeps too much. A filter mixing legacy
+/// and expression syntax widens as a whole; see [`Syntax`].
 pub fn normalize(filter: &JsonValue) -> Option<Predicate> {
+	let (mut legacy, mut expression) = (false, false);
+	syntaxes(filter, &mut legacy, &mut expression);
+	match (legacy, expression) {
+		(true, true) => None,
+		(true, false) => normalize_in(filter, Syntax::Legacy),
+		// Written the same in both syntaxes, it means the same in both.
+		(false, _) => normalize_in(filter, Syntax::Expression),
+	}
+}
+
+/// [`normalize`], once the filter's syntax is known.
+fn normalize_in(filter: &JsonValue, syntax: Syntax) -> Option<Predicate> {
 	let JsonValue::Array(array) = filter else { return None };
 	let items = array.as_vec();
 	let [JsonValue::String(op), args @ ..] = items.as_slice() else {
@@ -142,29 +220,39 @@ pub fn normalize(filter: &JsonValue) -> Option<Predicate> {
 
 	match op.as_str() {
 		// `all` may drop what it cannot read; each dropped conjunct only widens the result.
-		"all" => combine(args.iter().filter_map(normalize).collect(), Predicate::And),
+		"all" => combine(
+			args.iter().filter_map(|arg| normalize_in(arg, syntax)).collect(),
+			Predicate::And,
+		),
 
 		// `any` may not. A disjunct is a reason to keep a feature, and dropping one narrows.
 		"any" => {
-			let parts = args.iter().map(normalize).collect::<Option<Vec<_>>>()?;
+			let parts = args
+				.iter()
+				.map(|arg| normalize_in(arg, syntax))
+				.collect::<Option<Vec<_>>>()?;
 			combine(parts, Predicate::Or)
 		}
 
 		// Legacy `none` is `not(any(…))`, and inherits `any`'s strictness through the negation.
 		"none" => {
-			let parts = args.iter().map(normalize).collect::<Option<Vec<_>>>()?;
+			let parts = args
+				.iter()
+				.map(|arg| normalize_in(arg, syntax))
+				.collect::<Option<Vec<_>>>()?;
 			combine(parts, Predicate::Or).map(|inner| Predicate::Not(vec![inner]))
 		}
 
 		"!" => match args {
 			// Negation cannot widen: `not` of a widened child is narrower, not wider.
-			[arg] => normalize(arg).map(|p| Predicate::Not(vec![p])),
+			[arg] => normalize_in(arg, syntax).map(|p| Predicate::Not(vec![p])),
 			_ => None,
 		},
 
 		"has" | "!has" => match args {
 			[arg] => {
-				let has = Predicate::Has(field_of(arg)?);
+				// The key of `has` is a property name in both syntaxes.
+				let has = Predicate::Has(field_of(arg, Syntax::Legacy)?);
 				Some(if op == "has" { has } else { Predicate::Not(vec![has]) })
 			}
 			_ => None,
@@ -177,7 +265,7 @@ pub fn normalize(filter: &JsonValue) -> Option<Predicate> {
 		// for the POI category fields (`amenity`, `shop`, `leisure`, …), whose values are non-empty
 		// strings, so the two agree there in practice anyway.
 		"to-boolean" => match args {
-			[arg] => Some(Predicate::Has(field_of(arg)?)),
+			[arg] => Some(Predicate::Has(field_of(arg, syntax)?)),
 			_ => None,
 		},
 
@@ -197,9 +285,9 @@ pub fn normalize(filter: &JsonValue) -> Option<Predicate> {
 			}
 			let values = values_of(rest)?;
 			let test = if op == "in" {
-				Predicate::In(field_of(field)?, values)
+				Predicate::In(field_of(field, syntax)?, values)
 			} else {
-				Predicate::Nin(field_of(field)?, values)
+				Predicate::Nin(field_of(field, syntax)?, values)
 			};
 			Some(test)
 		}
@@ -213,7 +301,7 @@ pub fn normalize(filter: &JsonValue) -> Option<Predicate> {
 			if NUMERIC.contains(&op.as_str()) && !matches!(value, Literal::Number(_)) {
 				return None;
 			}
-			Some(build(field_of(field)?, value))
+			Some(build(field_of(field, syntax)?, value))
 		}
 	}
 }
@@ -439,8 +527,47 @@ mod tests {
 	}
 
 	#[test]
+	fn a_filter_mixing_both_syntaxes_widens() {
+		// MapLibre reads the legacy part as comparing two strings: `"kind" != "lake"` is always
+		// true, so it draws lakes. Read as a legacy filter, the lakes would be dropped.
+		assert_eq!(
+			norm(r#"["all",["!=","kind","lake"],["match",["get","name"],["A"],true,false]]"#),
+			None
+		);
+		assert_eq!(norm(r#"["any",["==","kind","lake"],["==",["get","name"],"A"]]"#), None);
+		// `!` is an expression, `none` is legacy; each mixed with the other syntax.
+		assert_eq!(norm(r#"["!",["==","kind","lake"]]"#), None);
+		assert_eq!(norm(r#"["none",["==",["get","kind"],"lake"]]"#), None);
+	}
+
+	#[test]
+	fn a_bare_string_in_an_expression_is_a_literal() {
+		// An expression because the second operand is a list; `"kind"` is then the needle.
+		assert_eq!(norm(r#"["in","kind",["literal",["kind","x"]]]"#), None);
+	}
+
+	#[test]
+	fn a_part_written_the_same_in_both_syntaxes_joins_either() {
+		// `has` with a plain key reads the same in both, so it joins a legacy or an expression filter.
+		assert_eq!(
+			norm(r#"["all",["has","name"],["==","kind","lake"]]"#),
+			Some(Predicate::And(vec![
+				Predicate::Has("name".into()),
+				Predicate::Eq("kind".into(), Literal::String("lake".into()))
+			]))
+		);
+		assert_eq!(
+			norm(r#"["all",["has","name"],["==",["get","kind"],"lake"]]"#),
+			Some(Predicate::And(vec![
+				Predicate::Has("name".into()),
+				Predicate::Eq("kind".into(), Literal::String("lake".into()))
+			]))
+		);
+	}
+
+	#[test]
 	fn predicate_fields_collects_every_field() {
-		let p = norm(r#"["all",["has","a"],["any",["==","b",1],["!",["in","c","x"]]]]"#).unwrap();
+		let p = norm(r#"["all",["has","a"],["any",["==","b",1],["!in","c","x"]]]"#).unwrap();
 		let mut out = std::collections::BTreeSet::new();
 		fields(&p, &mut out);
 		assert_eq!(out.into_iter().collect::<Vec<_>>(), ["a", "b", "c"]);

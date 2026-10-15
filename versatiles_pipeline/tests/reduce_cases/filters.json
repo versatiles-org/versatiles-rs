@@ -1292,6 +1292,221 @@
     }
   },
   {
+    "name": "a legacy != inside an expression compares two strings, so the filter widens",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": [
+          "all",
+          ["!=", "kind", "lake"],
+          ["match", ["get", "name"], ["A", "B"], true, false]
+        ]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["name"],
+        "2": ["name"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind", "name"],
+        "2": ["kind", "name"],
+        "3": ["kind"],
+        "4": ["name"]
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "A filter mixing legacy and expression syntax is not read; MapLibre takes `\"kind\" != \"lake\"` as always true."
+    }
+  },
+  {
+    "name": "a legacy == inside an expression compares two strings, so the filter widens",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": [
+          "all",
+          ["==", "kind", "lake"],
+          ["match", ["get", "name"], ["A", "B"], true, false]
+        ]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {},
+    "kept": {
+      "w": {
+        "1": ["kind", "name"],
+        "2": ["kind", "name"],
+        "3": ["kind"],
+        "4": ["name"]
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "A filter mixing legacy and expression syntax is not read; MapLibre takes `\"kind\" == \"lake\"` as always false."
+    }
+  },
+  {
+    "name": "a negated legacy comparison is an expression comparing two strings",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["!", ["==", "kind", "lake"]]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind"],
+        "2": ["kind"],
+        "3": ["kind"],
+        "4": []
+      }
+    },
+    "widening": {
+      "kind": "generous-field-detection",
+      "why": "`!` makes it an expression, where `kind` is a string, not a property; all features are drawn and kept."
+    }
+  },
+  {
+    "name": "a bare string needle in an expression is a string",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["in", "kind", ["literal", ["kind", "x"]]]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind"],
+        "2": ["kind"],
+        "3": ["kind"],
+        "4": []
+      }
+    },
+    "widening": {
+      "kind": "generous-field-detection",
+      "why": "`\"kind\"` is a needle found in the list, not a property; all features are drawn and kept."
+    }
+  },
+  {
     "name": "an empty all keeps every feature",
     "style": [
       {

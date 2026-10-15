@@ -4,8 +4,8 @@
 # Steps (in order): rustfmt, cargo check (no-default-features, server, cli,
 # server+cli, default, all-features), clippy with -D warnings (whole workspace,
 # then each crate with each feature alone via cargo-hack), tests with all
-# features, doc build with -D warnings and the gdal feature, and the cargo-deny
-# dependency policy.
+# features, the reduction cases' drawn features against MapLibre, doc build with
+# -D warnings and the gdal feature, and the cargo-deny dependency policy.
 #
 # These mirror what CI checks, with one gap: CI also runs the test suite under
 # the default and gdal feature sets, while this runs it only under
@@ -104,6 +104,25 @@ result=$(cargo test --color=always --all-features 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo test all features"
    exit 1
+fi
+
+# The tests above check the reduction against the `drawn` written into each
+# case in versatiles_pipeline/tests/reduce_cases/; this checks those `drawn`
+# against MapLibre's own style-spec package, so a hand-written expectation
+# cannot be wrong unnoticed. It installs the package into target/ on its first
+# run, which needs the network, as the npx prettier of check-markdown.sh does.
+#
+# Skipped rather than failed when Node.js is missing, as cargo-deny is below.
+cd $PROJECT_DIR
+if command -v node >/dev/null 2>&1; then
+   echo "reduction cases against MapLibre"
+   result=$(node scripts/check-reduce-cases.mjs 2>&1)
+   if [ $? -ne 0 ]; then
+      echo -e "$result\nERROR DURING: reduction cases against MapLibre"
+      exit 1
+   fi
+else
+   echo "reduction cases against MapLibre (skipped: Node.js not installed)"
 fi
 
 # Matches the CI docs job exactly, `--features gdal` included: a broken
