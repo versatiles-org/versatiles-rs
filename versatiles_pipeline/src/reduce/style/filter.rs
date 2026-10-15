@@ -49,6 +49,16 @@ const COMPARISONS: &[(&str, Comparison)] = &[
 /// The comparisons whose IR form insists on a number rather than any literal.
 const NUMERIC: &[&str] = &["<", "<=", ">", ">="];
 
+/// The keys a legacy filter reserves for what is not a property: `$type` is the geometry type and
+/// `$id` the feature ID.
+///
+/// A tile carries neither as a property, so reading one as a field would test a property no
+/// feature has — `["==", "$type", "Polygon"]` would drop every feature of the layer. Neither can be
+/// expressed in the closed predicate set, so a test on them widens. In the modern grammar they are
+/// `["geometry-type"]` and `["id"]`, which already widen, and `["get", "$type"]` is an ordinary
+/// property that happens to have this name.
+pub const LEGACY_SPECIAL_KEYS: &[&str] = &["$type", "$id"];
+
 /// The field a filter operand names, in either spelling.
 ///
 /// The modern grammar wraps it (`["get", "kind"]`); the legacy filter grammar puts a bare string in
@@ -57,9 +67,10 @@ const NUMERIC: &[&str] = &["<", "<=", ">", ">="];
 ///
 /// A bare string is only a field name because this is a *filter*. In a general expression it would
 /// be a string literal, and reading it as a field would be wrong — which is why this is not used
-/// outside filter operand positions.
+/// outside filter operand positions. A bare [`LEGACY_SPECIAL_KEYS`] entry names no field at all.
 fn field_of(value: &JsonValue) -> Option<String> {
 	match value {
+		JsonValue::String(name) if LEGACY_SPECIAL_KEYS.contains(&name.as_str()) => None,
 		JsonValue::String(name) => Some(name.clone()),
 		JsonValue::Array(array) => match array.as_vec().as_slice() {
 			[JsonValue::String(op), JsonValue::String(name)] if op == "get" => Some(name.clone()),
@@ -347,6 +358,46 @@ mod tests {
 		assert_eq!(
 			norm(r#"["!=","k",true]"#),
 			Some(Predicate::Ne("k".into(), Literal::Bool(true)))
+		);
+	}
+
+	#[test]
+	fn a_legacy_geometry_type_test_widens() {
+		// Read as a property, `$type` is one no feature carries, and the layer would be emptied.
+		for filter in [
+			r#"["==","$type","Polygon"]"#,
+			r#"["!=","$type","Point"]"#,
+			r#"["in","$type","Polygon","LineString"]"#,
+			r#"["!in","$type","Point"]"#,
+			r#"["has","$type"]"#,
+			r#"["!",["==","$type","Point"]]"#,
+			r#"["any",["==","$type","Point"],["has","name"]]"#,
+		] {
+			assert_eq!(norm(filter), None, "{filter}");
+		}
+	}
+
+	#[test]
+	fn a_legacy_feature_id_test_widens() {
+		assert_eq!(norm(r#"["==","$id",5]"#), None);
+		assert_eq!(norm(r#"["in","$id",1,2]"#), None);
+		assert_eq!(norm(r#"["has","$id"]"#), None);
+	}
+
+	#[test]
+	fn only_the_special_conjunct_of_an_all_widens() {
+		assert_eq!(
+			norm(r#"["all",["==","$type","Polygon"],["==","kind","water"]]"#),
+			Some(Predicate::Eq("kind".into(), Literal::String("water".into())))
+		);
+	}
+
+	#[test]
+	fn a_property_named_like_a_special_key_is_still_a_property() {
+		// Only the legacy bare string is special; the modern `get` reads the property it names.
+		assert_eq!(
+			norm(r#"["==",["get","$type"],"x"]"#),
+			Some(Predicate::Eq("$type".into(), Literal::String("x".into())))
 		);
 	}
 

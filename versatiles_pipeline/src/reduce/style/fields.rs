@@ -53,7 +53,9 @@ fn fields_in(value: &JsonValue, out: &mut BTreeSet<String>) {
 		if op == "get" && items.len() == 2 {
 			out.insert(name.clone());
 		}
-		if LEGACY_FIELD_OPS.contains(&op.as_str()) {
+		// `$type` and `$id` in a legacy filter are the geometry type and the feature ID, which no
+		// tile stores as a property.
+		if LEGACY_FIELD_OPS.contains(&op.as_str()) && !super::filter::LEGACY_SPECIAL_KEYS.contains(&name.as_str()) {
 			out.insert(name.clone());
 		}
 	}
@@ -153,6 +155,16 @@ mod tests {
 	#[test]
 	fn reads_the_modern_get_form() {
 		assert_eq!(fields(r#"{"filter":["==",["get","kind"],"motorway"]}"#), ["kind"]);
+	}
+
+	#[test]
+	fn legacy_special_keys_are_not_properties() {
+		assert_eq!(
+			fields(r#"{"filter":["all",["==","$type","Polygon"],["in","$id",1],["has","kind"]]}"#),
+			["kind"]
+		);
+		// The modern `get` names a real property, whatever it is called.
+		assert_eq!(fields(r#"{"paint":{"c":["get","$type"]}}"#), ["$type"]);
 	}
 
 	#[test]

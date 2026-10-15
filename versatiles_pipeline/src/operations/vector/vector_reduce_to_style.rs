@@ -390,6 +390,35 @@ mod tests {
 		);
 	}
 
+	#[tokio::test]
+	async fn a_legacy_geometry_type_filter_keeps_the_features() -> Result<()> {
+		// `$type` is the geometry type, not a property. Read as one, no feature has it, and the
+		// layer the style draws would be emptied.
+		let dir = tempfile::tempdir().unwrap();
+		let operation = operation(
+			&dir,
+			r#"{"layers":[{"id":"a","source-layer":"debug_x","filter":["==","$type","Polygon"]}]}"#,
+		)
+		.await?;
+		let tile = operation
+			.tile_stream(TileBBox::new_full(1)?)
+			.await?
+			.next()
+			.await
+			.unwrap()
+			.1
+			.into_vector()?;
+		let layers: Vec<(&str, usize)> = tile
+			.layers
+			.iter()
+			.map(|layer| (layer.name.as_str(), layer.features.len()))
+			.collect();
+		assert_eq!(layers.len(), 1, "got: {layers:?}");
+		assert_eq!(layers[0].0, "debug_x");
+		assert!(layers[0].1 > 0, "the features are kept: {layers:?}");
+		Ok(())
+	}
+
 	/// `from_debug` drawn as `debug`, next to an `overlay` source that also has a `debug_x`.
 	const TWO_SOURCES: &str = r#"{"layers":[
 		{"id":"a","source":"debug","source-layer":"debug_x","paint":{"fill-color":["get","char"]}},
