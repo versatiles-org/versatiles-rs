@@ -38,11 +38,9 @@ use std::{
 use anyhow::{Context, Result, anyhow, bail};
 #[cfg(test)]
 use assert_fs::NamedTempFile;
-use versatiles_core::io::{
-	DataReader, DataReaderBlob, DataReaderHttp, DataWriterTrait, location_for_display, url_for_display,
-};
+use versatiles_core::io::{DataReader, DataReaderBlob, DataWriterTrait, location_for_display};
 #[cfg(feature = "sftp")]
-use versatiles_core::io::{DataReaderSftp, DataWriterSftp, sftp_utils};
+use versatiles_core::io::{DataWriterSftp, sftp_utils, url_for_display};
 #[cfg(test)]
 use versatiles_core::{TileCompression, TileFormat, TilePyramid};
 use versatiles_derive::context;
@@ -53,7 +51,7 @@ use crate::{
 	VersaTilesReader, VersaTilesWriter,
 	types::{
 		data_location::DataLocation, data_source::looks_like_vpl, staged_output::StagedOutput,
-		tile_sink::destination_is_directory,
+		tile_sink::destination_is_directory, url_reader::open_url_reader,
 	},
 };
 #[cfg(test)]
@@ -240,13 +238,6 @@ impl ContainerRegistry {
 		result
 	}
 
-	#[cfg_attr(
-		not(feature = "sftp"),
-		allow(
-			unused_variables,
-			reason = "`ssh_identity` is read only by the SFTP branch, compiled out without `sftp`"
-		)
-	)]
 	async fn reader_impl(
 		&self,
 		data_source: DataSource,
@@ -256,26 +247,7 @@ impl ContainerRegistry {
 	) -> Result<SharedTileSource> {
 		match data_source.into_location() {
 			DataLocation::Url(url) => {
-				let reader: DataReader =
-					match url.scheme() {
-						#[cfg(feature = "sftp")]
-						"sftp" => {
-							// The SSH handshake is async now, so concurrent opens (e.g.
-							// from `from_stacked_raster` building several sub-pipelines
-							// at once) already interleave on one worker — no
-							// `spawn_blocking` needed to keep them from serializing.
-							// A key named on the source itself wins over the process-wide one.
-							let identity = ssh_identity.or_else(|| runtime.ssh_identity());
-							let reader = DataReaderSftp::open(&url, identity).await.with_context(|| {
-								format!("Failed to create SFTP data reader for URL '{}'", url_for_display(&url))
-							})?;
-							Box::new(reader)
-						}
-						"http" | "https" => Box::new(DataReaderHttp::try_from(&url).with_context(|| {
-							format!("Failed to create HTTP data reader for URL '{}'", url_for_display(&url))
-						})?),
-						scheme => bail!("unsupported URL scheme '{scheme}' in '{}'", url_for_display(&url)),
-					};
+				let reader = open_url_reader(&url, ssh_identity, &runtime).await?;
 
 				let entry = self
 					.readers
