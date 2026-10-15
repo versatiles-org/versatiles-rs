@@ -43,8 +43,10 @@ use crate::{
 ///   legacy filters, `{token}` strings and legacy `{"property": …}` functions —
 ///   at the zooms it is drawn at, and the source's `promoteId` at every zoom.
 ///
-/// Hidden style layers (`"visibility": "none"`) count for nothing: a map that
-/// shows one at runtime needs a style with it visible for the reduction.
+/// A `ref` layer counts with what it takes from the layer it names, as MapLibre
+/// resolves it. Hidden style layers (`"visibility": "none"`) count for nothing:
+/// a map that shows one at runtime needs a style with it visible for the
+/// reduction.
 ///
 /// **Which tileset.** Only the style layers drawing this tileset count. A style
 /// that draws a single vector tileset uses that one; style sources with the same

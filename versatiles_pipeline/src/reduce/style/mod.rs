@@ -39,7 +39,8 @@ mod fields;
 mod filter;
 
 use std::{
-	collections::{BTreeMap, BTreeSet},
+	borrow::Cow,
+	collections::{BTreeMap, BTreeSet, HashMap},
 	ops::RangeInclusive,
 };
 
@@ -122,6 +123,50 @@ impl Tileset {
 			.collect::<Vec<_>>()
 			.join(" and ")
 	}
+}
+
+/// What a `ref` layer takes from the layer it names, as MapLibre's `refProperties` lists it.
+const REF_PROPERTIES: &[&str] = &[
+	"type",
+	"source",
+	"source-layer",
+	"minzoom",
+	"maxzoom",
+	"filter",
+	"layout",
+];
+
+/// The style layers with every `ref` resolved, the way MapLibre resolves them when it loads a style.
+///
+/// A `ref` layer, from before style expressions, takes [`REF_PROPERTIES`] from the layer it names
+/// and has only its own `paint`. MapLibre GL JS still accepts one (`derefLayers` in `style.ts`).
+/// Unresolved, it is a layer without a source-layer that draws nothing, and the properties its
+/// `paint` reads would be stripped. A `ref` naming no layer is left as it is; MapLibre refuses
+/// such a style anyway.
+fn resolve_refs<'a>(layers: &[&'a JsonObject]) -> Result<Vec<Cow<'a, JsonObject>>> {
+	let by_id: HashMap<String, &JsonObject> = layers
+		.iter()
+		.filter_map(|layer| Some((layer.string("id").ok()??, *layer)))
+		.collect();
+
+	layers
+		.iter()
+		.map(|layer| {
+			let Some(parent) = layer.string("ref")?.and_then(|id| by_id.get(&id)) else {
+				return Ok(Cow::Borrowed(*layer));
+			};
+			let mut resolved = JsonObject::new();
+			for (key, value) in layer.iter().filter(|(key, _)| *key != "ref") {
+				resolved.set(key, value);
+			}
+			for key in REF_PROPERTIES {
+				if let Some(value) = parent.get(key) {
+					resolved.set(key, value);
+				}
+			}
+			Ok(Cow::Owned(resolved))
+		})
+		.collect()
 }
 
 /// Whether a style layer is hidden: `"visibility": "none"` in its `layout`.
@@ -390,6 +435,8 @@ pub fn from_style(
 		Some(_) => bail!("the style's `layers` is not an array"),
 		None => bail!("the style has no `layers`"),
 	};
+	let resolved = resolve_refs(&layers)?;
+	let layers: Vec<&JsonObject> = resolved.iter().map(AsRef::as_ref).collect();
 	let layers = select_layers(style, &layers, sources, tileset_layers)?;
 
 	// Several sources reading one tileset may stop at different zooms, so the clamp is per layer,
@@ -929,6 +976,63 @@ mod tests {
 		assert!(message.contains("none of this tileset's layers"), "got: {message}");
 		assert!(message.contains("draws: water"), "got: {message}");
 		assert!(message.contains("has: buildings, streets"), "got: {message}");
+	}
+
+	// ── ref layers ──
+
+	#[test]
+	fn a_ref_layer_keeps_what_its_paint_reads() {
+		// `b` draws `water` through `a`, and reads `depth`, which `a` does not.
+		let requirement = from(
+			r#"{"layers":[
+				{"id":"a","source-layer":"water","paint":{"c":["get","kind"]}},
+				{"id":"b","ref":"a","paint":{"o":["get","depth"]}}
+			]}"#,
+			14,
+		);
+		assert_eq!(properties(&requirement, "water"), ["depth", "kind"]);
+	}
+
+	#[test]
+	fn a_ref_layer_takes_its_parents_filter_and_zooms() {
+		// `b`'s own `filter` and `minzoom` are ignored, as MapLibre ignores them.
+		let requirement = from(
+			r#"{"layers":[
+				{"id":"a","source-layer":"water","minzoom":10,"filter":["==","kind","lake"],"paint":{"c":["get","name"]}},
+				{"id":"b","ref":"a","minzoom":3,"filter":["has","x"],"paint":{"o":["get","depth"]}}
+			]}"#,
+			14,
+		);
+		let keep = &requirement.layers["water"].keep;
+		assert_eq!(keep.len(), 1, "both layers share a zoom range: {keep:?}");
+		assert_eq!(keep[0].minzoom, Some(10));
+		assert_eq!(listed(&requirement.layers["water"].properties)["depth"], 10..=14);
+	}
+
+	#[test]
+	fn a_ref_layer_of_a_hidden_layer_is_hidden() {
+		// `layout`, and with it `visibility`, comes from the parent.
+		let requirement = from(
+			r#"{"layers":[
+				{"id":"a","source-layer":"water","layout":{"visibility":"none"}},
+				{"id":"b","ref":"a","paint":{"o":["get","depth"]}},
+				{"id":"c","source-layer":"land"}
+			]}"#,
+			14,
+		);
+		assert_eq!(requirement.layers.keys().collect::<Vec<_>>(), ["land"]);
+	}
+
+	#[test]
+	fn a_ref_naming_no_layer_draws_nothing() {
+		let requirement = from(
+			r#"{"layers":[
+				{"id":"a","source-layer":"water"},
+				{"id":"b","ref":"missing","paint":{"o":["get","depth"]}}
+			]}"#,
+			14,
+		);
+		assert_eq!(properties(&requirement, "water"), Vec::<String>::new());
 	}
 
 	// ── hidden layers ──
