@@ -298,7 +298,7 @@ fn every_argument_naming_a_file_says_which_files() {
 	for op in &ops {
 		for field in &op.fields {
 			let names_a_file = field.rust_type.contains("FilePath")
-				|| field.rust_type.contains("SourceLocation")
+				|| field.rust_type.contains("ContainerLocation")
 				|| field.rust_type.contains("GeoDataPath");
 			if !names_a_file {
 				continue;

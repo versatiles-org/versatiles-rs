@@ -16,7 +16,7 @@ use versatiles_derive::context;
 
 use crate::{
 	PipelineFactory,
-	helpers::location::{FilePath, SourceLocation},
+	helpers::location::{ContainerLocation, FilePath},
 	vpl::VPLNode,
 };
 
@@ -34,7 +34,7 @@ use crate::{
 struct Args {
 	/// Path to the container, or an `http`, `https` or `sftp` URL.
 	#[vpl(accepts = "versatiles, mbtiles, pmtiles, tar")]
-	filename: SourceLocation,
+	filename: ContainerLocation,
 
 	/// Private key for this one `sftp://` source. Defaults to the global setting.
 	#[vpl(accepts_any)]

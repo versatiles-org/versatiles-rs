@@ -22,7 +22,7 @@ use versatiles_core::TileFormat;
 /// `check` can see it.
 ///
 /// The two arguments that genuinely take either — `from_container.filename` and
-/// `filter.filename`, which open a tile container — are [`SourceLocation`]
+/// `filter.filename`, which open a tile container — are [`ContainerLocation`]
 /// instead.
 ///
 /// # Why it does not parse through `DataLocation`
@@ -66,10 +66,10 @@ impl TryFrom<&str> for FilePath {
 		ensure!(!text.trim().is_empty(), "a file path cannot be empty");
 
 		match classify(text) {
-			Location::Path => Ok(Self(PathBuf::from(text))),
-			Location::Url => bail!("'{text}' is a URL, and this argument takes a path to a file"),
-			Location::Stdin => bail!("'-' reads from standard input, which this argument cannot do"),
-			Location::Inline => bail!("'{text}' is inline data, and this argument takes a path to a file"),
+			LocationKind::Path => Ok(Self(PathBuf::from(text))),
+			LocationKind::Url => bail!("'{text}' is a URL, and this argument takes a path to a file"),
+			LocationKind::Stdin => bail!("'-' reads from standard input, which this argument cannot do"),
+			LocationKind::Inline => bail!("'{text}' is inline data, and this argument takes a path to a file"),
 		}
 	}
 }
@@ -208,9 +208,9 @@ impl std::fmt::Display for TileFilePath {
 /// its name — which is what a consumer reads to decide between a file picker
 /// and a plain text box.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SourceLocation(String);
+pub struct ContainerLocation(String);
 
-impl SourceLocation {
+impl ContainerLocation {
 	/// The location to open, resolved by `DataLocation`'s own parser.
 	///
 	/// **Reads standard input** when the location is `-`, which is the point of
@@ -226,7 +226,7 @@ impl SourceLocation {
 	}
 }
 
-impl TryFrom<&str> for SourceLocation {
+impl TryFrom<&str> for ContainerLocation {
 	type Error = anyhow::Error;
 
 	fn try_from(text: &str) -> Result<Self> {
@@ -268,7 +268,7 @@ impl std::fmt::Display for HttpUrl {
 }
 
 /// What a location points at, as far as inspection can tell.
-enum Location {
+enum LocationKind {
 	Path,
 	Url,
 	Stdin,
@@ -277,16 +277,16 @@ enum Location {
 
 /// Classifies a location the way `DataLocation::parse_with_stdin` does, minus
 /// the reading — the same four branches, in the same order.
-fn classify(text: &str) -> Location {
+fn classify(text: &str) -> LocationKind {
 	let trimmed = text.trim();
 	if text == "-" {
-		Location::Stdin
+		LocationKind::Stdin
 	} else if trimmed.starts_with('(') && trimmed.ends_with(')') {
-		Location::Inline
+		LocationKind::Inline
 	} else if reqwest::Url::parse(text).is_ok_and(|url| url.has_host()) {
-		Location::Url
+		LocationKind::Url
 	} else {
-		Location::Path
+		LocationKind::Path
 	}
 }
 
@@ -393,8 +393,8 @@ mod tests {
 	#[case("sftp://host/tiles.versatiles")]
 	#[case("-")]
 	#[case("(inline)")]
-	fn a_source_location_accepts_anywhere_data_can_live(#[case] text: &str) {
-		assert!(SourceLocation::try_from(text).is_ok(), "{text} should be accepted");
+	fn a_container_location_accepts_anywhere_data_can_live(#[case] text: &str) {
+		assert!(ContainerLocation::try_from(text).is_ok(), "{text} should be accepted");
 	}
 
 	#[rstest]
@@ -417,7 +417,7 @@ mod tests {
 
 	#[test]
 	fn an_empty_location_is_refused_either_way() {
-		assert!(SourceLocation::try_from("").is_err());
+		assert!(ContainerLocation::try_from("").is_err());
 		assert!(FilePath::try_from("").is_err());
 	}
 }

@@ -81,8 +81,8 @@ enum ParsedFrom {
 const PATH_TYPES: &[(&str, PathKind)] = &[
 	("FilePath", PathKind::Undeclared),
 	("Option<FilePath>", PathKind::Undeclared),
-	("SourceLocation", PathKind::Undeclared),
-	("Option<SourceLocation>", PathKind::Undeclared),
+	("ContainerLocation", PathKind::Undeclared),
+	("Option<ContainerLocation>", PathKind::Undeclared),
 	("GeoDataPath", PathKind::Stated("GeoDataPath")),
 	("Option<GeoDataPath>", PathKind::Stated("GeoDataPath")),
 	("TileFilePath", PathKind::Stated("TileFilePath")),
@@ -459,7 +459,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		parsed_from: ParsedFrom::Str,
 	},
 	// Where the data is. `FilePath` refuses a URL, which each of its arguments
-	// already refused on `to_path_buf` — after building. `SourceLocation`
+	// already refused on `to_path_buf` — after building. `ContainerLocation`
 	// refuses nothing, because a container may live anywhere, and carries the
 	// distinction its doc comment used to carry alone (#260).
 	TypeMapping {
@@ -496,22 +496,22 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
-		pattern: "SourceLocation",
+		pattern: "ContainerLocation",
 		display_name: "path or URL",
 		method_name: "property_enum_required",
 		is_required: true,
-		generic_param: Some("SourceLocation"),
+		generic_param: Some("ContainerLocation"),
 		generic_param2: None,
 		is_enum: false,
 		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
-		pattern: "Option<SourceLocation>",
+		pattern: "Option<ContainerLocation>",
 		display_name: "path or URL",
 		method_name: "property_enum_option",
 		is_required: false,
-		generic_param: Some("SourceLocation"),
+		generic_param: Some("ContainerLocation"),
 		generic_param2: None,
 		is_enum: false,
 		has_bounds: false,

@@ -19,7 +19,7 @@ filter.bbox: Option<GeoBBox> | optional
 filter.bbox_border: Option<u32> | optional | default=0 | bounds=[0,4294967295] int
 filter.level_min: Option<ZoomLevel> | optional | bounds=[0,30] int
 filter.level_max: Option<ZoomLevel> | optional | bounds=[0,30] int
-filter.filename: Option<SourceLocation> | optional | accepts=suggested[versatiles,mbtiles,pmtiles,tar]
+filter.filename: Option<ContainerLocation> | optional | accepts=suggested[versatiles,mbtiles,pmtiles,tar]
 
 from_color [read]
 from_color.color: Option<HexColor> | optional | default=000000
@@ -27,7 +27,7 @@ from_color.tile_size: Option<TileSize> | optional | default=512 | values=[256,51
 from_color.format: Option<RasterTileFormat> | optional | default=png | values=[avif,jpg,png,webp]
 
 from_container [read]
-from_container.filename: SourceLocation | required | accepts=suggested[versatiles,mbtiles,pmtiles,tar]
+from_container.filename: ContainerLocation | required | accepts=suggested[versatiles,mbtiles,pmtiles,tar]
 from_container.ssh_identity: Option<FilePath> | optional | accepts=any
 
 from_csv [read]

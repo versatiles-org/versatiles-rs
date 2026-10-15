@@ -86,8 +86,8 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		| "Option<FilePath>"
 		| "GeoDataPath"
 		| "TileFilePath"
-		| "SourceLocation"
-		| "Option<SourceLocation>"
+		| "ContainerLocation"
+		| "Option<ContainerLocation>"
 		| "HttpUrl"
 		| "Option<TileJSON>"
 		| "Option<VectorLayers>" => "string",
