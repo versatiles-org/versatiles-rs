@@ -110,6 +110,15 @@ fn values_of(args: &[JsonValue]) -> Option<Vec<Literal>> {
 	list.iter().map(literal_of).collect()
 }
 
+/// Whether the arguments are exactly one `["literal", [ … ]]`, the modern spelling of a list.
+fn is_literal_array(args: &[JsonValue]) -> bool {
+	let [JsonValue::Array(array)] = args else { return false };
+	matches!(
+		array.as_vec().as_slice(),
+		[JsonValue::String(op), JsonValue::Array(_)] if op == "literal"
+	)
+}
+
 /// `and` / `or` over already-normalised arguments, unwrapping the one-argument case.
 fn combine(args: Vec<Predicate>, build: fn(Vec<Predicate>) -> Predicate) -> Option<Predicate> {
 	match args.len() {
@@ -175,6 +184,15 @@ pub fn normalize(filter: &JsonValue) -> Option<Predicate> {
 		"in" | "!in" => {
 			let [field, rest @ ..] = args else { return None };
 			if rest.is_empty() {
+				return None;
+			}
+			// The two grammars disagree about what `in` means. Legacy `["in", "kind", "a", "b"]` is
+			// membership, and its field is a bare string. Modern `["in", needle, haystack]` is
+			// membership only when the haystack is a literal array; with a string haystack,
+			// `["in", ["get", "name"], "Berlin Hbf"]`, it asks whether `name` is a *substring*, which
+			// the closed set cannot say. Read as a one-member list it would keep only an exact match
+			// and drop `"Berlin"`, so anything modern but the literal array widens.
+			if matches!(field, JsonValue::Array(_)) && !is_literal_array(rest) {
 				return None;
 			}
 			let values = values_of(rest)?;
@@ -325,6 +343,25 @@ mod tests {
 	fn an_unreadable_in_member_widens() {
 		// Keeping the readable members would make the set smaller than the filter's, which narrows.
 		assert_eq!(norm(r#"["in",["get","k"],["literal",["a",["get","b"]]]]"#), None);
+	}
+
+	#[test]
+	fn a_modern_substring_in_widens() {
+		// `name` is a substring of the haystack: "Berlin" passes. An exact-match list would drop it.
+		assert_eq!(norm(r#"["in",["get","name"],"Berlin Hauptbahnhof"]"#), None);
+		// A haystack that is evaluated, or a literal that is not a list, cannot be read either.
+		assert_eq!(norm(r#"["in",["get","name"],["get","names"]]"#), None);
+		assert_eq!(norm(r#"["in",["get","name"],["literal","Berlin"]]"#), None);
+		// Not a modern `in` at all: it takes exactly one haystack.
+		assert_eq!(norm(r#"["in",["get","kind"],"a","b"]"#), None);
+	}
+
+	#[test]
+	fn a_legacy_in_with_one_value_is_still_membership() {
+		assert_eq!(
+			norm(r#"["in","kind","a"]"#),
+			Some(Predicate::In("kind".into(), vec![Literal::String("a".into())]))
+		);
 	}
 
 	#[test]
