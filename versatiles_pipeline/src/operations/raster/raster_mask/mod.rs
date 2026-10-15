@@ -92,7 +92,7 @@ impl Operation {
 		let blur_function = args.blur_function.unwrap_or_default();
 
 		// Resolve GeoJSON path relative to the factory's base path
-		let geojson_path = factory.resolve_location(&args.geojson.to_location())?.to_path_buf()?;
+		let geojson_path = args.geojson.resolve(factory)?;
 
 		// Load mask geometry
 		let mask = MaskGeometry::from_geojson(

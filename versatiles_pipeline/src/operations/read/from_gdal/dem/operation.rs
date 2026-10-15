@@ -106,13 +106,9 @@ impl Operation {
 
 		let encoding = args.encoding.unwrap_or(DemEncoding::Mapbox);
 
-		let filename = factory.resolve_location(&args.filename.to_location())?.to_path_buf()?;
+		let filename = args.filename.resolve(factory)?;
 
-		let cutline_path = args
-			.cutline
-			.as_ref()
-			.map(|c| factory.resolve_location(&c.to_location()).and_then(|l| l.to_path_buf()))
-			.transpose()?;
+		let cutline_path = args.cutline.as_ref().map(|c| c.resolve(factory)).transpose()?;
 
 		let source = DemSource::new(
 			&filename,

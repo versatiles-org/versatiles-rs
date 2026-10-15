@@ -139,10 +139,10 @@ impl Runner {
 	) -> Result<TransformOp<AsTileTransform<Runner>>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let location = factory
-			.resolve_location(&args.style.to_location())
+		let path = args
+			.style
+			.resolve(factory)
 			.with_context(|| format!("resolving 'style' path {:?}", args.style))?;
-		let path = location.to_path_buf()?;
 		let json = std::fs::read_to_string(&path).with_context(|| format!("reading 'style' from {}", path.display()))?;
 
 		// The source's own pyramid is the only thing that knows how deep the tiles go, and an

@@ -118,8 +118,7 @@ impl Operation {
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		reject_unsupported_args(&args)?;
-		let location = factory.resolve_location(&args.filename.to_location())?;
-		let path = location.to_path_buf()?;
+		let path = args.filename.resolve(factory)?;
 
 		let layer_name = args.layer_name.clone().unwrap_or_else(|| {
 			path

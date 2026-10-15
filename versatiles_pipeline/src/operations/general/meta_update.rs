@@ -171,10 +171,9 @@ where
 		(Some(_), Some(_)) => bail!("'{name}' and '{name}_file' are mutually exclusive; provide only one"),
 		(Some(value), None) => Ok(Some(value)),
 		(None, Some(path)) => {
-			let location = factory
-				.resolve_location(&path.to_location())
+			let path_buf = path
+				.resolve(factory)
 				.with_context(|| format!("resolving '{name}_file' path {path:?}"))?;
-			let path_buf = location.to_path_buf()?;
 			let content = std::fs::read_to_string(&path_buf)
 				.with_context(|| format!("reading '{name}_file' from {}", path_buf.display()))?;
 			let parsed = T::try_from(content.as_str()).with_context(|| format!("parsing '{name}_file'"))?;

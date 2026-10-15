@@ -74,7 +74,7 @@ impl Operation {
 	)]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let path = factory.resolve_location(&args.filename.to_location())?.to_path_buf()?;
+		let path = args.filename.resolve(factory)?;
 		Operation::from_file(&path).map(|op| Box::new(op) as Box<dyn TileSource>)
 	}
 }

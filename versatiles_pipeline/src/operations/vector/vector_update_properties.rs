@@ -170,9 +170,7 @@ impl Runner {
 	) -> Result<TransformOp<AsTileTransform<Runner>>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let path = factory
-			.resolve_location(&args.data_source_path.to_location())?
-			.to_path_buf()?;
+		let path = args.data_source_path.resolve(factory)?;
 		let mut csv_reader = CsvReader::new(&path, factory.runtime()).with_string_field(&args.id_field_data);
 
 		if let Some(sep) = args.field_separator {

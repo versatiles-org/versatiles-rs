@@ -6,6 +6,8 @@ use anyhow::{Result, bail, ensure};
 use versatiles_container::DataLocation;
 use versatiles_core::TileFormat;
 
+use crate::PipelineFactory;
+
 /// A path to a file on disk.
 ///
 /// Thirteen arguments name one, and every one of them was a `String` — so a
@@ -44,12 +46,16 @@ impl FilePath {
 		&self.0
 	}
 
-	/// The location to resolve against the VPL document's directory.
+	/// The path resolved against the VPL document's directory.
 	///
-	/// Infallible, because the parser already decided this is a path.
-	#[must_use]
-	pub fn to_location(&self) -> DataLocation {
-		DataLocation::Path(self.0.clone())
+	/// # Errors
+	///
+	/// Errors when the result is not a local path: a relative path in a VPL
+	/// loaded from a URL resolves to a URL.
+	pub fn resolve(&self, factory: &PipelineFactory) -> Result<PathBuf> {
+		factory
+			.resolve_location(&DataLocation::Path(self.0.clone()))?
+			.to_path_buf()
 	}
 }
 
@@ -102,10 +108,13 @@ impl GeoDataPath {
 		"shp",
 	];
 
-	/// The location to resolve against the VPL document's directory.
-	#[must_use]
-	pub fn to_location(&self) -> DataLocation {
-		self.0.to_location()
+	/// The path resolved against the VPL document's directory.
+	///
+	/// # Errors
+	///
+	/// As [`FilePath::resolve`].
+	pub fn resolve(&self, factory: &PipelineFactory) -> Result<PathBuf> {
+		self.0.resolve(factory)
 	}
 
 	/// The extension this path was accepted for, lowercase and without the dot.
@@ -171,10 +180,13 @@ impl TileFilePath {
 		"avif", "bin", "geojson", "jpeg", "jpg", "json", "mvt", "pbf", "png", "svg", "topojson", "webp",
 	];
 
-	/// The location to resolve against the VPL document's directory.
-	#[must_use]
-	pub fn to_location(&self) -> DataLocation {
-		self.0.to_location()
+	/// The path resolved against the VPL document's directory.
+	///
+	/// # Errors
+	///
+	/// As [`FilePath::resolve`].
+	pub fn resolve(&self, factory: &PipelineFactory) -> Result<PathBuf> {
+		self.0.resolve(factory)
 	}
 }
 
