@@ -191,7 +191,7 @@ mod tests {
 	fn fixture(name: &str) -> Requirement {
 		let path = format!("{}/../testdata/styles/{name}", env!("CARGO_MANIFEST_DIR"));
 		let json = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {path}: {e}"));
-		from_style(&json, 14, None, &std::collections::BTreeSet::new()).unwrap()
+		from_style(&json, 14, &[], &std::collections::BTreeSet::new()).unwrap()
 	}
 
 	/// The rendered operations as VPL text, one per line.
@@ -205,7 +205,7 @@ mod tests {
 
 	/// An inline style, analysed against a z14 tileset.
 	fn parse(json: &str) -> Requirement {
-		from_style(json, 14, None, &std::collections::BTreeSet::new()).unwrap()
+		from_style(json, 14, &[], &std::collections::BTreeSet::new()).unwrap()
 	}
 
 	/// The `streets`/`buildings` shape the format was documented with, as a style.

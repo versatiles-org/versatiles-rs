@@ -420,13 +420,13 @@ versatiles reduce --style colorful.json tiles.versatiles reduced.versatiles
 
 **Reduce options:**
 
-| Option          | Description                                                                        | Example                          |
-| --------------- | ---------------------------------------------------------------------------------- | -------------------------------- |
-| `--style`, `-s` | MapLibre style JSON to reduce the tileset to (required)                            | `-s colorful.json`               |
-| `--source`      | ID of the style source the tileset is; required if the style draws several sources | `--source versatiles-shortbread` |
-| `--print`       | Print the rendered VPL pipeline and exit, touching no tiles                        | `--print`                        |
+| Option          | Description                                                                                     | Example                          |
+| --------------- | ----------------------------------------------------------------------------------------------- | -------------------------------- |
+| `--style`, `-s` | MapLibre style JSON to reduce the tileset to (required)                                         | `-s colorful.json`               |
+| `--source`      | ID of the style source the tileset is; required if the style draws several tilesets. Repeatable | `--source versatiles-shortbread` |
+| `--print`       | Print the rendered VPL pipeline and exit, touching no tiles                                     | `--print`                        |
 
-Only the style layers drawing the tileset's source count. A style that draws one vector source needs nothing more. A style that draws several, say a basemap and an overlay, is refused until `--source` names the one the tileset is, and so is a style that draws none of the tileset's layers: both would otherwise strip the tileset of what the map shows.
+Only the style layers drawing the tileset count. A style that draws one vector tileset needs nothing more; style sources with the same `url` or `tiles` are one tileset, even under different IDs. A style that draws several, say a basemap and an overlay, is refused until `--source` names the one the tileset is, and so is a style that draws none of the tileset's layers: both would otherwise strip the tileset of what the map shows.
 
 **Seeing the pipeline before running it:**
 

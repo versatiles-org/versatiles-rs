@@ -36,20 +36,21 @@ use crate::{
 /// MapLibre overzooms, so a style drawing addresses from z17 against a tileset
 /// that stops at z14 must keep them in the z14 tiles, not drop them.
 ///
-/// Only the style layers drawing one of the style's sources count. A style that
-/// draws a single vector source uses that one; a style drawing several needs
-/// `source`, because nothing in it says which of them this tileset is.
+/// Only the style layers drawing this tileset count. A style that draws a
+/// single vector tileset uses that one; a style drawing several needs `source`,
+/// because nothing in it says which of them this tileset is. Style sources with
+/// the same `url` or `tiles` are one tileset, and naming one names all of them.
 ///
 /// **The reduction may keep features the style never draws; it never drops one
 /// it does.** Anything in the style that cannot be read widens toward keeping.
 /// What would reduce the tileset to nothing is refused instead: a style that
-/// draws none of the tileset's layers, or several sources without `source`.
+/// draws none of the tileset's layers, or several tilesets without `source`.
 struct Args {
 	/// Path or URL of the MapLibre style JSON the tileset should be reduced to.
 	#[vpl(accepts = "json")]
 	style: FileLocation,
-	/// ID of the style source this tileset is. Defaults to the style's only vector source.
-	source: Option<String>,
+	/// IDs of the style sources this tileset is. Defaults to the style's only vector tileset.
+	source: Option<Vec<String>>,
 }
 
 /// Everything a style asks of a tileset, compiled once and applied per tile.
@@ -166,8 +167,13 @@ impl Runner {
 		// draws none of them. A tileset that lists none leaves both to the style.
 		let tileset_layers: BTreeSet<String> = source.tilejson().vector_layers.0.keys().cloned().collect();
 
-		let requirement = from_style(&json, maxzoom, args.source.as_deref(), &tileset_layers)
-			.with_context(|| format!("reading style {}", args.style))?;
+		let requirement = from_style(
+			&json,
+			maxzoom,
+			args.source.as_deref().unwrap_or_default(),
+			&tileset_layers,
+		)
+		.with_context(|| format!("reading style {}", args.style))?;
 
 		Ok(TransformOp::new(
 			source,
@@ -469,6 +475,27 @@ mod tests {
 				.keys()
 				.collect::<Vec<_>>(),
 			["char"]
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn several_named_sources_count_together() -> Result<()> {
+		let dir = tempfile::tempdir().unwrap();
+		let path = style_file(&dir, TWO_SOURCES);
+		let operation = PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!(
+				"from_debug format=mvt | vector_reduce_to_style style=\"{path}\" source=[\"debug\",\"overlay\"]"
+			))
+			.await?;
+		let layers: Vec<&String> = operation.tilejson().vector_layers.0.keys().collect();
+		assert_eq!(layers, ["debug_x", "debug_y"]);
+		assert_eq!(
+			operation.tilejson().vector_layers.0["debug_x"]
+				.fields
+				.keys()
+				.collect::<Vec<_>>(),
+			["char", "index"]
 		);
 		Ok(())
 	}

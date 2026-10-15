@@ -41,9 +41,9 @@ pub struct Subcommand {
 	style: PathBuf,
 
 	/// ID of the style's source that the input tileset is, e.g. "versatiles-shortbread".
-	/// Required when the style draws more than one vector source.
+	/// Required when the style draws more than one vector tileset. Can be repeated.
 	#[arg(long, value_name = "id", verbatim_doc_comment)]
-	source: Option<String>,
+	source: Vec<String>,
 
 	/// print the rendered VPL pipeline and exit, without reading or writing any tiles
 	#[arg(long, verbatim_doc_comment)]
@@ -110,24 +110,24 @@ fn build_pipeline(arguments: &Subcommand) -> Result<VPLPipeline> {
 		.to_str()
 		.ok_or_else(|| anyhow::anyhow!("the style path is not valid UTF-8: {:?}", arguments.style))?;
 
-	let mut reduce = vec![("style", style)];
-	if let Some(source) = &arguments.source {
-		reduce.push(("source", source));
+	let mut reduce = vec![("style", vec![style.to_string()])];
+	if !arguments.source.is_empty() {
+		reduce.push(("source", arguments.source.clone()));
 	}
 
 	Ok(VPLPipeline::new(vec![
-		node("from_container", &[("filename", &arguments.input_file)]),
-		node("vector_reduce_to_style", &reduce),
+		node("from_container", vec![("filename", vec![arguments.input_file.clone()])]),
+		node("vector_reduce_to_style", reduce),
 	]))
 }
 
 /// A VPL node with the given properties.
-fn node(name: &str, properties: &[(&str, &str)]) -> VPLNode {
+fn node(name: &str, properties: Vec<(&str, Vec<String>)>) -> VPLNode {
 	VPLNode {
 		name: name.to_string(),
 		properties: properties
-			.iter()
-			.map(|(key, value)| ((*key).to_string(), vec![(*value).to_string()]))
+			.into_iter()
+			.map(|(key, values)| (key.to_string(), values))
 			.collect(),
 		sources: Vec::new(),
 	}
@@ -147,15 +147,15 @@ mod tests {
 
 	/// The pipeline `--print` would write, without going through stdout.
 	fn pipeline_for(input: &str, style: &str) -> String {
-		pipeline_with_source(input, style, None)
+		pipeline_with_source(input, style, &[])
 	}
 
-	fn pipeline_with_source(input: &str, style: &str, source: Option<&str>) -> String {
+	fn pipeline_with_source(input: &str, style: &str, source: &[&str]) -> String {
 		let arguments = Subcommand {
 			input_file: input.to_string(),
 			output_file: None,
 			style: PathBuf::from(style),
-			source: source.map(str::to_string),
+			source: source.iter().map(ToString::to_string).collect(),
 			print: true,
 		};
 		build_pipeline(&arguments).unwrap().to_string()
@@ -189,9 +189,13 @@ mod tests {
 		let without = pipeline_for("in.versatiles", &style);
 		assert!(!without.contains("source="), "got: {without}");
 
-		let with = pipeline_with_source("in.versatiles", &style, Some("versatiles-shortbread"));
+		let with = pipeline_with_source("in.versatiles", &style, &["versatiles-shortbread"]);
 		assert!(with.contains("source=versatiles-shortbread"), "got: {with}");
 		assert!(versatiles_pipeline::vpl::parse_vpl(&with).is_ok(), "got: {with}");
+
+		let two = pipeline_with_source("in.versatiles", &style, &["map", "labels"]);
+		assert!(two.contains("source=[map, labels]"), "got: {two}");
+		assert!(versatiles_pipeline::vpl::parse_vpl(&two).is_ok(), "got: {two}");
 	}
 
 	#[test]
