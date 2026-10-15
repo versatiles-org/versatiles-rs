@@ -1,7 +1,493 @@
 [
   {
     "name": "a style that draws no source-layer is refused",
-    "style": [{ "type": "background" }],
+    "style": [
+      {
+        "type": "background"
+      }
+    ],
     "error": "draws no source-layer"
+  },
+  {
+    "name": "a style drawing two tilesets needs a source",
+    "style": {
+      "sources": {
+        "shortbread": {
+          "type": "vector"
+        },
+        "overlay": {
+          "type": "vector"
+        }
+      },
+      "layers": [
+        {
+          "source": "shortbread",
+          "source-layer": "water",
+          "filter": ["==", "kind", "lake"]
+        },
+        {
+          "source": "overlay",
+          "source-layer": "water",
+          "filter": ["==", "kind", "river"]
+        },
+        {
+          "source": "overlay",
+          "source-layer": "routes"
+        }
+      ]
+    },
+    "tileset_layers": [],
+    "error": "draws 2 tilesets (\"overlay\", \"shortbread\")"
+  },
+  {
+    "name": "the refusal suggests the tileset whose layers match",
+    "style": {
+      "sources": {
+        "shortbread": {
+          "type": "vector"
+        },
+        "overlay": {
+          "type": "vector"
+        }
+      },
+      "layers": [
+        {
+          "source": "shortbread",
+          "source-layer": "water",
+          "filter": ["==", "kind", "lake"]
+        },
+        {
+          "source": "overlay",
+          "source-layer": "water",
+          "filter": ["==", "kind", "river"]
+        },
+        {
+          "source": "overlay",
+          "source-layer": "routes"
+        }
+      ]
+    },
+    "tileset_layers": ["routes"],
+    "error": "match source \"overlay\""
+  },
+  {
+    "name": "a named source counts only its own layers",
+    "style": {
+      "sources": {
+        "shortbread": {
+          "type": "vector"
+        },
+        "overlay": {
+          "type": "vector"
+        }
+      },
+      "layers": [
+        {
+          "source": "shortbread",
+          "source-layer": "water",
+          "filter": ["==", "kind", "lake"]
+        },
+        {
+          "source": "overlay",
+          "source-layer": "water",
+          "filter": ["==", "kind", "river"]
+        },
+        {
+          "source": "overlay",
+          "source-layer": "routes"
+        }
+      ]
+    },
+    "source": ["shortbread"],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        },
+        {
+          "id": 2,
+          "$geometry": "LineString",
+          "kind": "river"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": ["kind"]
+      }
+    },
+    "kept": {
+      "water": {
+        "1": ["kind"]
+      }
+    }
+  },
+  {
+    "name": "a list of sources counts all their layers",
+    "style": {
+      "sources": {
+        "shortbread": {
+          "type": "vector"
+        },
+        "overlay": {
+          "type": "vector"
+        }
+      },
+      "layers": [
+        {
+          "source": "shortbread",
+          "source-layer": "water",
+          "filter": ["==", "kind", "lake"]
+        },
+        {
+          "source": "overlay",
+          "source-layer": "water",
+          "filter": ["==", "kind", "river"]
+        },
+        {
+          "source": "overlay",
+          "source-layer": "routes"
+        }
+      ]
+    },
+    "source": ["shortbread", "overlay"],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        },
+        {
+          "id": 2,
+          "$geometry": "LineString",
+          "kind": "river"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": ["kind"],
+        "2": ["kind"]
+      }
+    },
+    "kept": {
+      "water": {
+        "1": ["kind"],
+        "2": ["kind"]
+      }
+    }
+  },
+  {
+    "name": "an unknown source is refused",
+    "style": {
+      "sources": {
+        "shortbread": {
+          "type": "vector"
+        },
+        "overlay": {
+          "type": "vector"
+        }
+      },
+      "layers": [
+        {
+          "source": "shortbread",
+          "source-layer": "water",
+          "filter": ["==", "kind", "lake"]
+        },
+        {
+          "source": "overlay",
+          "source-layer": "water",
+          "filter": ["==", "kind", "river"]
+        },
+        {
+          "source": "overlay",
+          "source-layer": "routes"
+        }
+      ]
+    },
+    "source": ["osm"],
+    "error": "no style layer draws source-layers from source \"osm\""
+  },
+  {
+    "name": "a raster source is refused as a source",
+    "style": {
+      "sources": {
+        "s": {
+          "type": "vector"
+        },
+        "hills": {
+          "type": "raster"
+        }
+      },
+      "layers": [
+        {
+          "type": "raster",
+          "source": "hills"
+        },
+        {
+          "source": "s",
+          "source-layer": "water"
+        }
+      ]
+    },
+    "source": ["hills"],
+    "error": "source \"hills\""
+  },
+  {
+    "name": "sources sharing a url are one tileset",
+    "style": {
+      "sources": {
+        "map": {
+          "type": "vector",
+          "url": "https://example.org/tiles.json"
+        },
+        "labels": {
+          "type": "vector",
+          "url": "https://example.org/tiles.json"
+        }
+      },
+      "layers": [
+        {
+          "source": "map",
+          "source-layer": "water"
+        },
+        {
+          "source": "labels",
+          "source-layer": "places",
+          "layout": {
+            "text-field": ["get", "name"]
+          }
+        }
+      ]
+    },
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ],
+      "places": [
+        {
+          "id": 1,
+          "name": "Berlin"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": []
+      },
+      "places": {
+        "1": ["name"]
+      }
+    },
+    "kept": {
+      "water": {
+        "1": []
+      },
+      "places": {
+        "1": ["name"]
+      }
+    }
+  },
+  {
+    "name": "sources sharing their tiles are one tileset",
+    "style": {
+      "sources": {
+        "map": {
+          "type": "vector",
+          "tiles": ["https://example.org/{z}/{x}/{y}"]
+        },
+        "labels": {
+          "type": "vector",
+          "tiles": ["https://example.org/{z}/{x}/{y}"]
+        }
+      },
+      "layers": [
+        {
+          "source": "map",
+          "source-layer": "water"
+        },
+        {
+          "source": "labels",
+          "source-layer": "places"
+        }
+      ]
+    },
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ],
+      "places": [
+        {
+          "id": 1,
+          "name": "Berlin"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": []
+      },
+      "places": {
+        "1": []
+      }
+    },
+    "kept": {
+      "water": {
+        "1": []
+      },
+      "places": {
+        "1": []
+      }
+    }
+  },
+  {
+    "name": "naming one source of a tileset selects all of them",
+    "style": {
+      "sources": {
+        "map": {
+          "type": "vector",
+          "url": "https://example.org/tiles.json"
+        },
+        "labels": {
+          "type": "vector",
+          "url": "https://example.org/tiles.json"
+        }
+      },
+      "layers": [
+        {
+          "source": "map",
+          "source-layer": "water"
+        },
+        {
+          "source": "labels",
+          "source-layer": "places",
+          "layout": {
+            "text-field": ["get", "name"]
+          }
+        }
+      ]
+    },
+    "source": ["labels"],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ],
+      "places": [
+        {
+          "id": 1,
+          "name": "Berlin"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": []
+      },
+      "places": {
+        "1": ["name"]
+      }
+    },
+    "kept": {
+      "water": {
+        "1": []
+      },
+      "places": {
+        "1": ["name"]
+      }
+    }
+  },
+  {
+    "name": "a style for another tileset is refused",
+    "style": [
+      {
+        "source-layer": "water"
+      }
+    ],
+    "tileset_layers": ["roads", "buildings"],
+    "error": "none of this tileset's layers"
+  },
+  {
+    "name": "a style whose data layers are all hidden is refused",
+    "style": [
+      {
+        "source-layer": "water",
+        "layout": {
+          "visibility": "none"
+        }
+      }
+    ],
+    "error": "data layers are all hidden"
+  },
+  {
+    "name": "a hidden layer of another tileset needs no source",
+    "style": {
+      "sources": {
+        "map": {
+          "type": "vector"
+        },
+        "overlay": {
+          "type": "vector"
+        }
+      },
+      "layers": [
+        {
+          "source": "map",
+          "source-layer": "water"
+        },
+        {
+          "source": "overlay",
+          "source-layer": "routes",
+          "layout": {
+            "visibility": "none"
+          }
+        }
+      ]
+    },
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ],
+      "routes": [
+        {
+          "id": 1,
+          "$geometry": "LineString"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": []
+      }
+    },
+    "kept": {
+      "water": {
+        "1": []
+      }
+    }
   }
 ]

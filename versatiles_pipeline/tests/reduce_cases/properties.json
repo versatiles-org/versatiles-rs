@@ -2,17 +2,699 @@
   {
     "name": "a property read in paint stays and one never read goes",
     "style": [
-      { "source-layer": "roads", "paint": { "line-width": ["get", "width"] } }
+      {
+        "source-layer": "r",
+        "paint": {
+          "line-width": ["get", "width"]
+        }
+      }
     ],
     "zoom": 14,
     "tile": {
-      "roads": [
-        { "id": 1, "$geometry": "LineString", "width": 3, "surface": "asphalt" }
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
       ]
     },
-    "drawn": { "roads": { "1": ["width"] } },
-    "kept": { "roads": { "1": ["width"] } },
-    "fields": { "roads": ["width"] }
+    "drawn": {
+      "r": {
+        "1": ["width"]
+      }
+    },
+    "kept": {
+      "r": {
+        "1": ["width"]
+      }
+    },
+    "fields": {
+      "r": ["width"]
+    }
+  },
+  {
+    "name": "a property read in layout stays",
+    "style": [
+      {
+        "source-layer": "r",
+        "layout": {
+          "text-field": ["get", "name"]
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": ["name"]
+      }
+    },
+    "kept": {
+      "r": {
+        "1": ["name"]
+      }
+    }
+  },
+  {
+    "name": "a token in a text-field is a property read",
+    "style": [
+      {
+        "source-layer": "r",
+        "layout": {
+          "text-field": "{name}"
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": ["name"]
+      }
+    },
+    "kept": {
+      "r": {
+        "1": ["name"]
+      }
+    }
+  },
+  {
+    "name": "every token in a text-field is read",
+    "style": [
+      {
+        "source-layer": "r",
+        "layout": {
+          "text-field": "{ref} {name}"
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": ["name", "ref"]
+      }
+    },
+    "kept": {
+      "r": {
+        "1": ["name", "ref"]
+      }
+    }
+  },
+  {
+    "name": "a token in an icon-image is read",
+    "style": [
+      {
+        "source-layer": "r",
+        "layout": {
+          "icon-image": "shield-{ref}"
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": ["ref"]
+      }
+    },
+    "kept": {
+      "r": {
+        "1": ["ref"]
+      }
+    }
+  },
+  {
+    "name": "braces in a paint string are not a token",
+    "style": [
+      {
+        "source-layer": "r",
+        "paint": {
+          "line-color": "{color}"
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": []
+      }
+    },
+    "kept": {
+      "r": {
+        "1": []
+      }
+    }
+  },
+  {
+    "name": "the property of a legacy categorical function is read",
+    "style": [
+      {
+        "source-layer": "r",
+        "paint": {
+          "line-color": {
+            "property": "kind",
+            "type": "categorical",
+            "stops": [["primary", "#f00"]]
+          }
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": ["kind"]
+      }
+    },
+    "kept": {
+      "r": {
+        "1": ["kind"]
+      }
+    }
+  },
+  {
+    "name": "the property of a legacy identity function is read",
+    "style": [
+      {
+        "source-layer": "r",
+        "layout": {
+          "icon-image": {
+            "property": "ref",
+            "type": "identity"
+          }
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": ["ref"]
+      }
+    },
+    "kept": {
+      "r": {
+        "1": ["ref"]
+      }
+    }
+  },
+  {
+    "name": "a property read in format options is read",
+    "style": [
+      {
+        "source-layer": "r",
+        "layout": {
+          "text-field": [
+            "format",
+            ["get", "name"],
+            {
+              "text-color": ["get", "color"]
+            }
+          ]
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": ["color", "name"]
+      }
+    },
+    "kept": {
+      "r": {
+        "1": ["color", "name"]
+      }
+    }
+  },
+  {
+    "name": "a property name computed at runtime keeps every property",
+    "style": [
+      {
+        "source-layer": "r",
+        "layout": {
+          "text-field": ["get", ["concat", "na", "me"]]
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": ["name"]
+      }
+    },
+    "kept": {
+      "r": {
+        "1": ["color", "kind", "name", "ref", "surface", "width"]
+      }
+    },
+    "widening": {
+      "kind": "computed-property-name",
+      "why": "Any property may be the one a computed name reads."
+    }
+  },
+  {
+    "name": "the whole property map is every property",
+    "style": [
+      {
+        "source-layer": "r",
+        "layout": {
+          "text-field": ["to-string", ["properties"]]
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": ["color", "kind", "name", "ref", "surface", "width"]
+      }
+    },
+    "kept": {
+      "r": {
+        "1": ["color", "kind", "name", "ref", "surface", "width"]
+      }
+    }
+  },
+  {
+    "name": "a three-argument get from the property map keeps every property",
+    "style": [
+      {
+        "source-layer": "r",
+        "layout": {
+          "text-field": ["get", "name", ["properties"]]
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": ["name"]
+      }
+    },
+    "kept": {
+      "r": {
+        "1": ["color", "kind", "name", "ref", "surface", "width"]
+      }
+    },
+    "widening": {
+      "kind": "computed-property-name",
+      "why": "`[\"properties\"]` hands over all of them, so all are kept."
+    }
+  },
+  {
+    "name": "a three-argument get from a literal object reads no property",
+    "style": [
+      {
+        "source-layer": "r",
+        "layout": {
+          "text-field": [
+            "get",
+            "name",
+            [
+              "literal",
+              {
+                "name": "x"
+              }
+            ]
+          ]
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": []
+      }
+    },
+    "kept": {
+      "r": {
+        "1": []
+      }
+    }
+  },
+  {
+    "name": "a layer drawn as geometry alone keeps no property",
+    "style": [
+      {
+        "source-layer": "r",
+        "paint": {
+          "line-color": "#888"
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": []
+      }
+    },
+    "kept": {
+      "r": {
+        "1": []
+      }
+    },
+    "fields": {
+      "r": []
+    }
+  },
+  {
+    "name": "a string after a legacy operator in an expression is taken for a property",
+    "style": [
+      {
+        "source-layer": "r",
+        "layout": {
+          "text-field": ["case", ["in", "ref", ["get", "name"]], "yes", "no"]
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "r": [
+        {
+          "id": 1,
+          "$geometry": "LineString",
+          "width": 3,
+          "surface": "asphalt",
+          "name": "Kantstraße",
+          "ref": "B 2",
+          "kind": "primary",
+          "color": "red"
+        }
+      ]
+    },
+    "drawn": {
+      "r": {
+        "1": ["name"]
+      }
+    },
+    "kept": {
+      "r": {
+        "1": ["name", "ref"]
+      }
+    },
+    "widening": {
+      "kind": "generous-field-detection",
+      "why": "`ref` is the needle of a substring test here, not a property name."
+    }
+  },
+  {
+    "name": "a promoted ID is kept on every source-layer",
+    "style": {
+      "sources": {
+        "s": {
+          "type": "vector",
+          "promoteId": "osm_id"
+        }
+      },
+      "layers": [
+        {
+          "source": "s",
+          "source-layer": "w",
+          "paint": {
+            "fill-color": ["get", "kind"]
+          }
+        },
+        {
+          "source": "s",
+          "source-layer": "l"
+        }
+      ]
+    },
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "osm_id": 7,
+          "kind": "lake"
+        }
+      ],
+      "l": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "osm_id": 9,
+          "wid": 3
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["kind", "osm_id"]
+      },
+      "l": {
+        "1": ["osm_id"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind", "osm_id"]
+      },
+      "l": {
+        "1": ["osm_id"]
+      }
+    }
+  },
+  {
+    "name": "a promoted ID per source-layer is kept where it applies",
+    "style": {
+      "sources": {
+        "s": {
+          "type": "vector",
+          "promoteId": {
+            "w": "osm_id"
+          }
+        }
+      },
+      "layers": [
+        {
+          "source": "s",
+          "source-layer": "w"
+        },
+        {
+          "source": "s",
+          "source-layer": "l"
+        }
+      ]
+    },
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "osm_id": 7,
+          "kind": "lake"
+        }
+      ],
+      "l": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "osm_id": 9,
+          "wid": 3
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["osm_id"]
+      },
+      "l": {
+        "1": []
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["osm_id"]
+      },
+      "l": {
+        "1": []
+      }
+    }
   },
   {
     "name": "a property read by one style layer stays on every feature of its source-layer",
@@ -20,26 +702,195 @@
       {
         "source-layer": "labels",
         "filter": ["==", "kind", "motorway"],
-        "layout": { "text-field": "{ref}" }
+        "layout": {
+          "text-field": "{ref}"
+        }
       },
-      { "source-layer": "labels", "layout": { "text-field": ["get", "name"] } }
+      {
+        "source-layer": "labels",
+        "layout": {
+          "text-field": ["get", "name"]
+        }
+      }
     ],
     "zoom": 14,
     "tile": {
       "labels": [
-        { "id": 1, "kind": "motorway", "ref": "A 100", "name": "Stadtring" },
-        { "id": 2, "kind": "residential", "ref": "x", "name": "Kantstraße" }
+        {
+          "id": 1,
+          "kind": "motorway",
+          "ref": "A 100",
+          "name": "Stadtring"
+        },
+        {
+          "id": 2,
+          "kind": "residential",
+          "ref": "x",
+          "name": "Kantstraße"
+        }
       ]
     },
     "drawn": {
-      "labels": { "1": ["kind", "name", "ref"], "2": ["kind", "name"] }
+      "labels": {
+        "1": ["kind", "name", "ref"],
+        "2": ["kind", "name"]
+      }
     },
     "kept": {
-      "labels": { "1": ["kind", "name", "ref"], "2": ["kind", "name", "ref"] }
+      "labels": {
+        "1": ["kind", "name", "ref"],
+        "2": ["kind", "name", "ref"]
+      }
     },
     "widening": {
       "kind": "property-per-source-layer",
       "why": "`ref` is read only by the motorway layer, but properties are kept per source-layer."
+    }
+  },
+  {
+    "name": "a property another layer's filter reads stays, since stripping it would change that filter's answer",
+    "style": [
+      {
+        "source-layer": "labels",
+        "filter": ["!=", "kind", "motorway"]
+      },
+      {
+        "source-layer": "labels",
+        "layout": {
+          "text-field": "{ref}"
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "labels": [
+        {
+          "id": 1,
+          "kind": "motorway",
+          "ref": "A 100"
+        },
+        {
+          "id": 2,
+          "kind": "residential"
+        }
+      ]
+    },
+    "drawn": {
+      "labels": {
+        "1": ["kind", "ref"],
+        "2": ["kind"]
+      }
+    },
+    "kept": {
+      "labels": {
+        "1": ["kind", "ref"],
+        "2": ["kind"]
+      }
+    }
+  },
+  {
+    "name": "a property read only from z12 is stripped below it",
+    "style": [
+      {
+        "source-layer": "w",
+        "paint": {
+          "fill-color": ["get", "kind"]
+        }
+      },
+      {
+        "source-layer": "w",
+        "minzoom": 12,
+        "layout": {
+          "text-field": "{name}"
+        }
+      }
+    ],
+    "zoom": [11, 12],
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake",
+          "name": "Wannsee"
+        }
+      ]
+    },
+    "drawn": {
+      "11": {
+        "w": {
+          "1": ["kind"]
+        }
+      },
+      "12": {
+        "w": {
+          "1": ["kind", "name"]
+        }
+      }
+    },
+    "kept": {
+      "11": {
+        "w": {
+          "1": ["kind"]
+        }
+      },
+      "12": {
+        "w": {
+          "1": ["kind", "name"]
+        }
+      }
+    }
+  },
+  {
+    "name": "one zoom range per property spans a gap between two style layers",
+    "style": [
+      {
+        "source-layer": "w"
+      },
+      {
+        "source-layer": "w",
+        "minzoom": 5,
+        "maxzoom": 7,
+        "layout": {
+          "text-field": "{name}"
+        }
+      },
+      {
+        "source-layer": "w",
+        "minzoom": 10,
+        "layout": {
+          "text-field": "{name}"
+        }
+      }
+    ],
+    "zoom": [8],
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake",
+          "name": "Wannsee"
+        }
+      ]
+    },
+    "drawn": {
+      "8": {
+        "w": {
+          "1": []
+        }
+      }
+    },
+    "kept": {
+      "8": {
+        "w": {
+          "1": ["name"]
+        }
+      }
+    },
+    "widening": {
+      "kind": "property-zoom-span",
+      "why": "`name` is read at z5–z6 and from z10; one range from 5 to 14 also keeps it at z8."
     }
   }
 ]

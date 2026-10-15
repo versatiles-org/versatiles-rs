@@ -1,0 +1,225 @@
+[
+  {
+    "name": "a fill layer keeps points and lines it does not draw",
+    "style": [
+      {
+        "source-layer": "g",
+        "type": "fill"
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "g": [
+        {
+          "id": 1,
+          "$geometry": "Point",
+          "kind": "a"
+        },
+        {
+          "id": 2,
+          "$geometry": "LineString",
+          "kind": "a"
+        },
+        {
+          "id": 3,
+          "$geometry": "Polygon",
+          "kind": "a"
+        }
+      ]
+    },
+    "drawn": {
+      "g": {
+        "3": []
+      }
+    },
+    "kept": {
+      "g": {
+        "1": [],
+        "2": [],
+        "3": []
+      }
+    },
+    "widening": {
+      "kind": "geometry-type",
+      "why": "A fill layer draws polygons only, and the reduction does not look at geometry types."
+    }
+  },
+  {
+    "name": "a line layer keeps points it does not draw",
+    "style": [
+      {
+        "source-layer": "g",
+        "type": "line"
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "g": [
+        {
+          "id": 1,
+          "$geometry": "Point",
+          "kind": "a"
+        },
+        {
+          "id": 2,
+          "$geometry": "LineString",
+          "kind": "a"
+        },
+        {
+          "id": 3,
+          "$geometry": "Polygon",
+          "kind": "a"
+        }
+      ]
+    },
+    "drawn": {
+      "g": {
+        "2": [],
+        "3": []
+      }
+    },
+    "kept": {
+      "g": {
+        "1": [],
+        "2": [],
+        "3": []
+      }
+    },
+    "widening": {
+      "kind": "geometry-type",
+      "why": "A line layer draws lines and polygon outlines, not points."
+    }
+  },
+  {
+    "name": "a symbol layer draws every geometry",
+    "style": [
+      {
+        "source-layer": "g",
+        "type": "symbol",
+        "layout": {
+          "text-field": "x"
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "g": [
+        {
+          "id": 1,
+          "$geometry": "Point",
+          "kind": "a"
+        },
+        {
+          "id": 2,
+          "$geometry": "LineString",
+          "kind": "a"
+        },
+        {
+          "id": 3,
+          "$geometry": "Polygon",
+          "kind": "a"
+        }
+      ]
+    },
+    "drawn": {
+      "g": {
+        "1": [],
+        "2": [],
+        "3": []
+      }
+    },
+    "kept": {
+      "g": {
+        "1": [],
+        "2": [],
+        "3": []
+      }
+    }
+  },
+  {
+    "name": "an icon that resolves to none keeps the feature",
+    "style": [
+      {
+        "source-layer": "p",
+        "type": "symbol",
+        "layout": {
+          "icon-image": [
+            "match",
+            ["get", "amenity"],
+            "cafe",
+            "icon-cafe",
+            "bench",
+            "icon-bench",
+            ""
+          ]
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "p": [
+        {
+          "id": 1,
+          "amenity": "cafe"
+        },
+        {
+          "id": 2,
+          "amenity": "bench"
+        },
+        {
+          "id": 3,
+          "amenity": "parking"
+        }
+      ]
+    },
+    "drawn": {
+      "p": {
+        "1": ["amenity"],
+        "2": ["amenity"]
+      }
+    },
+    "kept": {
+      "p": {
+        "1": ["amenity"],
+        "2": ["amenity"],
+        "3": ["amenity"]
+      }
+    },
+    "widening": {
+      "kind": "draws-nothing",
+      "why": "`parking` gets the empty icon and no text, so nothing is drawn; only `filter` decides what is kept."
+    }
+  },
+  {
+    "name": "a layer with opacity 0 keeps its features",
+    "style": [
+      {
+        "source-layer": "g",
+        "type": "fill",
+        "paint": {
+          "fill-opacity": 0
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "g": [
+        {
+          "id": 3,
+          "$geometry": "Polygon",
+          "kind": "a"
+        }
+      ]
+    },
+    "drawn": {},
+    "kept": {
+      "g": {
+        "3": []
+      }
+    },
+    "widening": {
+      "kind": "draws-nothing",
+      "why": "A layer with opacity 0 draws nothing, but only `filter` decides what is kept."
+    }
+  }
+]

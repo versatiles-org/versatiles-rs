@@ -1,0 +1,214 @@
+[
+  {
+    "name": "a ref layer keeps what its paint reads",
+    "style": [
+      {
+        "id": "a",
+        "source-layer": "water",
+        "paint": {
+          "fill-color": ["get", "kind"]
+        }
+      },
+      {
+        "id": "b",
+        "ref": "a",
+        "paint": {
+          "fill-opacity": ["get", "depth"]
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake",
+          "depth": 5,
+          "name": "Wannsee"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": ["depth", "kind"]
+      }
+    },
+    "kept": {
+      "water": {
+        "1": ["depth", "kind"]
+      }
+    }
+  },
+  {
+    "name": "a ref layer takes its parent's filter and ignores its own",
+    "style": [
+      {
+        "id": "a",
+        "source-layer": "water",
+        "filter": ["==", "kind", "lake"]
+      },
+      {
+        "id": "b",
+        "ref": "a",
+        "filter": ["has", "name"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        },
+        {
+          "id": 2,
+          "$geometry": "Polygon",
+          "kind": "river",
+          "name": "Spree"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": ["kind"]
+      }
+    },
+    "kept": {
+      "water": {
+        "1": ["kind"]
+      }
+    }
+  },
+  {
+    "name": "a ref layer takes its parent's zooms and ignores its own",
+    "style": [
+      {
+        "id": "a",
+        "source-layer": "water",
+        "minzoom": 12
+      },
+      {
+        "id": "b",
+        "ref": "a",
+        "minzoom": 3,
+        "paint": {
+          "fill-color": ["get", "kind"]
+        }
+      }
+    ],
+    "zoom": [11, 12],
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ]
+    },
+    "drawn": {
+      "11": {},
+      "12": {
+        "water": {
+          "1": ["kind"]
+        }
+      }
+    },
+    "kept": {
+      "11": {},
+      "12": {
+        "water": {
+          "1": ["kind"]
+        }
+      }
+    }
+  },
+  {
+    "name": "a ref layer of a hidden layer is hidden",
+    "style": [
+      {
+        "id": "a",
+        "source-layer": "water",
+        "layout": {
+          "visibility": "none"
+        }
+      },
+      {
+        "id": "b",
+        "ref": "a",
+        "paint": {
+          "fill-color": ["get", "kind"]
+        }
+      },
+      {
+        "id": "c",
+        "source-layer": "land"
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ],
+      "land": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "forest"
+        }
+      ]
+    },
+    "drawn": {
+      "land": {
+        "1": []
+      }
+    },
+    "kept": {
+      "land": {
+        "1": []
+      }
+    }
+  },
+  {
+    "name": "a ref naming no layer draws nothing",
+    "style": [
+      {
+        "id": "a",
+        "source-layer": "water"
+      },
+      {
+        "id": "b",
+        "ref": "missing",
+        "paint": {
+          "fill-color": ["get", "kind"]
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": []
+      }
+    },
+    "kept": {
+      "water": {
+        "1": []
+      }
+    }
+  }
+]

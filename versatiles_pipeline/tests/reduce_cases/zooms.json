@@ -5,30 +5,455 @@
       {
         "source-layer": "water",
         "minzoom": 12,
-        "paint": { "fill-color": ["get", "kind"] }
+        "paint": {
+          "fill-color": ["get", "kind"]
+        }
       }
     ],
     "zoom": [11, 12],
-    "tile": { "water": [{ "id": 1, "$geometry": "Polygon", "kind": "lake" }] },
-    "drawn": { "11": {}, "12": { "water": { "1": ["kind"] } } },
-    "kept": { "11": {}, "12": { "water": { "1": ["kind"] } } }
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ]
+    },
+    "drawn": {
+      "11": {},
+      "12": {
+        "water": {
+          "1": ["kind"]
+        }
+      }
+    },
+    "kept": {
+      "11": {},
+      "12": {
+        "water": {
+          "1": ["kind"]
+        }
+      }
+    }
+  },
+  {
+    "name": "a layer's maxzoom is read as inclusive",
+    "style": [
+      {
+        "source-layer": "water",
+        "maxzoom": 10
+      }
+    ],
+    "zoom": [9, 10, 11],
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ]
+    },
+    "drawn": {
+      "9": {
+        "water": {
+          "1": []
+        }
+      },
+      "10": {},
+      "11": {}
+    },
+    "kept": {
+      "9": {
+        "water": {
+          "1": []
+        }
+      },
+      "10": {
+        "water": {
+          "1": []
+        }
+      },
+      "11": {}
+    },
+    "widening": {
+      "kind": "inclusive-maxzoom",
+      "why": "Hidden from map zoom 10, the layer draws z9 tiles at most; z10 is kept as well."
+    }
+  },
+  {
+    "name": "a fractional minzoom is the tile zoom it falls in",
+    "style": [
+      {
+        "source-layer": "water",
+        "minzoom": 12.5
+      }
+    ],
+    "zoom": [11, 12],
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ]
+    },
+    "drawn": {
+      "11": {},
+      "12": {
+        "water": {
+          "1": []
+        }
+      }
+    },
+    "kept": {
+      "11": {},
+      "12": {
+        "water": {
+          "1": []
+        }
+      }
+    }
+  },
+  {
+    "name": "a fractional maxzoom is the tile zoom it falls in",
+    "style": [
+      {
+        "source-layer": "water",
+        "maxzoom": 10.5
+      }
+    ],
+    "zoom": [10, 11],
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ]
+    },
+    "drawn": {
+      "10": {
+        "water": {
+          "1": []
+        }
+      },
+      "11": {}
+    },
+    "kept": {
+      "10": {
+        "water": {
+          "1": []
+        }
+      },
+      "11": {}
+    }
+  },
+  {
+    "name": "a layer drawn above the tileset's maxzoom is kept in its deepest tiles",
+    "style": [
+      {
+        "source-layer": "water",
+        "minzoom": 17
+      }
+    ],
+    "zoom": [13, 14],
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ]
+    },
+    "drawn": {
+      "13": {},
+      "14": {
+        "water": {
+          "1": []
+        }
+      }
+    },
+    "kept": {
+      "13": {},
+      "14": {
+        "water": {
+          "1": []
+        }
+      }
+    }
   },
   {
     "name": "a lower source maxzoom keeps a layer in the tiles the source stops at",
     "style": {
-      "sources": { "s": { "type": "vector", "maxzoom": 12 } },
+      "sources": {
+        "s": {
+          "type": "vector",
+          "maxzoom": 12
+        }
+      },
       "layers": [
         {
           "source": "s",
           "source-layer": "places",
           "minzoom": 13,
-          "layout": { "text-field": ["get", "name"] }
+          "layout": {
+            "text-field": ["get", "name"]
+          }
         }
       ]
     },
     "zoom": [11, 12],
-    "tile": { "places": [{ "id": 1, "name": "Berlin" }] },
-    "drawn": { "11": {}, "12": { "places": { "1": ["name"] } } },
-    "kept": { "11": {}, "12": { "places": { "1": ["name"] } } }
+    "tile": {
+      "places": [
+        {
+          "id": 1,
+          "name": "Berlin"
+        }
+      ]
+    },
+    "drawn": {
+      "11": {},
+      "12": {
+        "places": {
+          "1": ["name"]
+        }
+      }
+    },
+    "kept": {
+      "11": {},
+      "12": {
+        "places": {
+          "1": ["name"]
+        }
+      }
+    }
+  },
+  {
+    "name": "nothing is kept below the source's minzoom",
+    "style": {
+      "sources": {
+        "s": {
+          "type": "vector",
+          "minzoom": 8
+        }
+      },
+      "layers": [
+        {
+          "source": "s",
+          "source-layer": "water"
+        }
+      ]
+    },
+    "zoom": [7, 8],
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ]
+    },
+    "drawn": {
+      "7": {},
+      "8": {
+        "water": {
+          "1": []
+        }
+      }
+    },
+    "kept": {
+      "7": {},
+      "8": {
+        "water": {
+          "1": []
+        }
+      }
+    }
+  },
+  {
+    "name": "a source minzoom above the tileset's keeps the deepest zoom",
+    "style": {
+      "sources": {
+        "s": {
+          "type": "vector",
+          "minzoom": 16
+        }
+      },
+      "layers": [
+        {
+          "source": "s",
+          "source-layer": "water"
+        }
+      ]
+    },
+    "zoom": [14],
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ]
+    },
+    "drawn": {
+      "14": {}
+    },
+    "kept": {
+      "14": {
+        "water": {
+          "1": []
+        }
+      }
+    },
+    "widening": {
+      "kind": "zoom-clamp",
+      "why": "MapLibre would request nothing from this source; the clamp keeps the deepest zoom."
+    }
+  },
+  {
+    "name": "a layer whose maxzoom is below its minzoom is never drawn",
+    "style": [
+      {
+        "source-layer": "water",
+        "minzoom": 10,
+        "maxzoom": 8
+      },
+      {
+        "source-layer": "land"
+      }
+    ],
+    "zoom": [9, 10],
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ],
+      "land": [
+        {
+          "id": 1,
+          "$geometry": "Polygon"
+        }
+      ]
+    },
+    "drawn": {
+      "9": {
+        "land": {
+          "1": []
+        }
+      },
+      "10": {
+        "land": {
+          "1": []
+        }
+      }
+    },
+    "kept": {
+      "9": {
+        "land": {
+          "1": []
+        }
+      },
+      "10": {
+        "land": {
+          "1": []
+        }
+      }
+    }
+  },
+  {
+    "name": "two sources of one tileset each stop at their own maxzoom",
+    "style": {
+      "sources": {
+        "map": {
+          "type": "vector",
+          "url": "https://example.org/tiles.json"
+        },
+        "labels": {
+          "type": "vector",
+          "url": "https://example.org/tiles.json",
+          "maxzoom": 12
+        }
+      },
+      "layers": [
+        {
+          "source": "map",
+          "source-layer": "water"
+        },
+        {
+          "source": "labels",
+          "source-layer": "places",
+          "minzoom": 13,
+          "layout": {
+            "text-field": ["get", "name"]
+          }
+        }
+      ]
+    },
+    "zoom": [12, 13, 14],
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake"
+        }
+      ],
+      "places": [
+        {
+          "id": 1,
+          "name": "Berlin"
+        }
+      ]
+    },
+    "drawn": {
+      "12": {
+        "water": {
+          "1": []
+        },
+        "places": {
+          "1": ["name"]
+        }
+      },
+      "13": {
+        "water": {
+          "1": []
+        }
+      },
+      "14": {
+        "water": {
+          "1": []
+        }
+      }
+    },
+    "kept": {
+      "12": {
+        "water": {
+          "1": []
+        },
+        "places": {
+          "1": ["name"]
+        }
+      },
+      "13": {
+        "water": {
+          "1": []
+        }
+      },
+      "14": {
+        "water": {
+          "1": []
+        }
+      }
+    }
   }
 ]

@@ -11,12 +11,15 @@
       "water": [
         {
           "id": 1,
-          "kind": "lake"
+          "$geometry": "Polygon",
+          "kind": "lake",
+          "name": "Wannsee"
         }
       ],
       "land": [
         {
           "id": 1,
+          "$geometry": "Polygon",
           "kind": "forest"
         }
       ]
@@ -29,6 +32,129 @@
     "kept": {
       "water": {
         "1": []
+      }
+    }
+  },
+  {
+    "name": "background and raster layers draw no tile data",
+    "style": {
+      "sources": {
+        "s": {
+          "type": "vector"
+        },
+        "hills": {
+          "type": "raster"
+        }
+      },
+      "layers": [
+        {
+          "type": "background"
+        },
+        {
+          "type": "raster",
+          "source": "hills"
+        },
+        {
+          "source": "s",
+          "source-layer": "water"
+        }
+      ]
+    },
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake",
+          "name": "Wannsee"
+        }
+      ],
+      "land": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "forest"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": []
+      }
+    },
+    "kept": {
+      "water": {
+        "1": []
+      }
+    }
+  },
+  {
+    "name": "a layer emptied by its filter leaves an empty tile",
+    "style": [
+      {
+        "source-layer": "water",
+        "filter": ["==", "kind", "sea"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake",
+          "name": "Wannsee"
+        }
+      ],
+      "land": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "forest"
+        }
+      ]
+    },
+    "drawn": {},
+    "kept": {}
+  },
+  {
+    "name": "an unfiltered style layer keeps every feature its filtered neighbour does not",
+    "style": [
+      {
+        "source-layer": "water",
+        "filter": ["==", "kind", "sea"]
+      },
+      {
+        "source-layer": "water"
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake",
+          "name": "Wannsee"
+        }
+      ],
+      "land": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "forest"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": ["kind"]
+      }
+    },
+    "kept": {
+      "water": {
+        "1": ["kind"]
       }
     }
   },
@@ -51,7 +177,7 @@
         }
       },
       {
-        "source-layer": "pois",
+        "source-layer": "land",
         "layout": {
           "visibility": "none"
         }
@@ -67,10 +193,11 @@
           "name": "Wannsee"
         }
       ],
-      "pois": [
+      "land": [
         {
           "id": 1,
-          "amenity": "cafe"
+          "$geometry": "Polygon",
+          "kind": "forest"
         }
       ]
     },
@@ -82,6 +209,119 @@
     "kept": {
       "water": {
         "1": ["kind"]
+      }
+    }
+  },
+  {
+    "name": "a hidden layer does not widen a visible layer's filter",
+    "style": [
+      {
+        "source-layer": "water",
+        "filter": ["==", "kind", "sea"]
+      },
+      {
+        "source-layer": "water",
+        "layout": {
+          "visibility": "none"
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake",
+          "name": "Wannsee"
+        }
+      ],
+      "land": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "forest"
+        }
+      ]
+    },
+    "drawn": {},
+    "kept": {}
+  },
+  {
+    "name": "an explicitly visible layer counts",
+    "style": [
+      {
+        "source-layer": "water",
+        "layout": {
+          "visibility": "visible"
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake",
+          "name": "Wannsee"
+        }
+      ],
+      "land": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "forest"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": []
+      }
+    },
+    "kept": {
+      "water": {
+        "1": []
+      }
+    }
+  },
+  {
+    "name": "a visibility expression counts as visible",
+    "style": [
+      {
+        "source-layer": "water",
+        "layout": {
+          "visibility": ["case", ["global-state", "water"], "visible", "none"]
+        }
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "water": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "lake",
+          "name": "Wannsee"
+        }
+      ],
+      "land": [
+        {
+          "id": 1,
+          "$geometry": "Polygon",
+          "kind": "forest"
+        }
+      ]
+    },
+    "drawn": {
+      "water": {
+        "1": []
+      }
+    },
+    "kept": {
+      "water": {
+        "1": []
       }
     }
   }

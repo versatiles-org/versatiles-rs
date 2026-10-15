@@ -1,52 +1,2178 @@
 [
   {
-    "name": "a filter keeps the features it matches and the property it reads",
-    "style": [{ "source-layer": "water", "filter": ["==", "kind", "lake"] }],
-    "zoom": 14,
-    "tile": {
-      "water": [
-        { "id": 1, "kind": "lake", "name": "Wannsee" },
-        { "id": 2, "kind": "river", "name": "Spree" }
-      ]
-    },
-    "drawn": { "water": { "1": ["kind"] } },
-    "kept": { "water": { "1": ["kind"] } }
-  },
-  {
-    "name": "an unsigned integer equals the literal it holds",
+    "name": "legacy == keeps the matching features",
     "style": [
-      { "source-layer": "boundaries", "filter": ["==", "admin_level", 2] }
+      {
+        "source-layer": "w",
+        "filter": ["==", "kind", "lake"]
+      }
     ],
     "zoom": 14,
     "tile": {
-      "boundaries": [
-        { "id": 1, "admin_level": { "uint": 2 } },
-        { "id": 2, "admin_level": { "double": 4.0 } }
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
       ]
     },
-    "drawn": { "boundaries": { "1": ["admin_level"] } },
-    "kept": { "boundaries": { "1": ["admin_level"] } }
+    "drawn": {
+      "w": {
+        "1": ["kind"],
+        "3": ["kind"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind"],
+        "3": ["kind"]
+      }
+    }
   },
   {
-    "name": "a match filter keeps every feature in its zoom range",
+    "name": "modern == keeps the matching features",
     "style": [
       {
-        "source-layer": "water",
+        "source-layer": "w",
+        "filter": ["==", ["get", "kind"], "lake"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["kind"],
+        "3": ["kind"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind"],
+        "3": ["kind"]
+      }
+    }
+  },
+  {
+    "name": "legacy != keeps a feature without the property",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["!=", "kind", "lake"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "2": ["kind"],
+        "4": []
+      }
+    },
+    "kept": {
+      "w": {
+        "2": ["kind"],
+        "4": []
+      }
+    }
+  },
+  {
+    "name": "modern != keeps a feature without the property",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["!=", ["get", "kind"], "lake"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "2": ["kind"],
+        "4": []
+      }
+    },
+    "kept": {
+      "w": {
+        "2": ["kind"],
+        "4": []
+      }
+    }
+  },
+  {
+    "name": "legacy < compares numbers and drops a feature without the property",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["<", "depth", 10]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["depth"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["depth"]
+      }
+    }
+  },
+  {
+    "name": "modern < compares numbers and drops a feature without the property",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["<", ["get", "depth"], 10]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["depth"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["depth"]
+      }
+    }
+  },
+  {
+    "name": "legacy <= includes the bound",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["<=", "depth", 5]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["depth"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["depth"]
+      }
+    }
+  },
+  {
+    "name": "legacy > excludes the bound",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": [">", "depth", 5]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "2": ["depth"]
+      }
+    },
+    "kept": {
+      "w": {
+        "2": ["depth"]
+      }
+    }
+  },
+  {
+    "name": "modern >= includes the bound",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": [">=", ["get", "depth"], 12]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "2": ["depth"]
+      }
+    },
+    "kept": {
+      "w": {
+        "2": ["depth"]
+      }
+    }
+  },
+  {
+    "name": "an ordering against a string keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["<", "kind", "m"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["kind"],
+        "3": ["kind"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind"],
+        "2": ["kind"],
+        "3": ["kind"],
+        "4": []
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "A string ordering is not in the predicate set, which compares numbers only."
+    }
+  },
+  {
+    "name": "legacy in keeps the listed values",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["in", "kind", "lake", "pond"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["kind"],
+        "3": ["kind"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind"],
+        "3": ["kind"]
+      }
+    }
+  },
+  {
+    "name": "modern in with a literal list keeps the listed values",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["in", ["get", "kind"], ["literal", ["lake", "pond"]]]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["kind"],
+        "3": ["kind"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind"],
+        "3": ["kind"]
+      }
+    }
+  },
+  {
+    "name": "legacy !in keeps a feature without the property",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["!in", "kind", "lake"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "2": ["kind"],
+        "4": []
+      }
+    },
+    "kept": {
+      "w": {
+        "2": ["kind"],
+        "4": []
+      }
+    }
+  },
+  {
+    "name": "legacy has keeps the features with the property",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["has", "name"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["name"],
+        "2": ["name"],
+        "4": ["name"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["name"],
+        "2": ["name"],
+        "4": ["name"]
+      }
+    }
+  },
+  {
+    "name": "legacy !has keeps the features without the property",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["!has", "name"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "3": []
+      }
+    },
+    "kept": {
+      "w": {
+        "3": []
+      }
+    }
+  },
+  {
+    "name": "a negated has keeps the features without the property",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["!", ["has", "name"]]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "3": []
+      }
+    },
+    "kept": {
+      "w": {
+        "3": []
+      }
+    }
+  },
+  {
+    "name": "all needs every condition",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["all", ["==", "kind", "lake"], ["has", "name"]]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["kind", "name"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind", "name"]
+      }
+    }
+  },
+  {
+    "name": "any needs one condition",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["any", ["==", "kind", "river"], ["!has", "name"]]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "2": ["kind", "name"],
+        "3": ["kind"]
+      }
+    },
+    "kept": {
+      "w": {
+        "2": ["kind", "name"],
+        "3": ["kind"]
+      }
+    }
+  },
+  {
+    "name": "legacy none needs no condition",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["none", ["==", "kind", "lake"]]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "2": ["kind"],
+        "4": []
+      }
+    },
+    "kept": {
+      "w": {
+        "2": ["kind"],
+        "4": []
+      }
+    }
+  },
+  {
+    "name": "an unreadable conjunct of all is left out and the rest still filters",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": [
+          "all",
+          ["==", "kind", "lake"],
+          ["match", ["get", "name"], ["A"], true, false]
+        ]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["kind", "name"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind", "name"],
+        "3": ["kind"]
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "The `match` conjunct is dropped, which only widens a conjunction."
+    }
+  },
+  {
+    "name": "an unreadable disjunct of any keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": [
+          "any",
+          ["==", "kind", "river"],
+          ["match", ["get", "name"], ["A"], true, false]
+        ]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["kind", "name"],
+        "2": ["kind", "name"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind", "name"],
+        "2": ["kind", "name"],
+        "3": ["kind"],
+        "4": ["name"]
+      }
+    },
+    "widening": {
+      "kind": "unreadable-negation",
+      "why": "Dropping a disjunct would narrow, so one unreadable part widens the whole `any`."
+    }
+  },
+  {
+    "name": "a negated unreadable filter keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["!", ["match", ["get", "name"], ["A"], true, false]]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "2": ["name"],
+        "3": [],
+        "4": ["name"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["name"],
+        "2": ["name"],
+        "3": [],
+        "4": ["name"]
+      }
+    },
+    "widening": {
+      "kind": "unreadable-negation",
+      "why": "Negating a widened filter would narrow it, so the negation widens as a whole."
+    }
+  },
+  {
+    "name": "a match filter keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
         "filter": ["match", ["get", "kind"], ["lake"], true, false]
       }
     ],
     "zoom": 14,
     "tile": {
-      "water": [
-        { "id": 1, "kind": "lake" },
-        { "id": 2, "kind": "river" }
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
       ]
     },
-    "drawn": { "water": { "1": ["kind"] } },
-    "kept": { "water": { "1": ["kind"], "2": ["kind"] } },
+    "drawn": {
+      "w": {
+        "1": ["kind"],
+        "3": ["kind"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind"],
+        "2": ["kind"],
+        "3": ["kind"],
+        "4": []
+      }
+    },
     "widening": {
       "kind": "unreadable-filter",
       "why": "`match` is not in the predicate set, so the filter keeps everything."
+    }
+  },
+  {
+    "name": "a case filter keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["case", ["has", "name"], true, false]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["name"],
+        "2": ["name"],
+        "4": ["name"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["name"],
+        "2": ["name"],
+        "3": [],
+        "4": ["name"]
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "`case` is not in the predicate set."
+    }
+  },
+  {
+    "name": "a comparison with null keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["==", ["get", "kind"], null]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "4": []
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["kind"],
+        "2": ["kind"],
+        "3": ["kind"],
+        "4": []
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "MapLibre's null and an absent tile property are not reliably the same, so it widens."
+    }
+  },
+  {
+    "name": "a collator comparison keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": [
+          "==",
+          ["get", "name"],
+          "a",
+          [
+            "collator",
+            {
+              "case-sensitive": false
+            }
+          ]
+        ]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": ["name"]
+      }
+    },
+    "kept": {
+      "w": {
+        "1": ["name"],
+        "2": ["name"],
+        "3": [],
+        "4": ["name"]
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "A comparison with a collator is not in the predicate set."
+    }
+  },
+  {
+    "name": "a zoom test in a filter keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["<", ["zoom"], 10]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {},
+    "kept": {
+      "w": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "`zoom` inside a filter is not in the predicate set."
+    }
+  },
+  {
+    "name": "an empty all keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["all"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    },
+    "kept": {
+      "w": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    }
+  },
+  {
+    "name": "an empty any keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["any"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {},
+    "kept": {
+      "w": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "An empty combinator widens instead of matching nothing."
+    }
+  },
+  {
+    "name": "the filter true keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": true
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    },
+    "kept": {
+      "w": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    }
+  },
+  {
+    "name": "the filter false keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": false
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {},
+    "kept": {
+      "w": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "A filter that is not an expression widens."
+    }
+  },
+  {
+    "name": "a global-state filter keeps every feature, since the state changes at runtime",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["==", ["global-state", "mode"], "dark"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    },
+    "kept": {
+      "w": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    }
+  },
+  {
+    "name": "every number type equals the number literal it holds",
+    "style": [
+      {
+        "source-layer": "n",
+        "filter": ["==", "n", 2]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "n": [
+        {
+          "id": 1,
+          "n": {
+            "int": 2
+          }
+        },
+        {
+          "id": 2,
+          "n": {
+            "uint": 2
+          }
+        },
+        {
+          "id": 3,
+          "n": {
+            "float": 2.0
+          }
+        },
+        {
+          "id": 4,
+          "n": {
+            "double": 2.0
+          }
+        },
+        {
+          "id": 5,
+          "n": "2"
+        },
+        {
+          "id": 6,
+          "n": {
+            "double": 2.5
+          }
+        }
+      ]
+    },
+    "drawn": {
+      "n": {
+        "1": ["n"],
+        "2": ["n"],
+        "3": ["n"],
+        "4": ["n"]
+      }
+    },
+    "kept": {
+      "n": {
+        "1": ["n"],
+        "2": ["n"],
+        "3": ["n"],
+        "4": ["n"]
+      }
+    }
+  },
+  {
+    "name": "a number does not equal the string of its digits",
+    "style": [
+      {
+        "source-layer": "n",
+        "filter": ["==", "n", "2"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "n": [
+        {
+          "id": 1,
+          "n": {
+            "int": 2
+          }
+        },
+        {
+          "id": 2,
+          "n": {
+            "uint": 2
+          }
+        },
+        {
+          "id": 3,
+          "n": {
+            "float": 2.0
+          }
+        },
+        {
+          "id": 4,
+          "n": {
+            "double": 2.0
+          }
+        },
+        {
+          "id": 5,
+          "n": "2"
+        },
+        {
+          "id": 6,
+          "n": {
+            "double": 2.5
+          }
+        }
+      ]
+    },
+    "drawn": {
+      "n": {
+        "5": ["n"]
+      }
+    },
+    "kept": {
+      "n": {
+        "5": ["n"]
+      }
+    }
+  },
+  {
+    "name": "in with numbers matches every number type",
+    "style": [
+      {
+        "source-layer": "n",
+        "filter": ["in", "n", 2, 3]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "n": [
+        {
+          "id": 1,
+          "n": {
+            "int": 2
+          }
+        },
+        {
+          "id": 2,
+          "n": {
+            "uint": 2
+          }
+        },
+        {
+          "id": 3,
+          "n": {
+            "float": 2.0
+          }
+        },
+        {
+          "id": 4,
+          "n": {
+            "double": 2.0
+          }
+        },
+        {
+          "id": 5,
+          "n": "2"
+        },
+        {
+          "id": 6,
+          "n": {
+            "double": 2.5
+          }
+        }
+      ]
+    },
+    "drawn": {
+      "n": {
+        "1": ["n"],
+        "2": ["n"],
+        "3": ["n"],
+        "4": ["n"]
+      }
+    },
+    "kept": {
+      "n": {
+        "1": ["n"],
+        "2": ["n"],
+        "3": ["n"],
+        "4": ["n"]
+      }
+    }
+  },
+  {
+    "name": "an ordering skips a string that looks like a number",
+    "style": [
+      {
+        "source-layer": "n",
+        "filter": ["<=", "n", 2.5]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "n": [
+        {
+          "id": 1,
+          "n": {
+            "int": 2
+          }
+        },
+        {
+          "id": 2,
+          "n": {
+            "uint": 2
+          }
+        },
+        {
+          "id": 3,
+          "n": {
+            "float": 2.0
+          }
+        },
+        {
+          "id": 4,
+          "n": {
+            "double": 2.0
+          }
+        },
+        {
+          "id": 5,
+          "n": "2"
+        },
+        {
+          "id": 6,
+          "n": {
+            "double": 2.5
+          }
+        }
+      ]
+    },
+    "drawn": {
+      "n": {
+        "1": ["n"],
+        "2": ["n"],
+        "3": ["n"],
+        "4": ["n"],
+        "6": ["n"]
+      }
+    },
+    "kept": {
+      "n": {
+        "1": ["n"],
+        "2": ["n"],
+        "3": ["n"],
+        "4": ["n"],
+        "6": ["n"]
+      }
+    }
+  },
+  {
+    "name": "to-boolean keeps empty and false values too",
+    "style": [
+      {
+        "source-layer": "p",
+        "filter": ["to-boolean", ["get", "amenity"]]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "p": [
+        {
+          "id": 1,
+          "amenity": "cafe"
+        },
+        {
+          "id": 2,
+          "amenity": ""
+        },
+        {
+          "id": 3,
+          "amenity": false
+        },
+        {
+          "id": 4,
+          "amenity": 0
+        },
+        {
+          "id": 5,
+          "shop": "bakery"
+        }
+      ]
+    },
+    "drawn": {
+      "p": {
+        "1": ["amenity"]
+      }
+    },
+    "kept": {
+      "p": {
+        "1": ["amenity"],
+        "2": ["amenity"],
+        "3": ["amenity"],
+        "4": ["amenity"]
+      }
+    },
+    "widening": {
+      "kind": "to-boolean",
+      "why": "`to-boolean` is read as `has`, which also passes `\"\"`, `false` and `0`."
+    }
+  },
+  {
+    "name": "a legacy $type filter keeps every feature",
+    "style": [
+      {
+        "source-layer": "g",
+        "filter": ["==", "$type", "Polygon"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "g": [
+        {
+          "id": 1,
+          "$geometry": "Point",
+          "kind": "a"
+        },
+        {
+          "id": 2,
+          "$geometry": "LineString",
+          "kind": "a"
+        },
+        {
+          "id": 3,
+          "$geometry": "Polygon",
+          "kind": "a"
+        }
+      ]
+    },
+    "drawn": {
+      "g": {
+        "3": []
+      }
+    },
+    "kept": {
+      "g": {
+        "1": [],
+        "2": [],
+        "3": []
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "The geometry type is not a property, and the predicate set cannot test it."
+    }
+  },
+  {
+    "name": "a geometry-type filter keeps every feature",
+    "style": [
+      {
+        "source-layer": "g",
+        "filter": ["==", ["geometry-type"], "Polygon"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "g": [
+        {
+          "id": 1,
+          "$geometry": "Point",
+          "kind": "a"
+        },
+        {
+          "id": 2,
+          "$geometry": "LineString",
+          "kind": "a"
+        },
+        {
+          "id": 3,
+          "$geometry": "Polygon",
+          "kind": "a"
+        }
+      ]
+    },
+    "drawn": {
+      "g": {
+        "3": []
+      }
+    },
+    "kept": {
+      "g": {
+        "1": [],
+        "2": [],
+        "3": []
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "The predicate set cannot test the geometry type."
+    }
+  },
+  {
+    "name": "a legacy $type test inside all leaves the other conditions",
+    "style": [
+      {
+        "source-layer": "g",
+        "filter": ["all", ["==", "$type", "Polygon"], ["==", "kind", "a"]]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "g": [
+        {
+          "id": 1,
+          "$geometry": "Point",
+          "kind": "a"
+        },
+        {
+          "id": 2,
+          "$geometry": "LineString",
+          "kind": "a"
+        },
+        {
+          "id": 3,
+          "$geometry": "Polygon",
+          "kind": "a"
+        }
+      ]
+    },
+    "drawn": {
+      "g": {
+        "3": ["kind"]
+      }
+    },
+    "kept": {
+      "g": {
+        "1": ["kind"],
+        "2": ["kind"],
+        "3": ["kind"]
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "The `$type` conjunct is dropped; `kind` still filters."
+    }
+  },
+  {
+    "name": "a legacy $id filter keeps every feature",
+    "style": [
+      {
+        "source-layer": "w",
+        "filter": ["==", "$id", 1]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "w": [
+        {
+          "id": 1,
+          "kind": "lake",
+          "name": "A",
+          "depth": 5
+        },
+        {
+          "id": 2,
+          "kind": "river",
+          "name": "B",
+          "depth": 12
+        },
+        {
+          "id": 3,
+          "kind": "lake"
+        },
+        {
+          "id": 4,
+          "name": "D"
+        }
+      ]
+    },
+    "drawn": {
+      "w": {
+        "1": []
+      }
+    },
+    "kept": {
+      "w": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "The feature ID is not a property, and the predicate set cannot test it."
+    }
+  },
+  {
+    "name": "a modern in with a string tests for a substring and keeps every feature",
+    "style": [
+      {
+        "source-layer": "s",
+        "filter": ["in", ["get", "name"], "Berlin Hbf"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "s": [
+        {
+          "id": 1,
+          "name": "Berlin"
+        },
+        {
+          "id": 2,
+          "name": "Hamburg"
+        },
+        {
+          "id": 3,
+          "name": "Berlin Hbf"
+        }
+      ]
+    },
+    "drawn": {
+      "s": {
+        "1": ["name"],
+        "3": ["name"]
+      }
+    },
+    "kept": {
+      "s": {
+        "1": ["name"],
+        "2": ["name"],
+        "3": ["name"]
+      }
+    },
+    "widening": {
+      "kind": "unreadable-filter",
+      "why": "A substring test is not in the predicate set; read as a list it would keep only exact matches."
+    }
+  },
+  {
+    "name": "a property named like a CEL keyword is filtered on",
+    "style": [
+      {
+        "source-layer": "k",
+        "filter": ["==", "in", "x"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "k": [
+        {
+          "id": 1,
+          "in": "x",
+          "name:de": "Berlin",
+          "name": "O'Brien"
+        },
+        {
+          "id": 2,
+          "in": "y",
+          "name:de": "Köln",
+          "name": "Smith"
+        }
+      ]
+    },
+    "drawn": {
+      "k": {
+        "1": ["in"]
+      }
+    },
+    "kept": {
+      "k": {
+        "1": ["in"]
+      }
+    }
+  },
+  {
+    "name": "a property name with a colon is filtered on",
+    "style": [
+      {
+        "source-layer": "k",
+        "filter": ["==", "name:de", "Berlin"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "k": [
+        {
+          "id": 1,
+          "in": "x",
+          "name:de": "Berlin",
+          "name": "O'Brien"
+        },
+        {
+          "id": 2,
+          "in": "y",
+          "name:de": "Köln",
+          "name": "Smith"
+        }
+      ]
+    },
+    "drawn": {
+      "k": {
+        "1": ["name:de"]
+      }
+    },
+    "kept": {
+      "k": {
+        "1": ["name:de"]
+      }
+    }
+  },
+  {
+    "name": "a value with a quote is matched exactly",
+    "style": [
+      {
+        "source-layer": "k",
+        "filter": ["==", "name", "O'Brien"]
+      }
+    ],
+    "zoom": 14,
+    "tile": {
+      "k": [
+        {
+          "id": 1,
+          "in": "x",
+          "name:de": "Berlin",
+          "name": "O'Brien"
+        },
+        {
+          "id": 2,
+          "in": "y",
+          "name:de": "Köln",
+          "name": "Smith"
+        }
+      ]
+    },
+    "drawn": {
+      "k": {
+        "1": ["name"]
+      }
+    },
+    "kept": {
+      "k": {
+        "1": ["name"]
+      }
     }
   }
 ]
