@@ -765,10 +765,12 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          # Bake GDAL version into the key so brew rolling forward (e.g. 3.12.4 →
-          # 3.13.0) doesn't leave us with rlibs that hard-code a Cellar path that
-          # no longer exists.
-          shared-key: "macos-gdal-${{ steps.gdal.outputs.version }}"
+          # Bake GDAL's install directory into the key: the cached build output
+          # hard-codes it as a link path, and a cache restored after brew moved
+          # it fails with "library 'gdal' not found". The prefix and not the
+          # version, because a Homebrew rebuild changes only the revision
+          # (3.13.3_1 → 3.13.3_5), which `gdal-config --version` leaves out.
+          shared-key: "macos-gdal-${{ steps.gdal.outputs.prefix }}"
           cache-targets: true
           cache-on-failure: false
           cache-bin: false
