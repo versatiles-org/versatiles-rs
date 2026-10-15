@@ -30,10 +30,10 @@
 //! A tile zoom is the map zoom rounded down — MapLibre floors it for vector sources — so a layer
 //! drawn from map zoom 12.5 is drawn from z12 tiles, and one hidden from 10.5 still draws z10 tiles.
 //!
-//! This assumes the map loads one tile zoom for the whole view. A view pitched beyond about 60°,
-//! one with terrain, and the globe projection give each tile its own zoom — lower toward the
-//! horizon, higher close to the camera — but still draw a layer by the *map* zoom. A feature this
-//! drops from a tile outside the layer's zoom range is then missing where such a tile is drawn.
+//! So each tile keeps what the style draws at that tile's zoom. A view pitched beyond about 60°,
+//! one with terrain, and the globe projection load several tile zooms at once — lower toward the
+//! horizon — and get from each tile the detail of its zoom, as they would from any tileset built
+//! with per-zoom detail.
 
 mod fields;
 mod filter;
