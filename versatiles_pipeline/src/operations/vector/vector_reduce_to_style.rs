@@ -36,9 +36,10 @@ use crate::{
 ///
 /// - its `source-layer` and its `filter`;
 /// - its `minzoom` and `maxzoom`, as the tile zooms MapLibre loads for them:
-///   rounded down, and clamped to the lower of the tileset's maximum and the
-///   style source's `maxzoom`. MapLibre overzooms, so a style drawing addresses
-///   from z17 keeps them in the z14 tiles of a tileset that stops there;
+///   rounded down, no lower than the style source's `minzoom`, and clamped to
+///   the lower of the tileset's maximum and the style source's `maxzoom`.
+///   MapLibre overzooms, so a style drawing addresses from z17 keeps them in the
+///   z14 tiles of a tileset that stops there;
 /// - every property its `filter`, `paint` and `layout` read — through `get`,
 ///   legacy filters, `{token}` strings and legacy `{"property": …}` functions —
 ///   at the zooms it is drawn at, and the source's `promoteId` at every zoom.

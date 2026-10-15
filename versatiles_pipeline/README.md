@@ -820,7 +820,7 @@ The same reduction can be written by hand as `vector_filter_layers`, one `vector
 **What it reads from the style**, for every visible style layer of this tileset:
 
 - its `source-layer` and its `filter`;
-- its `minzoom` and `maxzoom`, as the tile zooms MapLibre loads for them: rounded down, and clamped to the lower of the tileset's maximum and the style source's `maxzoom`. MapLibre overzooms, so a style drawing addresses from z17 keeps them in the z14 tiles of a tileset that stops there;
+- its `minzoom` and `maxzoom`, as the tile zooms MapLibre loads for them: rounded down, no lower than the style source's `minzoom`, and clamped to the lower of the tileset's maximum and the style source's `maxzoom`. MapLibre overzooms, so a style drawing addresses from z17 keeps them in the z14 tiles of a tileset that stops there;
 - every property its `filter`, `paint` and `layout` read — through `get`, legacy filters, `{token}` strings and legacy `{"property": …}` functions — at the zooms it is drawn at, and the source's `promoteId` at every zoom.
 
 A `ref` layer counts with what it takes from the layer it names, as MapLibre resolves it. Hidden style layers (`"visibility": "none"`) count for nothing: a map that shows one at runtime needs a style with it visible for the reduction.

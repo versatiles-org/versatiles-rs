@@ -76,11 +76,16 @@ fn tile_zoom(object: &JsonObject, key: &str) -> Result<Option<u8>> {
 /// — the layer is hidden at zooms greater than or equal to it — and is read here as inclusive. For a
 /// fractional one that is exact (hidden from 10.5, still drawn at 10.4, from z10 tiles); for a whole
 /// one it keeps one zoom level more than the style draws, which is the widening direction.
-fn zoom_range(layer: &JsonObject, maxzoom: u8) -> Result<ZoomRange> {
+///
+/// `source` is the range of tile zooms the layer's source is requested at ([`source_zooms`]): the
+/// lower bound is raised to its start, because MapLibre requests no tile below a source's
+/// `minzoom`, and both are clamped to its end.
+fn zoom_range(layer: &JsonObject, source: ZoomRange) -> Result<ZoomRange> {
 	let read = |key: &str| tile_zoom(layer, key);
+	let (source_min, source_max) = source;
 
-	let min = read("minzoom")?.unwrap_or(0).min(maxzoom);
-	let max = read("maxzoom")?.unwrap_or(maxzoom).min(maxzoom);
+	let min = read("minzoom")?.unwrap_or(0).max(source_min).min(source_max);
+	let max = read("maxzoom")?.unwrap_or(source_max).min(source_max);
 
 	Ok((min, max))
 }
@@ -328,16 +333,19 @@ fn promoted_id(style: &JsonObject, source: Option<&str>, source_layer: &str) -> 
 	}
 }
 
-/// Where a style layer's source stops: the tileset's maximum, or the source's own `maxzoom` if that
-/// is lower.
-fn source_maxzoom(style: &JsonObject, layer: &JsonObject, tileset_maxzoom: u8) -> Result<u8> {
+/// The tile zooms a style layer's source is requested at: from the source's `minzoom`, below which
+/// MapLibre requests nothing, to the tileset's maximum or the source's own `maxzoom` if that is
+/// lower.
+fn source_zooms(style: &JsonObject, layer: &JsonObject, tileset_maxzoom: u8) -> Result<ZoomRange> {
 	let id = layer.string("source")?;
-	Ok(match source_definition(style, id.as_deref()) {
-		Some(definition) => tile_zoom(definition, "maxzoom")
-			.with_context(|| format!("in style source {}", source_name(id.as_ref())))?
-			.map_or(tileset_maxzoom, |source_max| source_max.min(tileset_maxzoom)),
-		None => tileset_maxzoom,
-	})
+	let Some(definition) = source_definition(style, id.as_deref()) else {
+		return Ok((0, tileset_maxzoom));
+	};
+	let read =
+		|key: &str| tile_zoom(definition, key).with_context(|| format!("in style source {}", source_name(id.as_ref())));
+	let max = read("maxzoom")?.map_or(tileset_maxzoom, |source_max| source_max.min(tileset_maxzoom));
+	let min = read("minzoom")?.unwrap_or(0);
+	Ok((min, max))
 }
 
 /// The promoted IDs of every source whose layers draw `source_layer`; see [`promoted_id`].
@@ -444,7 +452,7 @@ pub fn from_style(
 	let tileset_maxzoom = maxzoom;
 	let mut maxzoom = 0;
 	for layer in &layers {
-		maxzoom = maxzoom.max(source_maxzoom(style, layer, tileset_maxzoom)?);
+		maxzoom = maxzoom.max(source_zooms(style, layer, tileset_maxzoom)?.1);
 	}
 
 	// source-layer → clamped zoom range → the filters of the style layers contributing to it. A
@@ -458,7 +466,7 @@ pub fn from_style(
 		let Some(source_layer) = layer.string("source-layer")? else {
 			continue;
 		};
-		let range = zoom_range(layer, source_maxzoom(style, layer, tileset_maxzoom)?).with_context(|| {
+		let range = zoom_range(layer, source_zooms(style, layer, tileset_maxzoom)?).with_context(|| {
 			format!(
 				"in style layer {:?}",
 				layer.string("id").ok().flatten().unwrap_or_default()
@@ -705,6 +713,36 @@ mod tests {
 			14,
 		);
 		assert_eq!(requirement.layers["addresses"].keep[0].minzoom, Some(14));
+	}
+
+	#[test]
+	fn a_source_minzoom_raises_every_lower_bound() {
+		// MapLibre requests no tile below z8 from this source, so nothing below it is drawn.
+		let requirement = from(
+			r#"{"sources":{"s":{"type":"vector","minzoom":8}},"layers":[
+				{"id":"a","source":"s","source-layer":"water"},
+				{"id":"b","source":"s","source-layer":"places","minzoom":10},
+				{"id":"c","source":"s","source-layer":"land","minzoom":3,"paint":{"c":["get","kind"]}}
+			]}"#,
+			14,
+		);
+		assert_eq!(requirement.layers["water"].keep[0].minzoom, Some(8));
+		assert_eq!(requirement.layers["places"].keep[0].minzoom, Some(10));
+		assert_eq!(requirement.layers["land"].keep[0].minzoom, Some(8));
+		assert_eq!(listed(&requirement.layers["land"].properties)["kind"], 8..=14);
+	}
+
+	#[test]
+	fn a_source_minzoom_above_the_tileset_keeps_the_deepest_zoom() {
+		// Inconsistent: MapLibre would request nothing from this source at all. The clamp keeps the
+		// deepest zoom rather than nothing, which is the widening direction.
+		let requirement = from(
+			r#"{"sources":{"s":{"type":"vector","minzoom":16}},"layers":[
+				{"id":"a","source":"s","source-layer":"water"}
+			]}"#,
+			14,
+		);
+		assert_eq!(requirement.layers["water"].keep[0].minzoom, Some(14));
 	}
 
 	#[test]
