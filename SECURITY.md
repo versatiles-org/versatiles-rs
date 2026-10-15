@@ -23,6 +23,8 @@ In scope:
 - The Node.js bindings (`versatiles_node`).
 - Container readers and writers handling untrusted input (`.versatiles`, `.pmtiles`, `.mbtiles`, `.tar`, directory).
 
+A pipeline (`.vpl`) is a program: running one you did not write is like running a script. One opened from a URL cannot read the files of the machine that runs it, because every path in it resolves to a URL on its own server. It can still make that machine fetch any `http`, `https` or `sftp` URL, including addresses on the local network. Do not build pipelines from untrusted input on a machine that can reach services which are not public.
+
 Out of scope:
 
 - Issues that require an already-compromised host.

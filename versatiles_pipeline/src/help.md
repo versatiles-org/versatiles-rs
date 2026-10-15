@@ -76,4 +76,20 @@ Both quoted forms may be empty: `""` and `''` are the empty string. That is dist
 
 To pass several values to one parameter, use a comma-separated list in square brackets, e.g. `layer=["place", "water"]`. The same three forms apply to each element.
 
+### Files and URLs
+
 Every parameter that takes a file path resolves a relative one against the `.vpl` file's own directory, so a pipeline and the data it reads can be moved together. The individual parameters below do not repeat this.
+
+A parameter documented as "path or URL" also takes an `http`, `https` or `sftp` URL (`sftp` where the build includes it). The file is fetched once, whole, when the pipeline is built:
+
+```vpl
+from_geo filename="https://example.org/data/places.geojson"
+  | vector_reduce_to_style style="https://example.org/styles/basic.json"
+```
+
+- A remote file is held in memory while it is read. An `http` or `https` response over 256 MB is refused; raise the limit with the environment variable `VERSATILES_MAX_HTTP_BODY_BYTES`. A large local file is still read from disk piece by piece.
+- Where the format comes from the extension (`from_geo`, `from_tile`), it is taken from the URL's last path segment: `…/places.geojson?key=abc` works, `…/items?f=geojson` does not. A Shapefile has to be local, because its `.dbf` and `.prj` lie beside it.
+- A password in a URL is used, and left out of every message.
+- The same pipeline gives a different result when the file behind a URL changes. For a result you can reproduce, use a URL that names a version.
+
+A `.vpl` file that is itself opened from a URL resolves every path against its own URL, the way a web page resolves its links: `style.json` is read from beside it and `/data/x.csv` from the root of its server. Such a pipeline cannot read a file on the machine that runs it, so a parameter that needs a local file — a GDAL input, a `cutline`, an `ssh_identity`, a Shapefile — cannot be used in it. A query string in the `.vpl` file's URL is not carried over to the files it names, so a presigned URL does not extend to them: each needs its own.
