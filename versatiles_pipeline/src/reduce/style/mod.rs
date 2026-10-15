@@ -38,7 +38,10 @@
 mod fields;
 mod filter;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	ops::RangeInclusive,
+};
 
 use anyhow::{Context, Result, bail, ensure};
 use versatiles_core::json::{JsonObject, JsonValue};
@@ -277,6 +280,53 @@ fn promoted_ids(style: &JsonObject, layers: &[&JsonObject], source_layer: &str) 
 	Ok(ids)
 }
 
+/// One keep entry per zoom range of a source-layer, from the filters of the style layers drawn in it.
+///
+/// `maxzoom` is where the selection's tiles stop; a bound reaching it is left out.
+fn keep_entries(ranges: BTreeMap<ZoomRange, Vec<Option<&JsonValue>>>, maxzoom: u8) -> Vec<KeepEntry> {
+	ranges
+		.into_iter()
+		.map(|((min, max), filters)| {
+			let mut predicates = Vec::new();
+			// One style layer that keeps everything absorbs the rest of the range: the disjunction
+			// is already satisfied for every feature, so narrowing it with the others' predicates
+			// would drop features this range draws.
+			let mut keeps_everything = false;
+
+			for filter in filters {
+				match filter.map(filter::normalize) {
+					// No filter at all, or one that could not be read.
+					None | Some(None) => keeps_everything = true,
+					Some(Some(predicate)) => predicates.push(predicate),
+				}
+			}
+
+			let predicate = if keeps_everything {
+				None
+			} else {
+				match predicates.len() {
+					0 => None,
+					1 => predicates.into_iter().next(),
+					// Simplified, not merely built. One style layer per drawn case is how cartography
+					// is written, so this disjunction is the whole of a source-layer's styling
+					// flattened into one predicate — 232 terms for `colorful`'s `streets`. `simplify`
+					// is exact; what it removes is repetition, not meaning.
+					_ => Some(Predicate::Or(predicates)),
+				}
+				.map(crate::reduce::simplify::simplify)
+			};
+
+			KeepEntry {
+				// A bound that covers the whole pyramid is not worth emitting: it would render as
+				// `zoom >= 0`, which every tile satisfies, and cost a CEL evaluation to say so.
+				minzoom: (min > 0).then_some(min),
+				maxzoom: (max < maxzoom).then_some(max),
+				predicate,
+			}
+		})
+		.collect()
+}
+
 /// What a style needs from a tileset whose deepest level is `maxzoom`.
 ///
 /// Only the style layers drawing one tileset count. `sources` names it by the IDs of its style
@@ -324,12 +374,12 @@ pub fn from_style(
 		maxzoom = maxzoom.max(source_maxzoom(style, layer, tileset_maxzoom)?);
 	}
 
-	let usage = fields::usage(&layers);
-
 	// source-layer → clamped zoom range → the filters of the style layers contributing to it. A
 	// `None` filter is a style layer that draws everything, which is why the option is kept rather
 	// than skipped: it is what makes the whole range keep everything.
 	let mut grouped: BTreeMap<String, BTreeMap<ZoomRange, Vec<Option<&JsonValue>>>> = BTreeMap::new();
+	// Every style layer with the tile zooms it is drawn at, for the properties it reads there.
+	let mut drawn_at: Vec<(&JsonObject, RangeInclusive<u8>)> = Vec::new();
 
 	for layer in &layers {
 		let Some(source_layer) = layer.string("source-layer")? else {
@@ -342,6 +392,7 @@ pub fn from_style(
 			)
 		})?;
 
+		drawn_at.push((layer, range.0..=range.1));
 		grouped
 			.entry(source_layer)
 			.or_default()
@@ -350,77 +401,42 @@ pub fn from_style(
 			.push(layer.get("filter"));
 	}
 
+	let usage = fields::usage(&drawn_at);
 	let mut requirement_layers = BTreeMap::new();
 
 	for (source_layer, ranges) in grouped {
-		let keep: Vec<KeepEntry> = ranges
-			.into_iter()
-			.map(|((min, max), filters)| {
-				let mut predicates = Vec::new();
-				// One style layer that keeps everything absorbs the rest of the range: the
-				// disjunction is already satisfied for every feature, so narrowing it with the
-				// others' predicates would drop features this range draws.
-				let mut keeps_everything = false;
-
-				for filter in filters {
-					match filter.map(filter::normalize) {
-						// No filter at all, or one that could not be read.
-						None | Some(None) => keeps_everything = true,
-						Some(Some(predicate)) => predicates.push(predicate),
-					}
-				}
-
-				let predicate = if keeps_everything {
-					None
-				} else {
-					match predicates.len() {
-						0 => None,
-						1 => predicates.into_iter().next(),
-						// Simplified, not merely built. One style layer per drawn case is how
-						// cartography is written, so this disjunction is the whole of a source-layer's
-						// styling flattened into one predicate — 232 terms for `colorful`'s `streets`.
-						// `simplify` is exact; what it removes is repetition, not meaning.
-						_ => Some(Predicate::Or(predicates)),
-					}
-					.map(crate::reduce::simplify::simplify)
-				};
-
-				KeepEntry {
-					// A bound that covers the whole pyramid is not worth emitting: it would render
-					// as `zoom >= 0`, which every tile satisfies, and cost a CEL evaluation to say
-					// so.
-					minzoom: (min > 0).then_some(min),
-					maxzoom: (max < maxzoom).then_some(max),
-					predicate,
-				}
-			})
-			.collect();
-
-		let fields::Fields {
-			names: mut properties,
-			all,
-		} = usage.get(&source_layer).cloned().unwrap_or_default();
+		let keep = keep_entries(ranges, maxzoom);
+		let mut usage = usage.get(&source_layer).cloned().unwrap_or_default();
 
 		// Every property a predicate reads must survive the reduction, or the filter that needs it
 		// evaluates `has(props.k)` against a feature that no longer carries it and drops the whole
 		// layer. `fields::usage` already walks filters, so this should be a no-op — but "should be"
 		// is what the `{ref}` token also was, and the cost of being wrong here is silent data loss
-		// while the cost of the union is nothing.
+		// while the cost of the union is nothing. The feature filter runs before properties are
+		// stripped, so the range only has to cover the entry's own zooms.
 		for entry in &keep {
 			if let Some(predicate) = &entry.predicate {
-				filter::fields(predicate, &mut properties);
+				let mut names = BTreeSet::new();
+				filter::fields(predicate, &mut names);
+				let zooms = entry.minzoom.unwrap_or(0)..=entry.maxzoom.unwrap_or(maxzoom);
+				for name in names {
+					usage.add(name, &zooms);
+				}
 			}
 		}
 
-		properties.extend(promoted_ids(style, &layers, &source_layer)?);
+		// The promoted ID identifies a feature at every zoom it is drawn at.
+		for name in promoted_ids(style, &layers, &source_layer)? {
+			usage.add(name, &(0..=maxzoom));
+		}
 
 		requirement_layers.insert(
 			source_layer,
 			LayerRequirement {
-				properties: if all {
+				properties: if usage.all {
 					Properties::All
 				} else {
-					Properties::Listed(properties.into_iter().collect())
+					Properties::Listed(usage.names)
 				},
 				keep,
 			},
@@ -464,8 +480,9 @@ mod tests {
 		from_style(json, maxzoom, &[], &BTreeSet::new()).unwrap()
 	}
 
-	/// The listed properties of a layer; a layer keeping all of them fails the test.
-	fn listed(properties: &Properties) -> &[String] {
+	/// The listed properties of a layer, with their zooms; a layer keeping all of them fails the
+	/// test.
+	fn listed(properties: &Properties) -> &BTreeMap<String, RangeInclusive<u8>> {
 		match properties {
 			Properties::Listed(names) => names,
 			Properties::All => panic!("expected a list of properties, found all of them"),
@@ -473,7 +490,7 @@ mod tests {
 	}
 
 	fn properties(requirement: &Requirement, layer: &str) -> Vec<String> {
-		listed(&requirement.layers[layer].properties).to_vec()
+		listed(&requirement.layers[layer].properties).keys().cloned().collect()
 	}
 
 	// ── the vendored styles ──
@@ -516,7 +533,7 @@ mod tests {
 		let translations: Vec<String> = requirement
 			.layers
 			.values()
-			.flat_map(|layer| listed(&layer.properties).iter())
+			.flat_map(|layer| listed(&layer.properties).keys())
 			.filter(|property| property.starts_with("name_") || property.starts_with("name:"))
 			.cloned()
 			.collect();
@@ -530,7 +547,7 @@ mod tests {
 		let requirement = from(&style("colorful.json"), 14);
 		for (name, layer) in &requirement.layers {
 			let read = predicate_fields(&requirement, name);
-			let kept: BTreeSet<String> = listed(&layer.properties).iter().cloned().collect();
+			let kept: BTreeSet<String> = listed(&layer.properties).keys().cloned().collect();
 			assert!(
 				read.is_subset(&kept),
 				"{name}: predicates read {:?} which the reduction would strip",
@@ -886,6 +903,35 @@ mod tests {
 		assert!(message.contains("none of this tileset's layers"), "got: {message}");
 		assert!(message.contains("draws: water"), "got: {message}");
 		assert!(message.contains("has: buildings, streets"), "got: {message}");
+	}
+
+	// ── properties per zoom ──
+
+	#[test]
+	fn a_property_is_kept_from_the_lowest_zoom_a_layer_reads_it() {
+		let requirement = from(
+			r#"{"layers":[
+				{"id":"a","source-layer":"streets","minzoom":5,"paint":{"c":["get","kind"]}},
+				{"id":"b","source-layer":"streets","minzoom":12,"layout":{"text-field":"{ref}"},"paint":{"c":["get","kind"]}},
+				{"id":"c","source-layer":"streets","maxzoom":8,"paint":{"c":["get","old"]}}
+			]}"#,
+			14,
+		);
+		let zooms = listed(&requirement.layers["streets"].properties);
+		assert_eq!(zooms["kind"], 5..=14);
+		assert_eq!(zooms["ref"], 12..=14);
+		assert_eq!(zooms["old"], 0..=8);
+	}
+
+	#[test]
+	fn a_promoted_id_is_kept_at_every_zoom() {
+		let requirement = from(
+			r#"{"sources":{"s":{"type":"vector","promoteId":"osm_id"}},"layers":[
+				{"id":"a","source":"s","source-layer":"water","minzoom":10}
+			]}"#,
+			14,
+		);
+		assert_eq!(listed(&requirement.layers["water"].properties)["osm_id"], 0..=14);
 	}
 
 	// ── properties that cannot be listed ──

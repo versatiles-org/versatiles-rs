@@ -1,14 +1,13 @@
 //! Reducing a tileset to what one style draws.
 //!
 //! Two halves. [`style`] reads a built MapLibre style and works out which source-layers, properties
-//! and features it actually draws; [`render`](render::operations) turns that answer into the VPL
-//! operations that strip a tileset down to it.
+//! and features it actually draws, at which zooms; [`feature_expressions`] turns the features into
+//! the CEL that `vector_reduce_to_style` evaluates per tile.
 //!
-//! Both live here rather than beside the styles because VPL's vocabulary — operation names,
-//! parameter spellings, what `vector_filter_properties`'s regex matches against — is this crate's,
-//! and a copy of it elsewhere is a second implementation that agrees until it does not. Keeping the
-//! analysis here too means the two never disagree about what a predicate means, and that the
-//! tileset's own pyramid is available to clamp zooms against.
+//! Both live here rather than beside the styles because the CEL dialect `vector_filter_features`
+//! evaluates is this crate's, and a copy of it elsewhere is a second implementation that agrees
+//! until it does not. Keeping the analysis here too means the two never disagree about what a
+//! predicate means, and that the tileset's own pyramid is available to clamp zooms against.
 //!
 //! ## The contract
 //!
@@ -26,5 +25,5 @@ mod simplify;
 pub mod style;
 
 pub use ir::{KeepEntry, LayerRequirement, Literal, Predicate, Properties, Requirement};
-pub use render::{feature_expressions, layer_names, operations, property_regex};
+pub use render::{feature_expressions, layer_names};
 pub use style::from_style;

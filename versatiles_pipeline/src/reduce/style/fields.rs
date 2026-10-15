@@ -37,7 +37,10 @@
 //! of scanning narrower is the failure above, reintroduced the first time a token appears somewhere
 //! this file did not predict.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	ops::RangeInclusive,
+};
 
 use versatiles_core::json::{JsonObject, JsonValue};
 
@@ -54,14 +57,6 @@ pub struct Fields {
 	/// Whether properties are also read by a name that cannot be listed, so that all of them have
 	/// to stay.
 	pub all: bool,
-}
-
-impl Fields {
-	/// Adds what another layer reads.
-	pub fn extend(&mut self, other: Fields) {
-		self.names.extend(other.names);
-		self.all |= other.all;
-	}
 }
 
 /// Every field an expression reads, by any spelling.
@@ -178,17 +173,46 @@ pub fn fields_of_layer(layer: &JsonObject) -> Fields {
 	fields
 }
 
-/// Source-layer → the properties the style reads from it.
-///
-/// Style layers with no `source-layer` draw no tile data and are skipped.
-pub fn usage(layers: &[&JsonObject]) -> BTreeMap<String, Fields> {
-	let mut used: BTreeMap<String, Fields> = BTreeMap::new();
+/// What a source-layer's style layers read, and at which tile zooms.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Usage {
+	/// Each property read, with the zooms of the style layers that read it.
+	pub names: BTreeMap<String, RangeInclusive<u8>>,
+	/// Whether a property is read by a name that cannot be listed, so that all of them have to
+	/// stay at every zoom.
+	pub all: bool,
+}
 
-	for layer in layers {
+impl Usage {
+	/// Records `name` as read at `zooms`, widening the range it is already read at.
+	pub fn add(&mut self, name: String, zooms: &RangeInclusive<u8>) {
+		self
+			.names
+			.entry(name)
+			.and_modify(|range| {
+				*range = (*range.start()).min(*zooms.start())..=(*range.end()).max(*zooms.end());
+			})
+			.or_insert_with(|| zooms.clone());
+	}
+}
+
+/// Source-layer → the properties the style reads from it, and at which zooms.
+///
+/// Each style layer comes with the tile zooms it is drawn at; style layers with no `source-layer`
+/// draw no tile data and are skipped.
+pub fn usage(layers: &[(&JsonObject, RangeInclusive<u8>)]) -> BTreeMap<String, Usage> {
+	let mut used: BTreeMap<String, Usage> = BTreeMap::new();
+
+	for (layer, zooms) in layers {
 		let Ok(Some(source_layer)) = layer.string("source-layer") else {
 			continue;
 		};
-		used.entry(source_layer).or_default().extend(fields_of_layer(layer));
+		let fields = fields_of_layer(layer);
+		let usage = used.entry(source_layer).or_default();
+		usage.all |= fields.all;
+		for name in fields.names {
+			usage.add(name, zooms);
+		}
 	}
 
 	used
@@ -296,13 +320,24 @@ mod tests {
 		let a = layer(r#"{"source-layer":"streets","filter":["has","kind"]}"#);
 		let b = layer(r#"{"source-layer":"streets","layout":{"text-field":"{ref}"}}"#);
 		let c = layer(r##"{"paint":{"background-color":"#fff"}}"##);
-		let used = usage(&[&a, &b, &c]);
+		let used = usage(&[(&a, 0..=14), (&b, 0..=14), (&c, 0..=14)]);
 
 		assert_eq!(used.len(), 1, "the layer without a source-layer draws no data");
 		assert_eq!(
-			used["streets"].names.iter().cloned().collect::<Vec<_>>(),
+			used["streets"].names.keys().cloned().collect::<Vec<_>>(),
 			["kind", "ref"]
 		);
+	}
+
+	#[test]
+	fn a_property_is_read_at_the_zooms_of_the_layers_reading_it() {
+		let a = layer(r#"{"source-layer":"streets","filter":["has","kind"]}"#);
+		let b = layer(r#"{"source-layer":"streets","layout":{"text-field":"{ref}"},"paint":{"c":["get","kind"]}}"#);
+		let c = layer(r#"{"source-layer":"streets","paint":{"c":["get","ref"]}}"#);
+		let used = usage(&[(&a, 5..=8), (&b, 12..=14), (&c, 10..=11)]);
+
+		assert_eq!(used["streets"].names["kind"], 5..=14, "spans both layers reading it");
+		assert_eq!(used["streets"].names["ref"], 10..=14);
 	}
 
 	#[test]
@@ -359,8 +394,8 @@ mod tests {
 	fn usage_keeps_them_all_if_one_layer_does() {
 		let a = layer(r#"{"source-layer":"streets","filter":["has","kind"]}"#);
 		let b = layer(r#"{"source-layer":"streets","layout":{"text-field":["get",["concat","name_","de"]]}}"#);
-		let used = usage(&[&a, &b]);
+		let used = usage(&[(&a, 0..=14), (&b, 0..=14)]);
 		assert!(used["streets"].all);
-		assert!(used["streets"].names.contains("kind"));
+		assert!(used["streets"].names.contains_key("kind"));
 	}
 }

@@ -1,7 +1,6 @@
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use anyhow::Result;
-use regex::Regex;
 use versatiles_container::TileSource;
 use versatiles_core::{TileCoord, TileJSON};
 use versatiles_derive::context;
@@ -14,7 +13,7 @@ use crate::{
 		transform::{AsTileTransform, TransformOp, VectorTransform},
 		vector::vector_filter_features,
 	},
-	reduce::{self, from_style},
+	reduce::{self, Properties, from_style},
 	vpl::VPLNode,
 };
 
@@ -65,8 +64,8 @@ struct Runner {
 	/// One compiled predicate per layer that needs one, reusing `vector_filter_features`' runner so
 	/// there is a single implementation of what an expression means.
 	filters: Vec<vector_filter_features::Runner>,
-	/// Matches `layer/property` for the properties to keep.
-	properties: Regex,
+	/// The properties to keep per layer, with the tile zooms each is read at.
+	properties: HashMap<String, Properties>,
 }
 
 impl std::fmt::Debug for Runner {
@@ -74,7 +73,7 @@ impl std::fmt::Debug for Runner {
 		f.debug_struct("Runner")
 			.field("layers", &self.layers)
 			.field("filters", &self.filters.len())
-			.field("properties", &self.properties.as_str())
+			.field("properties", &self.properties)
 			.finish()
 	}
 }
@@ -90,7 +89,11 @@ impl Runner {
 		Ok(Self {
 			layers: reduce::layer_names(requirement).into_iter().collect(),
 			filters,
-			properties: Regex::new(&reduce::property_regex(requirement))?,
+			properties: requirement
+				.layers
+				.iter()
+				.map(|(name, layer)| (name.clone(), layer.properties.clone()))
+				.collect(),
 		})
 	}
 }
@@ -114,10 +117,15 @@ impl VectorTransform for Runner {
 			}
 		}
 
+		// Per zoom: a property read only by a style layer drawn from z14 has no business in a z5
+		// tile.
 		for layer in &mut tile.layers {
-			let name = layer.name.clone();
+			let Some(Properties::Listed(keep)) = self.properties.get(&layer.name) else {
+				// `All`, or a layer the first stage would have dropped.
+				continue;
+			};
 			layer.filter_map_properties(|mut properties| {
-				properties.retain(|key, _| self.properties.is_match(&format!("{name}/{key}")));
+				properties.retain(|key, _| keep.get(key).is_some_and(|zooms| zooms.contains(&coord.level)));
 				Some(properties)
 			})?;
 		}
@@ -129,12 +137,13 @@ impl VectorTransform for Runner {
 		}
 	}
 
+	/// The metadata describes the whole tileset, so a field stays if it is kept at any zoom.
 	fn update_tilejson(&self, tilejson: &mut TileJSON) {
 		tilejson.vector_layers.0.retain(|name, _| self.layers.contains(name));
 		tilejson.vector_layers.iter_mut().for_each(|(name, layer)| {
-			layer
-				.fields
-				.retain(|key, _| self.properties.is_match(&format!("{name}/{key}")));
+			if let Some(Properties::Listed(keep)) = self.properties.get(name) {
+				layer.fields.retain(|key, _| keep.contains_key(key));
+			}
 		});
 	}
 }
@@ -216,11 +225,16 @@ mod tests {
 
 	/// The properties surviving in `from_debug`'s tiles, as `layer/property`.
 	async fn surviving(style: &str) -> Result<Vec<String>> {
+		surviving_at(style, 1).await
+	}
+
+	/// The properties surviving in one of `from_debug`'s tiles at `level`, as `layer/property`.
+	async fn surviving_at(style: &str, level: u8) -> Result<Vec<String>> {
 		let dir = tempfile::tempdir().unwrap();
 		let operation = operation(&dir, style).await?;
 
 		let tile = operation
-			.tile_stream(TileBBox::new_full(1)?)
+			.tile_stream(TileBBox::from_min_and_max(level, 0, 0, 0, 0)?)
 			.await?
 			.next()
 			.await
@@ -277,6 +291,40 @@ mod tests {
 				.await
 				.unwrap();
 		assert_eq!(properties, ["debug_x/char"]);
+	}
+
+	#[tokio::test]
+	async fn a_property_stays_only_at_the_zooms_it_is_read_at() {
+		// `char` is read at every zoom, `index` only from z5, by a second style layer of the same
+		// source-layer.
+		let style = r#"{"layers":[
+			{"id":"a","source-layer":"debug_x","paint":{"c":["get","char"]}},
+			{"id":"b","source-layer":"debug_x","minzoom":5,"paint":{"c":["get","index"]}}
+		]}"#;
+		assert_eq!(surviving_at(style, 4).await.unwrap(), ["debug_x/char"]);
+		assert_eq!(surviving_at(style, 5).await.unwrap(), ["debug_x/char", "debug_x/index"]);
+	}
+
+	#[tokio::test]
+	async fn the_tilejson_keeps_a_field_kept_at_any_zoom() {
+		// The metadata describes the whole tileset, so `index`, kept from z5, is still listed.
+		let dir = tempfile::tempdir().unwrap();
+		let operation = operation(
+			&dir,
+			r#"{"layers":[
+				{"id":"a","source-layer":"debug_x","paint":{"c":["get","char"]}},
+				{"id":"b","source-layer":"debug_x","minzoom":5,"paint":{"c":["get","index"]}}
+			]}"#,
+		)
+		.await
+		.unwrap();
+		assert_eq!(
+			operation.tilejson().vector_layers.0["debug_x"]
+				.fields
+				.keys()
+				.collect::<Vec<_>>(),
+			["char", "index"]
+		);
 	}
 
 	#[tokio::test]

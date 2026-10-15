@@ -1,111 +1,20 @@
-//! Turning a requirement into the VPL operations that enforce it.
+//! Turning a requirement into what `vector_reduce_to_style` applies to a tile: the layers to keep
+//! and one CEL feature filter per layer that needs one.
 //!
-//! The output is a list of transform nodes, not a whole pipeline: what they are applied to is the
-//! caller's business, and keeping the source out of it is what makes this a pure function of the
-//! requirement — testable as golden text, and callable by an editor that wants the operations to
-//! append to a pipeline someone is already writing.
-//!
-//! Nodes are built as [`VPLNode`] values rather than assembled as text. VPL quoting already
-//! exists, is already tested, and picks the least punctuation that parses back; a second
-//! implementation here would be a place for a mis-escaped layer name to hide.
-
-use std::collections::BTreeMap;
+//! The expressions are the ones `vector_filter_features` evaluates, so there is a single
+//! implementation of what an expression means. Properties need no rendering: the operation reads
+//! [`Properties`](super::Properties) per tile zoom directly, which no regex over `layer/property`
+//! could express.
 
 use super::{
-	ir::{KeepEntry, Properties, Requirement},
+	ir::{KeepEntry, Requirement},
 	predicate,
 };
-use crate::vpl::VPLNode;
-
-/// Builds one transform node.
-fn node(name: &str, properties: &[(&str, Vec<String>)]) -> VPLNode {
-	VPLNode {
-		name: name.to_string(),
-		properties: properties
-			.iter()
-			.map(|(key, values)| ((*key).to_string(), values.clone()))
-			.collect::<BTreeMap<_, _>>(),
-		sources: Vec::new(),
-	}
-}
-
-/// The operations that reduce a tileset to `requirement`, as VPL nodes.
-///
-/// Order matters and is not a preference: **properties are stripped last**, because the feature
-/// filter's expressions read properties, and removing them first would make every `has(props.k)`
-/// guard false and delete the features the filter was meant to keep.
-///
-/// This is the *readable* presentation of a reduction — what someone would have written by hand,
-/// and what an editor can paste into a pipeline. It is not how `vector_reduce_to_style` runs one:
-/// chaining these would decode and re-encode every tile once per node, twenty times over for a
-/// real style. The operation applies [`layer_names`], [`feature_expressions`] and
-/// [`property_regex`] in a single pass instead, so both presentations are built from the same three
-/// answers and cannot drift apart.
-#[must_use]
-pub fn operations(requirement: &Requirement) -> Vec<VPLNode> {
-	let mut nodes = Vec::new();
-
-	nodes.push(node(
-		"vector_filter_layers",
-		&[
-			("filter", layer_names(requirement)),
-			("invert", vec!["true".to_string()]),
-		],
-	));
-
-	for (layer, expression) in feature_expressions(requirement) {
-		nodes.push(node(
-			"vector_filter_features",
-			&[("layer", vec![layer]), ("expr", vec![expression])],
-		));
-	}
-
-	nodes.push(node(
-		"vector_filter_properties",
-		&[
-			("regex", vec![property_regex(requirement)]),
-			("invert", vec!["true".to_string()]),
-		],
-	));
-
-	nodes
-}
 
 /// The source-layers to keep. Everything else is dropped.
 #[must_use]
 pub fn layer_names(requirement: &Requirement) -> Vec<String> {
 	requirement.layers.keys().cloned().collect()
-}
-
-/// Keeps only the properties the requirement names, across every layer.
-///
-/// One regex over `layer/property`, which is what `vector_filter_properties` matches against. A
-/// layer whose `properties` list is empty contributes no alternative and so loses every property
-/// while keeping its geometry — the case where a layer is drawn as shape alone. A layer that keeps
-/// all of them contributes `layer/.*`.
-#[must_use]
-pub fn property_regex(requirement: &Requirement) -> String {
-	let mut alternatives: Vec<String> = Vec::new();
-	for (layer, requirements) in &requirement.layers {
-		match &requirements.properties {
-			Properties::All => alternatives.push(format!("{}.*", regex::escape(&format!("{layer}/")))),
-			Properties::Listed(properties) => {
-				for property in properties {
-					alternatives.push(regex::escape(&format!("{layer}/{property}")));
-				}
-			}
-		}
-	}
-
-	// An empty alternation is not the empty pattern: `^(?:)$` matches the empty string rather
-	// than nothing at all. `[^\s\S]` asks for one character that is neither whitespace nor
-	// non-whitespace, so it can never match — and unlike `(?!)`, it needs no look-around, which
-	// the `regex` crate does not support.
-	if alternatives.is_empty() {
-		r"[^\s\S]".to_string()
-	} else {
-		format!("^(?:{})$", alternatives.join("|"))
-	}
 }
 
 /// One feature filter per layer that needs one.
@@ -183,7 +92,7 @@ mod tests {
 	use pretty_assertions::assert_eq;
 
 	use super::{
-		super::{ir::Requirement, style::from_style},
+		super::{LayerRequirement, Properties, style::from_style},
 		*,
 	};
 
@@ -194,18 +103,17 @@ mod tests {
 		from_style(&json, 14, &[], &std::collections::BTreeSet::new()).unwrap()
 	}
 
-	/// The rendered operations as VPL text, one per line.
-	fn render_text(requirement: &Requirement) -> String {
-		operations(requirement)
-			.iter()
-			.map(ToString::to_string)
-			.collect::<Vec<_>>()
-			.join("\n")
-	}
-
 	/// An inline style, analysed against a z14 tileset.
 	fn parse(json: &str) -> Requirement {
 		from_style(json, 14, &[], &std::collections::BTreeSet::new()).unwrap()
+	}
+
+	/// The feature expressions, as `layer: expression` lines.
+	fn expressions(requirement: &Requirement) -> Vec<String> {
+		feature_expressions(requirement)
+			.into_iter()
+			.map(|(layer, expression)| format!("{layer}: {expression}"))
+			.collect()
 	}
 
 	/// The `streets`/`buildings` shape the format was documented with, as a style.
@@ -220,52 +128,23 @@ mod tests {
 
 	#[test]
 	fn renders_the_documentation_example() {
-		// Parameters come out in alphabetical order and quoting picks the least punctuation that
-		// parses back — both the serializer's doing, which is the point of building nodes rather
-		// than text.
+		let r = parse(STREETS);
+		assert_eq!(layer_names(&r), ["buildings", "streets"]);
 		assert_eq!(
-			render_text(&parse(STREETS)),
+			expressions(&r),
 			[
-				r"vector_filter_layers filter=[buildings, streets] invert=true",
-				r"vector_filter_features expr='zoom >= 14' layer=buildings",
-				r#"vector_filter_features expr="(zoom >= 5 && ((has(props.kind) && props.kind in ['motorway', 'trunk']) && !((has(props.bridge) && props.bridge == true)))) || (zoom >= 12)" layer=streets"#,
-				r"vector_filter_properties invert=true regex='^(?:streets/bridge|streets/kind|streets/service|streets/tunnel)$'",
+				"buildings: zoom >= 14",
+				"streets: (zoom >= 5 && ((has(props.kind) && props.kind in ['motorway', 'trunk']) && !((has(props.bridge) && props.bridge == true)))) || (zoom >= 12)",
 			]
-			.join("\n")
 		);
-	}
-
-	#[test]
-	fn buildings_is_drawn_as_geometry_so_keeps_no_properties() {
-		// `buildings` is drawn with no filter and nothing read from it, so it contributes nothing to
-		// the property regex and gets a zoom-only feature filter.
-		let text = render_text(&parse(STREETS));
-		assert!(
-			!text.contains("buildings/"),
-			"no property of buildings survives: {text}"
-		);
-		assert!(
-			text.contains(r"vector_filter_features expr='zoom >= 14' layer=buildings"),
-			"buildings keeps a zoom-only filter: {text}"
-		);
-	}
-
-	#[test]
-	fn the_property_filter_comes_last() {
-		// Not cosmetic: the feature filters read properties through `has(props.k)`, so stripping
-		// properties first would make every guard false and delete the features they keep.
-		let names: Vec<String> = operations(&parse(STREETS)).iter().map(|n| n.name.clone()).collect();
-		assert_eq!(names.first().unwrap(), "vector_filter_layers");
-		assert_eq!(names.last().unwrap(), "vector_filter_properties");
 	}
 
 	#[test]
 	fn a_layer_that_keeps_everything_gets_no_feature_filter() {
-		// Unfiltered and drawn at every zoom, so the operation would decode and re-encode every
-		// feature to arrive back where it started.
+		// Unfiltered and drawn at every zoom, so the filter would decode every feature's properties
+		// to arrive back where it started.
 		let r = parse(r#"{"layers":[{"id":"a","source-layer":"a","paint":{"fill-color":["get","k"]}}]}"#);
-		let text = render_text(&r);
-		assert!(!text.contains("vector_filter_features"), "got: {text}");
+		assert_eq!(expressions(&r), Vec::<String>::new());
 	}
 
 	#[test]
@@ -278,7 +157,7 @@ mod tests {
 				{"id":"b","source-layer":"a"}
 			]}"#,
 		);
-		assert!(!render_text(&r).contains("vector_filter_features"));
+		assert_eq!(expressions(&r), Vec::<String>::new());
 	}
 
 	#[test]
@@ -290,20 +169,16 @@ mod tests {
 		let r = Requirement {
 			layers: [(
 				"a".to_string(),
-				crate::reduce::LayerRequirement {
-					properties: Properties::Listed(vec!["k".to_string()]),
+				LayerRequirement {
+					properties: Properties::Listed([("k".to_string(), 0..=14)].into_iter().collect()),
 					keep: Vec::new(),
 				},
 			)]
 			.into_iter()
 			.collect(),
 		};
-		let text = render_text(&r);
-		assert!(!text.contains("vector_filter_features"), "got: {text}");
-		assert!(
-			text.contains("vector_filter_layers filter=a"),
-			"the layer survives: {text}"
-		);
+		assert_eq!(expressions(&r), Vec::<String>::new());
+		assert_eq!(layer_names(&r), ["a"], "the layer survives");
 	}
 
 	#[test]
@@ -311,45 +186,31 @@ mod tests {
 		// An unreadable filter contributes nothing, so the entry is its zoom test alone — which
 		// `vector_filter_features` then answers once per tile rather than once per feature.
 		let r = parse(r#"{"layers":[{"id":"a","source-layer":"a","minzoom":12,"filter":["sorcery","k"]}]}"#);
-		assert!(
-			render_text(&r).contains(r"vector_filter_features expr='zoom >= 12' layer=a"),
-			"got: {}",
-			render_text(&r)
-		);
+		assert_eq!(expressions(&r), ["a: zoom >= 12"]);
 	}
 
-	#[test]
-	fn property_names_are_escaped_into_the_regex() {
-		// `addr:street` and `name.en` carry regex metacharacters; unescaped, `.` would match any
-		// character and keep properties the style never asked for.
-		let r = parse(
-			r#"{"layers":[{"id":"a","source-layer":"a",
-				"layout":{"text-field":["get","name.en"]},"paint":{"x":["get","addr:street"]}}]}"#,
-		);
-		let text = render_text(&r);
-		assert!(text.contains(r"a/name\.en"), "the dot is escaped: {text}");
-	}
-
-	#[test]
-	fn a_requirement_that_reads_no_properties_keeps_none() {
-		// `[^\s\S]` never matches, so with `invert=true` every property is dropped. An empty
-		// alternation would have been `^(?:)$`, which matches the empty string instead.
-		let r = parse(r##"{"layers":[{"id":"a","source-layer":"a","paint":{"fill-color":"#fff"}}]}"##);
-		assert!(render_text(&r).contains(r"regex='[^\s\S]'"), "got: {}", render_text(&r));
-	}
-
-	/// Renders `requirement` into a full pipeline and reports what `check` makes of it.
+	/// What `check` makes of every expression, as a `vector_filter_features` node.
 	///
-	/// This is the cheap half of proving the renderer right: `check_pipeline` needs no factory,
-	/// no runtime and no tiles, but it resolves every operation name, validates every parameter
-	/// against the operation's own metadata, and compiles the CEL. A mis-escaped name or an
-	/// expression with unbalanced parentheses is caught here rather than as a silently wrong
-	/// reduction later.
+	/// `check_pipeline` needs no factory, no runtime and no tiles, but it compiles the CEL with the
+	/// same code `vector_reduce_to_style` does. A mis-escaped name or an expression with unbalanced
+	/// parentheses is caught here rather than as a pipeline that refuses to build. The nodes are built
+	/// as values, so VPL quoting is the serializer's problem.
 	fn problems(requirement: &Requirement) -> Vec<String> {
-		let text = format!(
-			"from_debug format=mvt | {}",
-			render_text(requirement).replace('\n', " | ")
-		);
+		let mut nodes = vec!["from_debug format=mvt".to_string()];
+		for (layer, expression) in feature_expressions(requirement) {
+			let node = crate::vpl::VPLNode {
+				name: "vector_filter_features".to_string(),
+				properties: [
+					("layer".to_string(), vec![layer]),
+					("expr".to_string(), vec![expression]),
+				]
+				.into_iter()
+				.collect(),
+				sources: Vec::new(),
+			};
+			nodes.push(node.to_string());
+		}
+		let text = nodes.join(" | ");
 		let pipeline =
 			crate::vpl::parse_vpl(&text).unwrap_or_else(|e| panic!("rendered VPL does not parse: {text}\n{e}"));
 		crate::check_pipeline(&pipeline)
@@ -359,7 +220,7 @@ mod tests {
 	}
 
 	#[test]
-	fn every_deployed_style_renders_a_valid_pipeline() {
+	fn every_deployed_style_renders_expressions_that_compile() {
 		// The real cartography, not a fixture written to suit the renderer: 324 style layers and
 		// 318 filters in `colorful`, 207 and 203 in `neutrino`.
 		for name in ["colorful.json", "neutrino.json"] {
@@ -368,7 +229,7 @@ mod tests {
 	}
 
 	#[test]
-	fn awkward_names_still_render_a_valid_pipeline() {
+	fn awkward_names_still_render_expressions_that_compile() {
 		// Every character class that has bitten an escaper: quotes, backslashes, regex
 		// metacharacters, spaces, and a CEL keyword as a property name.
 		let r = parse(
@@ -381,16 +242,6 @@ mod tests {
 				 "paint":{"a":["get","k"]}}
 			]}"#,
 		);
-		assert_eq!(problems(&r), Vec::<String>::new(), "got: {}", render_text(&r));
-	}
-
-	#[test]
-	fn layer_names_needing_quotes_survive_the_serializer() {
-		// Building nodes rather than text means VPL quoting is the serializer's problem, and it
-		// already knows that a name with a space cannot be bare.
-		let r = parse(r#"{"layers":[{"id":"a","source-layer":"my layer","minzoom":3,"paint":{"a":["get","k"]}}]}"#);
-		let text = render_text(&r);
-		assert!(text.contains("filter='my layer'"), "got: {text}");
-		assert!(text.contains("layer='my layer'"), "got: {text}");
+		assert_eq!(problems(&r), Vec::<String>::new(), "got: {:?}", expressions(&r));
 	}
 }

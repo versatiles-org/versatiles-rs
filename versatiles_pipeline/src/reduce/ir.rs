@@ -1,9 +1,10 @@
 //! What a style needs from a tileset, as types the renderer can walk.
 //!
 //! Built by [`style::from_style`](super::style::from_style) from a MapLibre style and consumed by
-//! [`render::operations`](super::render::operations), which turns it into filter operations. It is
-//! an internal intermediate and nothing serialises it: the analysis and the rendering are two
-//! halves of one crate, so the shape between them answers to nothing but them.
+//! `vector_reduce_to_style`, with [`feature_expressions`](super::feature_expressions) writing its
+//! feature filters. It is an
+//! internal intermediate and nothing serialises it: the analysis and the rendering are two halves
+//! of one crate, so the shape between them answers to nothing but them.
 //!
 //! ## The rule that makes partial support safe
 //!
@@ -14,7 +15,7 @@
 //! widens rather than narrows — see the module docs of
 //! [`style::filter`](super::style) for the asymmetry that entails.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::RangeInclusive};
 
 /// A style's data requirement: which layers, properties and features it draws.
 #[derive(Debug, Clone, PartialEq)]
@@ -42,9 +43,14 @@ pub enum Properties {
 	/// Every property: the style reads one by a name that cannot be listed — computed at runtime, or
 	/// through the whole property map.
 	All,
-	/// These property names, sorted. Empty means the layer is drawn using geometry alone, so every
-	/// property can go.
-	Listed(Vec<String>),
+	/// These properties, each with the tile zooms it is read at. A property stays in a tile only
+	/// when the tile's zoom is in its range. Empty means the layer is drawn using geometry alone, so
+	/// every property can go.
+	///
+	/// The range spans every style layer that reads the property: a style layer that reads `ref`
+	/// from z12 and another from z14 make it `12..=14` and up. One range rather than a set of them
+	/// can keep a zoom level in a gap between two style layers; that is the widening direction.
+	Listed(BTreeMap<String, RangeInclusive<u8>>),
 }
 
 /// One (zoom range, predicate) pair. Every part is optional, and absent means "unbounded".
