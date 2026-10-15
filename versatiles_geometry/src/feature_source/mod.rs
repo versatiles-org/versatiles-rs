@@ -7,6 +7,7 @@
 
 mod csv;
 mod geojson;
+mod input;
 mod progress;
 mod shapefile;
 
@@ -14,6 +15,7 @@ use anyhow::Result;
 pub use csv::{CsvSource, CsvSourceBuilder};
 use futures::stream::BoxStream;
 pub use geojson::{Format as GeoJsonFormat, GeoJsonSource};
+pub use input::SourceInput;
 pub use progress::{ProgressCallback, ProgressReader};
 pub use shapefile::ShapefileSource;
 

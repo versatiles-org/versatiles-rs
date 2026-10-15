@@ -86,7 +86,7 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		| "Option<FilePath>"
 		| "FileLocation"
 		| "Option<FileLocation>"
-		| "GeoDataPath"
+		| "GeoDataLocation"
 		| "TileFileLocation"
 		| "ContainerLocation"
 		| "Option<ContainerLocation>"
@@ -582,7 +582,7 @@ mod tests {
 	/// `rust_type_to_ts` falls through to `"unknown"` for a type it has never
 	/// been told about, which is silent: the generated `.d.ts` still builds and
 	/// still type-checks, having quietly stopped describing one parameter. A
-	/// new newtype is exactly the change that lands there — `GeoDataPath` and
+	/// new newtype is exactly the change that lands there — `GeoDataLocation` and
 	/// `TileFileLocation` both would have, and nothing would have said so.
 	#[test]
 	fn every_parameter_renders_as_a_typescript_type() {

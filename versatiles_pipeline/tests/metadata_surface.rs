@@ -300,7 +300,7 @@ fn every_argument_naming_a_file_says_which_files() {
 			let names_a_file = field.rust_type.contains("FilePath")
 				|| field.rust_type.contains("ContainerLocation")
 				|| field.rust_type.contains("FileLocation")
-				|| field.rust_type.contains("GeoDataPath");
+				|| field.rust_type.contains("GeoDataLocation");
 			if !names_a_file {
 				continue;
 			}

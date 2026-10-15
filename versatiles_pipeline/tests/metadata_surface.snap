@@ -31,7 +31,7 @@ from_container.filename: ContainerLocation | required | accepts=suggested[versat
 from_container.ssh_identity: Option<FilePath> | optional | accepts=any
 
 from_csv [read]
-from_csv.filename: FilePath | required | accepts=suggested[csv,tsv]
+from_csv.filename: FileLocation | required | accepts=suggested[csv,tsv]
 from_csv.lon_column: String | required | names=field-of:filename
 from_csv.lat_column: String | required | names=field-of:filename
 from_csv.id_column: Option<String> | optional | names=field-of:filename
@@ -80,7 +80,7 @@ from_gdal_raster.bounds: Option<CrsExtent> | optional
 from_gdal_raster.geo_transform: Option<RasterTransform> | optional
 
 from_geo [read]
-from_geo.filename: GeoDataPath | required | accepts=only[geojson,json,ndjson,ndgeojson,geojsonl,geojsonseq,shp]
+from_geo.filename: GeoDataLocation | required | accepts=only[geojson,json,ndjson,ndgeojson,geojsonl,geojsonseq,shp]
 from_geo.layer_name: Option<String> | optional | names=new-layer
 from_geo.min_zoom: Option<ZoomLevel> | optional | default=0 | bounds=[0,30] int
 from_geo.max_zoom: Option<ZoomLevel> | optional | bounds=[0,30] int
@@ -209,7 +209,7 @@ vector_repair [transform]
 vector_repair.drop_offenders: Option<bool> | optional | default=false
 
 vector_update_properties [transform]
-vector_update_properties.data_source_path: FilePath | required | accepts=suggested[csv,tsv]
+vector_update_properties.data_source_path: FileLocation | required | accepts=suggested[csv,tsv]
 vector_update_properties.layer_name: String | required | names=layer-of-source
 vector_update_properties.id_field_tiles: String | required | names=field-of-source
 vector_update_properties.id_field_data: String | required | names=field-of:data_source_path

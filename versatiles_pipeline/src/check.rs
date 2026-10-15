@@ -514,14 +514,25 @@ mod tests {
 	}
 
 	/// Where the data is, as something a consumer can read — and, for the
-	/// thirteen that take a path, refused early instead of on `to_path_buf`
-	/// after the pipeline was built (#260).
+	/// arguments that take only a local path, refused early instead of on
+	/// `to_path_buf` after the pipeline was built (#260).
 	#[test]
 	fn a_location_of_the_wrong_kind_is_reported() {
 		assert_eq!(
-			problems("from_csv filename=\"https://example.org/cities.csv\" lon_column=x lat_column=y"),
-			["'from_csv' does not accept 'filename=https://example.org/cities.csv': \
-				 'https://example.org/cities.csv' is a URL, and this argument takes a path to a file"]
+			problems("from_container filename=a.versatiles ssh_identity=\"https://example.org/id_ed25519\""),
+			[
+				"'from_container' does not accept 'ssh_identity=https://example.org/id_ed25519': \
+				 'https://example.org/id_ed25519' is a URL, and this argument takes a path to a file"
+			]
+		);
+		assert_eq!(
+			problems("from_csv filename=\"ftp://example.org/cities.csv\" lon_column=x lat_column=y"),
+			["'from_csv' does not accept 'filename=ftp://example.org/cities.csv': \
+				 'ftp://example.org/cities.csv' is a ftp URL; a file can be read from an http, https or sftp URL"]
+		);
+		assert!(
+			problems("from_csv filename=\"https://example.org/cities.csv\" lon_column=x lat_column=y").is_empty(),
+			"a CSV can be read from a URL"
 		);
 		assert_eq!(
 			problems("from_tilejson url=\"tiles/index.json\""),
@@ -739,7 +750,7 @@ mod tests {
 	/// A file extension the operation cannot read is a problem `check` reports,
 	/// not one the build discovers.
 	///
-	/// This is what typing `from_geo.filename` as a `GeoDataPath` bought beyond
+	/// This is what typing `from_geo.filename` as a `GeoDataLocation` bought beyond
 	/// the dialog filter: the derive emits the type's `TryFrom` into
 	/// `VPLFieldMeta::validate`, so an editor underlines `notes.txt` as it is
 	/// typed. As a `FilePath` the value parsed fine here and failed later, in

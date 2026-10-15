@@ -11,6 +11,7 @@ use versatiles_core::{
 	Blob, TileFormat,
 	io::{location_for_display, url_for_display},
 };
+use versatiles_geometry::feature_source::SourceInput;
 
 use crate::PipelineFactory;
 
@@ -58,6 +59,10 @@ impl FilePath {
 	///
 	/// Errors when the result is not a local path: a relative path in a VPL
 	/// loaded from a URL resolves to a URL.
+	#[cfg_attr(
+		not(feature = "gdal"),
+		expect(dead_code, reason = "only the GDAL readers resolve a local-only path")
+	)]
 	pub fn resolve(&self, factory: &PipelineFactory) -> Result<PathBuf> {
 		factory
 			.resolve_location(&DataLocation::Path(self.0.clone()))?
@@ -99,30 +104,6 @@ impl TryFrom<&str> for FilePath {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileLocation(String);
 
-/// What [`FileLocation::open`] hands to a reader: a local file stays a path,
-/// so it can be streamed, and a remote one arrives as bytes.
-///
-/// `Arc`, because a `Blob` is a `Vec<u8>` and a reader that needs its own
-/// handle would otherwise copy the whole file.
-#[derive(Clone, Debug)]
-#[cfg_attr(
-	not(test),
-	expect(dead_code, reason = "no operation reads a FileInput yet; from_csv and from_geo will")
-)]
-pub enum FileInput {
-	/// A local file, resolved against the VPL document's directory.
-	Path(PathBuf),
-	/// The content of a remote file.
-	Bytes(Arc<Blob>),
-}
-
-#[cfg_attr(
-	not(test),
-	expect(
-		dead_code,
-		reason = "no operation takes a FileLocation yet; the next commits switch them over"
-	)
-)]
 impl FileLocation {
 	/// The location resolved against the VPL document's directory.
 	fn resolve(&self, factory: &PipelineFactory) -> Result<DataLocation> {
@@ -167,19 +148,29 @@ impl FileLocation {
 			.with_context(|| format!("reading {self} as text"))
 	}
 
-	/// The file for a reader that streams: a local file as its path, a remote
-	/// one fetched into memory.
+	/// The file for a reader that streams: a local file stays a path, so a
+	/// multi-GB input is still read piece by piece; a remote one is fetched
+	/// into memory, named in messages by its URL without the password.
 	///
 	/// # Errors
 	///
 	/// As [`read_all`](Self::read_all), for a URL. A local path is not
 	/// opened here, so a missing file is the reader's to report.
-	pub async fn open(&self, factory: &PipelineFactory) -> Result<FileInput> {
+	pub async fn open(&self, factory: &PipelineFactory) -> Result<SourceInput> {
 		match self.resolve(factory)? {
-			DataLocation::Path(path) => Ok(FileInput::Path(path)),
-			DataLocation::Url(url) => Ok(FileInput::Bytes(Arc::new(fetch(&url, factory).await?))),
+			DataLocation::Path(path) => Ok(SourceInput::Path(path)),
+			DataLocation::Url(url) => Ok(SourceInput::Bytes {
+				label: url_for_display(&url),
+				bytes: Arc::new(fetch(&url, factory).await?),
+			}),
 			DataLocation::Blob(_) => unreachable!("a FileLocation never resolves to inline data"),
 		}
+	}
+
+	/// Whether the location, as written, is a URL.
+	#[must_use]
+	pub fn is_url(&self) -> bool {
+		matches!(classify(&self.0), LocationKind::Url)
 	}
 
 	/// The last segment of the path or of the URL's path, for defaults such as
@@ -231,7 +222,8 @@ impl TryFrom<&str> for FileLocation {
 	}
 }
 
-/// A path to a file `from_geo` can read, refused here if it cannot.
+/// A file `from_geo` can read, on disk or behind a URL, refused here if it
+/// cannot.
 ///
 /// The extensions are the operation's own dispatch, moved to where the value is
 /// decoded. Two things follow that a `FilePath` could not give:
@@ -241,10 +233,17 @@ impl TryFrom<&str> for FileLocation {
 /// `VPLDecode` derive emits this `TryFrom` into
 /// [`VPLFieldMeta::validate`](crate::vpl::VPLFieldMeta::validate). An editor
 /// underlines `filename="notes.txt"` as it is typed rather than at build time.
+///
+/// For a URL the extension is that of the last path segment, and one without
+/// an extension is refused like a path without one. A Shapefile is refused as
+/// a URL: its `.dbf` and `.prj` have to lie beside it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GeoDataPath(FilePath);
+pub struct GeoDataLocation {
+	location: FileLocation,
+	extension: String,
+}
 
-impl GeoDataPath {
+impl GeoDataLocation {
 	/// Every extension `from_geo` reads, lowercase and without the dot.
 	///
 	/// The single source of truth: the operation dispatches on the value this
@@ -259,58 +258,67 @@ impl GeoDataPath {
 		"shp",
 	];
 
-	/// The path resolved against the VPL document's directory.
+	/// The extension this location was accepted for, lowercase and without the
+	/// dot.
+	#[must_use]
+	pub fn extension(&self) -> &str {
+		&self.extension
+	}
+
+	/// The file to read, as [`FileLocation::open`] gives it.
 	///
 	/// # Errors
 	///
-	/// As [`FilePath::resolve`].
-	pub fn resolve(&self, factory: &PipelineFactory) -> Result<PathBuf> {
-		self.0.resolve(factory)
-	}
-
-	/// The extension this path was accepted for, lowercase and without the dot.
-	///
-	/// Infallible: nothing else got past [`TryFrom`].
-	#[must_use]
-	pub fn extension(&self) -> String {
-		self
-			.0
-			.as_path()
-			.extension()
-			.and_then(|s| s.to_str())
-			.unwrap_or_default()
-			.to_ascii_lowercase()
+	/// As [`FileLocation::open`]; and for a Shapefile that resolves to a URL —
+	/// a relative path in a VPL loaded from one — before anything is fetched.
+	pub async fn open(&self, factory: &PipelineFactory) -> Result<SourceInput> {
+		if self.extension == "shp" {
+			let location = self.location.resolve(factory)?;
+			ensure!(
+				matches!(location, DataLocation::Path(_)),
+				"'{}' resolves to a URL, and a Shapefile must be a local file: its .dbf and .prj have to lie beside it",
+				self.location
+			);
+		}
+		self.location.open(factory).await
 	}
 }
 
-impl TryFrom<&str> for GeoDataPath {
+impl TryFrom<&str> for GeoDataLocation {
 	type Error = anyhow::Error;
 
 	fn try_from(text: &str) -> Result<Self> {
-		let path = FilePath::try_from(text)?;
-		let ext = path
-			.as_path()
-			.extension()
-			.and_then(|s| s.to_str())
-			.map(str::to_ascii_lowercase)
+		let location = FileLocation::try_from(text)?;
+		let extension = location
+			.file_name()
+			.and_then(|name| {
+				Path::new(&name)
+					.extension()
+					.and_then(|s| s.to_str())
+					.map(str::to_ascii_lowercase)
+			})
 			.unwrap_or_default();
 		ensure!(
-			!ext.is_empty(),
-			"file '{text}' has no extension; expected .{}",
+			!extension.is_empty(),
+			"file '{location}' has no extension; expected .{}",
 			Self::EXTENSIONS.join(" / .")
 		);
 		ensure!(
-			Self::EXTENSIONS.contains(&ext.as_str()),
-			"unsupported file extension '.{ext}'; expected .{}",
+			Self::EXTENSIONS.contains(&extension.as_str()),
+			"unsupported file extension '.{extension}'; expected .{}",
 			Self::EXTENSIONS.join(" / .")
 		);
-		Ok(Self(path))
+		ensure!(
+			!(extension == "shp" && location.is_url()),
+			"'{location}' is a Shapefile behind a URL, which cannot be read: its .dbf and .prj have to lie beside it — download them first"
+		);
+		Ok(Self { location, extension })
 	}
 }
 
-impl std::fmt::Display for GeoDataPath {
+impl std::fmt::Display for GeoDataLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		self.0.fmt(f)
+		self.location.fmt(f)
 	}
 }
 
@@ -503,8 +511,10 @@ mod tests {
 	#[case("world.GeoJSON")]
 	#[case("data/places.geojsonl")]
 	#[case("admin.shp")]
-	fn a_geo_data_path_takes_what_from_geo_reads(#[case] text: &str) {
-		assert!(GeoDataPath::try_from(text).is_ok(), "'{text}' should be accepted");
+	#[case("https://example.org/a.geojson")]
+	#[case("https://example.org/quakes.geojsonl?key=abc")]
+	fn a_geo_data_location_takes_what_from_geo_reads(#[case] text: &str) {
+		assert!(GeoDataLocation::try_from(text).is_ok(), "'{text}' should be accepted");
 	}
 
 	/// The refusal `from_geo` used to make at build time, made where the value
@@ -512,17 +522,21 @@ mod tests {
 	#[rstest]
 	#[case::wrong_extension("notes.txt", "unsupported file extension")]
 	#[case::no_extension("notes", "has no extension")]
-	#[case::a_url("https://example.org/a.geojson", "is a URL")]
-	fn a_geo_data_path_refuses_what_from_geo_cannot_read(#[case] text: &str, #[case] expected: &str) {
-		let error = GeoDataPath::try_from(text).expect_err("should be rejected");
+	#[case::url_without_extension("https://example.org/items?f=geojson", "has no extension")]
+	#[case::shapefile_url("https://example.org/admin.shp", "Shapefile behind a URL")]
+	fn a_geo_data_location_refuses_what_from_geo_cannot_read(#[case] text: &str, #[case] expected: &str) {
+		let error = GeoDataLocation::try_from(text).expect_err("should be rejected");
 		assert!(error.to_string().contains(expected), "got: {error}");
 	}
 
 	/// The extension is lowercased on the way in, so the operation's dispatch
 	/// sees one spelling.
 	#[test]
-	fn a_geo_data_path_reports_its_extension_lowercased() {
-		assert_eq!(GeoDataPath::try_from("Places.GeoJSON").unwrap().extension(), "geojson");
+	fn a_geo_data_location_reports_its_extension_lowercased() {
+		assert_eq!(
+			GeoDataLocation::try_from("Places.GeoJSON").unwrap().extension(),
+			"geojson"
+		);
 	}
 
 	#[rstest]
@@ -654,8 +668,8 @@ mod tests {
 
 		assert_eq!(location.read_all(&factory).await.unwrap().as_str(), "{}");
 		match location.open(&factory).await.unwrap() {
-			FileInput::Path(path) => assert_eq!(path, dir.path().join("file.json")),
-			FileInput::Bytes(_) => panic!("a local file should stay a path, so it can be streamed"),
+			SourceInput::Path(path) => assert_eq!(path, dir.path().join("file.json")),
+			SourceInput::Bytes { .. } => panic!("a local file should stay a path, so it can be streamed"),
 		}
 	}
 
@@ -667,6 +681,17 @@ mod tests {
 		assert!(format!("{error:#}").contains("missing.json"), "got: {error:#}");
 	}
 
+	/// A relative Shapefile in a VPL loaded from a URL resolves to a URL, which
+	/// cannot be read with its `.dbf` beside it. Refused before any fetch.
+	#[tokio::test]
+	async fn a_shapefile_that_resolves_to_a_url_is_refused() {
+		let base = DataLocation::try_from("https://example.org/pipelines/admin.vpl").unwrap();
+		let factory = PipelineFactory::new_runtime_reader(base, versatiles_container::TilesRuntime::new_silent());
+		let location = GeoDataLocation::try_from("admin.shp").unwrap();
+		let message = format!("{:#}", location.open(&factory).await.unwrap_err());
+		assert!(message.contains("must be a local file"), "got: {message}");
+	}
+
 	#[tokio::test]
 	async fn a_url_is_fetched() {
 		let base = serve(r#"{"version":8}"#).await;
@@ -676,8 +701,11 @@ mod tests {
 
 		assert_eq!(location.read_all(&factory).await.unwrap().as_str(), r#"{"version":8}"#);
 		match location.open(&factory).await.unwrap() {
-			FileInput::Bytes(blob) => assert_eq!(blob.as_str(), r#"{"version":8}"#),
-			FileInput::Path(path) => panic!("a URL should arrive as bytes, got {path:?}"),
+			SourceInput::Bytes { bytes, label } => {
+				assert_eq!(bytes.as_str(), r#"{"version":8}"#);
+				assert_eq!(label, format!("{base}/file.json"));
+			}
+			SourceInput::Path(path) => panic!("a URL should arrive as bytes, got {path:?}"),
 		}
 	}
 

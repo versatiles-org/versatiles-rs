@@ -8,7 +8,7 @@ use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 
 use crate::{
 	PipelineFactory,
-	helpers::{CsvReader, SeparatorChar, location::FilePath},
+	helpers::{CsvReader, SeparatorChar, location::FileLocation},
 	operations::transform::{AsTileTransform, TransformOp, VectorTransform},
 	vpl::VPLNode,
 };
@@ -22,9 +22,9 @@ use crate::{
 /// published statistics table is attached to the geometry it refers to — see
 /// `from_grid` and `from_h3` for generating that geometry.
 struct Args {
-	/// Path to the CSV or TSV file, which must have a header row.
+	/// Path or URL of the CSV or TSV file, which must have a header row.
 	#[vpl(accepts = "csv, tsv")]
-	data_source_path: FilePath,
+	data_source_path: FileLocation,
 
 	/// Name of the layer whose features are updated.
 	#[vpl(layer_of_source)]
@@ -170,8 +170,8 @@ impl Runner {
 	) -> Result<TransformOp<AsTileTransform<Runner>>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let path = args.data_source_path.resolve(factory)?;
-		let mut csv_reader = CsvReader::new(&path, factory.runtime()).with_string_field(&args.id_field_data);
+		let input = args.data_source_path.open(factory).await?;
+		let mut csv_reader = CsvReader::from_input(input, factory.runtime()).with_string_field(&args.id_field_data);
 
 		if let Some(sep) = args.field_separator {
 			csv_reader = csv_reader.with_field_separator(sep.char());
@@ -232,7 +232,7 @@ mod tests {
 
 		let runner = Runner {
 			args: Args {
-				data_source_path: FilePath::try_from("data.csv").unwrap(),
+				data_source_path: FileLocation::try_from("data.csv").unwrap(),
 				id_field_tiles: "id".to_string(),
 				id_field_data: "id".to_string(),
 				layer_name: "test_layer".to_string(),
@@ -261,7 +261,7 @@ mod tests {
 		.unwrap();
 
 		let args = Args::from_vpl_node(&vpl_node).unwrap();
-		assert_eq!(args.data_source_path.as_path(), std::path::Path::new("data.csv"));
+		assert_eq!(args.data_source_path.to_string(), "data.csv");
 		assert_eq!(args.id_field_tiles, "id");
 		assert_eq!(args.id_field_data, "id");
 		assert_eq!(args.replace_properties, Some(true));
@@ -319,6 +319,26 @@ mod tests {
 			.join("\n");
 
 		Ok((prop_str, fields))
+	}
+
+	#[tokio::test]
+	async fn the_data_can_come_from_a_url() -> Result<()> {
+		let base =
+			crate::helpers::test_server::serve_files(vec![("/data.csv", b"data_id,value\n1,test\n".to_vec())]).await;
+		let operation = PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!(
+				"from_debug | vector_update_properties data_source_path=\"{base}/data.csv\" \
+				 id_field_tiles=index id_field_data=data_id layer_name=debug_y"
+			))
+			.await?;
+		let mut stream = operation
+			.tile_stream(TileCoord::new(10, 1000, 100)?.to_tile_bbox())
+			.await?;
+		let tile = stream.next().await.unwrap().1.into_vector()?;
+		let layer = tile.find_layer("debug_y").unwrap();
+		let properties = format!("{:?}", layer.features[1].decode_properties(layer)?);
+		assert!(properties.contains("\"value\": String(\"test\")"), "got: {properties}");
+		Ok(())
 	}
 
 	#[tokio::test]

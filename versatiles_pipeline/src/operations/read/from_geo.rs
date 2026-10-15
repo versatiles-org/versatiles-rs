@@ -15,7 +15,7 @@
 //! from_geo filename="places.geojson" layer_name="places" max_zoom=12
 //! ```
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Result, bail, ensure};
 use futures::StreamExt;
@@ -24,7 +24,7 @@ use versatiles_core::{GeoBBox, TileCompression, ZoomLevel};
 use versatiles_derive::context;
 use versatiles_geometry::{
 	feature_import::{FeatureImport, FeatureImportArgs, PointReductionStrategy},
-	feature_source::{FeatureSource, GeoJsonSource, ProgressCallback, ShapefileSource},
+	feature_source::{FeatureSource, GeoJsonFormat, GeoJsonSource, ProgressCallback, ShapefileSource, SourceInput},
 	geo::GeoFeature,
 };
 
@@ -32,7 +32,7 @@ use crate::{
 	PipelineFactory,
 	helpers::{
 		feature_tile_source::{BBoxClip, FeatureTileSource, FeatureTileSourceArgs, apply_property_filters},
-		location::GeoDataPath,
+		location::GeoDataLocation,
 		tile_size_monitor::MaxTileBytes,
 	},
 	vpl::VPLNode,
@@ -87,8 +87,8 @@ const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 /// this makes that explicit; it is also the way to discard an id that is just
 /// noise.
 struct Args {
-	/// Path to the input file; its format comes from the extension.
-	filename: GeoDataPath,
+	/// Path or URL of the input file; its format comes from the extension.
+	filename: GeoDataLocation,
 	/// Name of the layer to write into. Defaults to the file's stem.
 	#[vpl(new_layer)]
 	layer_name: Option<String>,
@@ -143,33 +143,31 @@ impl Operation {
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		reject_unsupported_args(&args)?;
-		let path = args.filename.resolve(factory)?;
+		let input = args.filename.open(factory).await?;
 
-		let layer_name = args.layer_name.clone().unwrap_or_else(|| {
-			path
-				.file_stem()
-				.and_then(|s| s.to_str())
-				.unwrap_or("features")
-				.to_string()
-		});
+		let layer_name = args
+			.layer_name
+			.clone()
+			.or_else(|| input.file_stem())
+			.unwrap_or_else(|| "features".to_string());
 
 		let point_reduction = args.point_reduction;
 		let compression = args.compression.unwrap_or(TileCompression::Gzip);
 		let clip = args.bbox.map(BBoxClip::new);
 
-		// Which reader to use. Every arm is an extension `GeoDataPath` accepted,
+		// Which reader to use. Every arm is an extension `GeoDataLocation` accepted,
 		// and it accepted nothing else — so this maps the set rather than
 		// guarding it, and the set itself lives on the type. An extension added
-		// to `GeoDataPath::EXTENSIONS` without an arm here is a compile error.
+		// to `GeoDataLocation::EXTENSIONS` without an arm here is a compile error.
 		let ext = args.filename.extension();
-		let format_label = match ext.as_str() {
+		let format_label = match ext {
 			"geojson" | "json" => "GeoJSON",
 			"ndjson" | "ndgeojson" | "geojsonl" | "geojsonseq" => "line-delimited GeoJSON",
 			"shp" => "Shapefile",
-			other => unreachable!("'{other}' is not an extension GeoDataPath accepts"),
+			other => unreachable!("'{other}' is not an extension GeoDataLocation accepts"),
 		};
-		log::debug!("from_geo: loading {format_label} from {}", path.display());
-		let mut features = load_features(&path, ext.as_str(), format_label, factory, clip.as_ref()).await?;
+		log::debug!("from_geo: loading {format_label} from {}", input.label());
+		let mut features = load_features(input, ext, format_label, factory, clip.as_ref()).await?;
 		if args.ignore_id.unwrap_or(false) {
 			for f in &mut features {
 				f.id = None;
@@ -183,7 +181,7 @@ impl Operation {
 				!features.is_empty(),
 				"bbox={:?} selects no features from {}",
 				clip.geo().as_tuple(),
-				path.display()
+				args.filename
 			);
 		}
 
@@ -238,13 +236,13 @@ fn reject_unsupported_args(args: &Args) -> Result<()> {
 /// Build the right [`FeatureSource`] for `ext`, attach a byte-level progress
 /// bar when the input is big enough to be visibly slow, and drain it.
 async fn load_features(
-	path: &Path,
+	input: SourceInput,
 	ext: &str,
 	format_label: &str,
 	factory: &PipelineFactory,
 	clip: Option<&BBoxClip>,
 ) -> Result<Vec<GeoFeature>> {
-	let total_bytes = source_size_bytes(path, ext);
+	let total_bytes = source_size_bytes(&input, ext);
 	let (handle, cb) = if total_bytes >= PROGRESS_MIN_BYTES {
 		let handle = factory
 			.runtime()
@@ -258,20 +256,24 @@ async fn load_features(
 
 	let features = match ext {
 		"geojson" | "json" => {
-			let mut s = GeoJsonSource::new(path);
+			let mut s = GeoJsonSource::from_input(input, GeoJsonFormat::FeatureCollection);
 			if let Some(cb) = cb {
 				s = s.with_progress(cb);
 			}
 			drain(&s, clip).await?
 		}
 		"ndjson" | "ndgeojson" | "geojsonl" | "geojsonseq" => {
-			let mut s = GeoJsonSource::new_line_delimited(path);
+			let mut s = GeoJsonSource::from_input(input, GeoJsonFormat::LineDelimited);
 			if let Some(cb) = cb {
 				s = s.with_progress(cb);
 			}
 			drain(&s, clip).await?
 		}
 		"shp" => {
+			// `GeoDataLocation::open` refuses a Shapefile that is not a local file.
+			let SourceInput::Path(path) = input else {
+				unreachable!("a Shapefile arrives as a local path")
+			};
 			let mut s = ShapefileSource::new(path);
 			if let Some(cb) = cb {
 				s = s.with_progress(cb);
@@ -290,9 +292,11 @@ async fn load_features(
 /// shapefiles that's the sum of `.shp` + `.dbf` (the .shx is small and
 /// the projection file is negligible). Anything we can't stat returns 0,
 /// which falls below the progress threshold and silently disables the bar.
-fn source_size_bytes(path: &Path, ext: &str) -> u64 {
-	let primary = std::fs::metadata(path).map_or(0, |m| m.len());
-	if ext == "shp" {
+fn source_size_bytes(input: &SourceInput, ext: &str) -> u64 {
+	let primary = input.len();
+	if ext == "shp"
+		&& let SourceInput::Path(path) = input
+	{
 		let dbf = path.with_extension("dbf");
 		let dbf_len = std::fs::metadata(&dbf).map_or(0, |m| m.len());
 		primary.saturating_add(dbf_len)
@@ -354,6 +358,32 @@ mod tests {
 		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&blob)?;
 		assert_eq!(vt.layers[0].name, "places");
 		assert_eq!(vt.layers[0].features.len(), 5);
+		Ok(())
+	}
+
+	/// GeoJSON and line-delimited GeoJSON from a URL give the tiles the local
+	/// files give, with the layer named after the URL's file.
+	#[rstest::rstest]
+	#[case("places.geojson")]
+	#[case("places.geojsonl")]
+	#[tokio::test]
+	async fn geojson_from_a_url_gives_the_tiles_of_the_local_file(#[case] file: &str) -> Result<()> {
+		const COMMON: &str = "max_zoom=8 polygon_simplify=0 line_simplify=0 polygon_min_area=0 line_min_length=0";
+		let content = std::fs::read(format!("../testdata/{file}"))?;
+		let base = crate::helpers::test_server::serve_files(vec![(&format!("/{file}"), content)]).await;
+		let factory = PipelineFactory::new_dummy();
+		let remote = factory
+			.operation_from_vpl(&format!("from_geo filename=\"{base}/{file}\" {COMMON}"))
+			.await?;
+		let local = factory
+			.operation_from_vpl(&format!("from_geo filename=\"../testdata/{file}\" {COMMON}"))
+			.await?;
+
+		assert!(remote.tilejson().vector_layers.find("places").is_some());
+		let coord = TileCoord::new(0, 0, 0)?;
+		let remote_tile = remote.tile(&coord).await?.unwrap().into_blob(&Uncompressed)?;
+		let local_tile = local.tile(&coord).await?.unwrap().into_blob(&Uncompressed)?;
+		assert_eq!(remote_tile, local_tile);
 		Ok(())
 	}
 
@@ -445,7 +475,7 @@ mod tests {
 	///
 	/// `assert!(is_err())` alone passed for the wrong reason: `places.txt` is
 	/// not a committed fixture, so on a clean checkout this reported a missing
-	/// file and the extension was never reached. `GeoDataPath` now refuses the
+	/// file and the extension was never reached. `GeoDataLocation` now refuses the
 	/// name before anything opens it, which is what makes the assertion below
 	/// meaningful — and true whether or not the file is there.
 	#[tokio::test]

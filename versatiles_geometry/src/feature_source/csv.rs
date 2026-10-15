@@ -8,23 +8,19 @@
 //! v1 only supports the lon/lat path — WKT geometry columns are out of
 //! scope. The `lon_column` and `lat_column` fields are both required.
 
-use std::{
-	fs::File,
-	io::BufReader,
-	path::{Path, PathBuf},
-};
+use std::{io::BufReader, path::Path};
 
 use anyhow::{Context, Result, bail};
 use futures::stream::{self, BoxStream, StreamExt};
 use geo_types::{Geometry, Point};
 
-use super::{FeatureSource, ProgressCallback, ProgressReader};
+use super::{FeatureSource, ProgressCallback, ProgressReader, SourceInput};
 use crate::geo::{GeoFeature, GeoProperties, GeoValue};
 
 /// Reads point features from a CSV file using explicit lon/lat columns.
 #[derive(Clone)]
 pub struct CsvSource {
-	path: PathBuf,
+	input: SourceInput,
 	name: String,
 	lon_column: String,
 	lat_column: String,
@@ -37,7 +33,7 @@ pub struct CsvSource {
 impl std::fmt::Debug for CsvSource {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("CsvSource")
-			.field("path", &self.path)
+			.field("input", &self.input)
 			.field("name", &self.name)
 			.field("lon_column", &self.lon_column)
 			.field("lat_column", &self.lat_column)
@@ -52,7 +48,7 @@ impl std::fmt::Debug for CsvSource {
 /// Builder for [`CsvSource`]. `path`, `lon_column`, and `lat_column` are required.
 #[derive(Clone)]
 pub struct CsvSourceBuilder {
-	path: PathBuf,
+	input: SourceInput,
 	lon_column: String,
 	lat_column: String,
 	id_column: Option<String>,
@@ -65,8 +61,15 @@ impl CsvSourceBuilder {
 	/// Construct a builder pointing at `path` with the required lon/lat columns.
 	#[must_use]
 	pub fn new(path: impl AsRef<Path>, lon_column: impl Into<String>, lat_column: impl Into<String>) -> Self {
+		Self::from_input(SourceInput::from(path.as_ref()), lon_column, lat_column)
+	}
+
+	/// Construct a builder reading `input` — a path or bytes already in
+	/// memory — with the required lon/lat columns.
+	#[must_use]
+	pub fn from_input(input: SourceInput, lon_column: impl Into<String>, lat_column: impl Into<String>) -> Self {
 		Self {
-			path: path.as_ref().to_path_buf(),
+			input,
 			lon_column: lon_column.into(),
 			lat_column: lat_column.into(),
 			id_column: None,
@@ -110,14 +113,9 @@ impl CsvSourceBuilder {
 		if !self.has_header {
 			bail!("CSV inputs without a header row are not supported in v1");
 		}
-		let name = self
-			.path
-			.file_stem()
-			.and_then(|s| s.to_str())
-			.unwrap_or("features")
-			.to_string();
+		let name = self.input.file_stem().unwrap_or_else(|| "features".to_string());
 		Ok(CsvSource {
-			path: self.path,
+			input: self.input,
 			name,
 			lon_column: self.lon_column,
 			lat_column: self.lat_column,
@@ -131,7 +129,8 @@ impl CsvSourceBuilder {
 
 impl FeatureSource for CsvSource {
 	fn load(&self) -> Result<BoxStream<'static, Result<GeoFeature>>> {
-		let file = File::open(&self.path).with_context(|| format!("opening CSV file {}", self.path.display()))?;
+		let label = self.input.label();
+		let file = self.input.open().with_context(|| format!("opening CSV file {label}"))?;
 		let reader = BufReader::new(ProgressReader::maybe(file, self.progress.clone()));
 		let mut csv_reader = csv::ReaderBuilder::new()
 			.delimiter(self.delimiter)
@@ -140,7 +139,7 @@ impl FeatureSource for CsvSource {
 
 		let headers = csv_reader
 			.headers()
-			.with_context(|| format!("reading CSV header from {}", self.path.display()))?
+			.with_context(|| format!("reading CSV header from {label}"))?
 			.clone();
 
 		let lon_idx = column_index(&headers, &self.lon_column)?;
@@ -152,7 +151,6 @@ impl FeatureSource for CsvSource {
 			.transpose()?;
 
 		let header_names: Vec<String> = headers.iter().map(str::to_string).collect();
-		let path_for_errors = self.path.clone();
 
 		// Per-row errors (malformed CSV record, unparseable lon/lat) are logged
 		// once per source and the row is skipped; one bad row never aborts the
@@ -184,7 +182,7 @@ impl FeatureSource for CsvSource {
 		if skipped > 0 {
 			log::warn!(
 				"CSV {} had {skipped} unreadable row(s); first error: {}",
-				path_for_errors.display(),
+				label,
 				first_error.as_deref().unwrap_or("(none recorded)"),
 			);
 		}

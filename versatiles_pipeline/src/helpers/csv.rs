@@ -60,7 +60,10 @@ use anyhow::{Result, bail};
 use versatiles_container::TilesRuntime;
 use versatiles_core::utils::{CsvHeader, read_csv_header, read_csv_iter};
 use versatiles_derive::context;
-use versatiles_geometry::geo::{GeoProperties, GeoValue};
+use versatiles_geometry::{
+	feature_source::SourceInput,
+	geo::{GeoProperties, GeoValue},
+};
 
 /// A configurable CSV/TSV file reader.
 ///
@@ -103,7 +106,7 @@ pub struct CsvReader {
 	pub decimal_separator: Option<char>,
 
 	runtime: TilesRuntime,
-	path: std::path::PathBuf,
+	input: SourceInput,
 	string_fields: HashSet<String>,
 }
 
@@ -131,10 +134,17 @@ impl CsvReader {
 	/// ```
 	#[must_use]
 	pub fn new(path: &Path, runtime: TilesRuntime) -> Self {
-		// Auto-detect based on file extension
-		let field_separator = if let Some(ext) = path.extension()
-			&& ext.eq_ignore_ascii_case("tsv")
-		{
+		Self::from_input(SourceInput::from(path), runtime)
+	}
+
+	/// Creates a new `CsvReader` for `input`: a path, or a file already in
+	/// memory, such as one fetched from a URL.
+	///
+	/// The separator is detected from the extension as in [`new`](Self::new);
+	/// for bytes, from the extension of the label's last segment.
+	#[must_use]
+	pub fn from_input(input: SourceInput, runtime: TilesRuntime) -> Self {
+		let field_separator = if input.extension().as_deref() == Some("tsv") {
 			b'\t'
 		} else {
 			b','
@@ -144,7 +154,7 @@ impl CsvReader {
 			field_separator,
 			decimal_separator: None,
 			runtime,
-			path: path.to_path_buf(),
+			input,
 			string_fields: HashSet::new(),
 		}
 	}
@@ -235,7 +245,20 @@ impl CsvReader {
 	/// # Ok(()) }
 	/// ```
 	pub fn read_header(&self) -> Result<CsvHeader> {
-		read_csv_header(&self.path, Some(self.field_separator))
+		match &self.input {
+			SourceInput::Path(path) => read_csv_header(path, Some(self.field_separator)),
+			SourceInput::Bytes { .. } => {
+				let reader = BufReader::new(self.input.open()?);
+				let columns = read_csv_iter(reader, self.field_separator)?
+					.next()
+					.ok_or_else(|| anyhow::anyhow!("CSV file has no header row"))??
+					.0;
+				Ok(CsvHeader {
+					columns,
+					separator: self.field_separator,
+				})
+			}
+		}
 	}
 
 	/// Converts a string value to a [`GeoValue`], applying decimal separator conversion if needed.
@@ -285,13 +308,10 @@ impl CsvReader {
 	/// }
 	/// # Ok(()) }
 	/// ```
-	#[context("Failed to read CSV file at path: {:?}", self.path)]
+	#[context("Failed to read CSV file {}", self.input.label())]
 	pub async fn read(&self) -> Result<Vec<GeoProperties>> {
-		let file =
-			std::fs::File::open(&self.path).with_context(|| format!("Failed to open file at path: {:?}", self.path))?;
-
-		let size = file.metadata()?.len();
-		let progress = self.runtime.create_progress("read csv", size);
+		let file = self.input.open()?;
+		let progress = self.runtime.create_progress("read csv", self.input.len());
 
 		let reader = BufReader::new(file);
 

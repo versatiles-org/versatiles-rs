@@ -129,7 +129,7 @@ A tile over `max_tile_bytes` is dropped while streaming and an error when a sing
 
 ### Parameters
 
-- **`filename`: path (required)** - Path to the CSV file.
+- **`filename`: path or URL (required)** - Path or URL of the CSV file.
 - **`lon_column`: String (required)** - Column holding the longitude, in WGS84 degrees.
 - **`lat_column`: String (required)** - Column holding the latitude, in WGS84 degrees.
 - _`id_column`: String (optional)_ - Column to expose as the feature id. Defaults to emitting no id.
@@ -260,7 +260,7 @@ A tile over `max_tile_bytes` is dropped while streaming and an error when a sing
 
 ### Parameters
 
-- **`filename`: path (required)** - Path to the input file; its format comes from the extension.
+- **`filename`: path or URL (required)** - Path or URL of the input file; its format comes from the extension.
 - _`layer_name`: String (optional)_ - Name of the layer to write into. Defaults to the file's stem.
 - _`min_zoom`: 0-30 (optional)_ - Lowest zoom level to emit. Defaults to `0`.
 - _`max_zoom`: 0-30 (optional)_ - Highest zoom level to emit. Defaults to a heuristic capped at `14`.
@@ -842,7 +842,7 @@ Each row of a CSV or TSV file is matched to the features whose `id_field_tiles` 
 
 ### Parameters
 
-- **`data_source_path`: path (required)** - Path to the CSV or TSV file, which must have a header row.
+- **`data_source_path`: path or URL (required)** - Path or URL of the CSV or TSV file, which must have a header row.
 - **`layer_name`: String (required)** - Name of the layer whose features are updated.
 - **`id_field_tiles`: String (required)** - Feature property holding the id to match on.
 - **`id_field_data`: String (required)** - Column in the data file holding the id to match on.

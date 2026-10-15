@@ -28,7 +28,7 @@ use crate::{
 	helpers::{
 		CsvDelimiter,
 		feature_tile_source::{BBoxClip, FeatureTileSource, FeatureTileSourceArgs, apply_property_filters},
-		location::FilePath,
+		location::FileLocation,
 		tile_size_monitor::MaxTileBytes,
 	},
 	vpl::VPLNode,
@@ -61,9 +61,9 @@ const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 /// pass, where cropping afterwards with `versatiles convert --bbox` means
 /// writing the whole thing out first. The crop is tile-granular, as it is there.
 struct Args {
-	/// Path to the CSV file.
+	/// Path or URL of the CSV file.
 	#[vpl(accepts = "csv, tsv")]
-	filename: FilePath,
+	filename: FileLocation,
 	/// Column holding the longitude, in WGS84 degrees.
 	#[vpl(field_of = "filename")]
 	lon_column: String,
@@ -118,18 +118,18 @@ impl Operation {
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		reject_unsupported_args(&args)?;
-		let path = args.filename.resolve(factory)?;
+		let input = args.filename.open(factory).await?;
+		let label = input.label();
+		let total_bytes = input.len();
 
-		let layer_name = args.layer_name.clone().unwrap_or_else(|| {
-			path
-				.file_stem()
-				.and_then(|s| s.to_str())
-				.unwrap_or("features")
-				.to_string()
-		});
+		let layer_name = args
+			.layer_name
+			.clone()
+			.or_else(|| input.file_stem())
+			.unwrap_or_else(|| "features".to_string());
 
 		// Build the CSV source.
-		let mut builder = CsvSourceBuilder::new(&path, &args.lon_column, &args.lat_column);
+		let mut builder = CsvSourceBuilder::from_input(input, &args.lon_column, &args.lat_column);
 		if let Some(id_col) = &args.id_column {
 			builder = builder.id_column(id_col.clone());
 		}
@@ -142,7 +142,6 @@ impl Operation {
 
 		// For sources large enough to be visibly slow, attach a byte-level
 		// progress bar that ticks as the file is read.
-		let total_bytes = std::fs::metadata(&path).map_or(0, |m| m.len());
 		let progress_handle = if total_bytes >= PROGRESS_MIN_BYTES {
 			let handle = factory.runtime().create_progress("loading CSV", total_bytes);
 			let inc = handle.clone();
@@ -159,7 +158,7 @@ impl Operation {
 		let compression = args.compression.unwrap_or(TileCompression::Gzip);
 		let clip = args.bbox.map(BBoxClip::new);
 
-		log::info!("from_csv: importing CSV from {}", path.display());
+		log::info!("from_csv: importing CSV from {label}");
 		// Drain features once so the auto-max-zoom heuristic can inspect them.
 		// Project + flatten on the fly so we don't make two extra full-Vec
 		// passes after load. CSV is point-only so flatten is effectively a
@@ -189,7 +188,7 @@ impl Operation {
 				!features.is_empty(),
 				"bbox={:?} selects no features from {}",
 				clip.geo().as_tuple(),
-				path.display()
+				args.filename
 			);
 		}
 
@@ -265,6 +264,29 @@ mod tests {
 		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&blob)?;
 		assert_eq!(vt.layers[0].name, "quakes");
 		assert_eq!(vt.layers[0].features.len(), 3);
+		Ok(())
+	}
+
+	/// A URL gives the tiles a local file gives, and the layer is named after
+	/// the URL's file, query string or not.
+	#[tokio::test]
+	async fn a_csv_from_a_url_gives_the_tiles_of_the_local_file() -> Result<()> {
+		const COMMON: &str = "lon_column=\"longitude\" lat_column=\"latitude\" max_zoom=8";
+		let csv = std::fs::read("../testdata/quakes.csv")?;
+		let base = crate::helpers::test_server::serve_files(vec![("/quakes.csv", csv)]).await;
+		let factory = PipelineFactory::new_dummy();
+		let remote = factory
+			.operation_from_vpl(&format!("from_csv filename=\"{base}/quakes.csv?key=abc\" {COMMON}"))
+			.await?;
+		let local = factory
+			.operation_from_vpl(&format!("from_csv filename=\"../testdata/quakes.csv\" {COMMON}"))
+			.await?;
+
+		assert!(remote.tilejson().vector_layers.find("quakes").is_some());
+		let coord = TileCoord::new(0, 0, 0)?;
+		let remote_tile = remote.tile(&coord).await?.unwrap().into_blob(&Uncompressed)?;
+		let local_tile = local.tile(&coord).await?.unwrap().into_blob(&Uncompressed)?;
+		assert_eq!(remote_tile, local_tile);
 		Ok(())
 	}
 

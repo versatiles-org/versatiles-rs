@@ -69,7 +69,7 @@ pub enum Accepts {
 	/// decoded, so a dialog can filter on this and be right.
 	///
 	/// Comes from the argument's own type, which is what refuses the others —
-	/// see `GeoDataPath` and `TileFileLocation`. Stated on a field instead it would
+	/// see `GeoDataLocation` and `TileFileLocation`. Stated on a field instead it would
 	/// be a second list to keep in step, which is the mismatch this exists to
 	/// end, so the derive accepts it from a type and nowhere else.
 	///
