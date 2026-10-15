@@ -52,8 +52,16 @@ fn format_bytes(n: u64) -> String {
 }
 
 fn interval_secs() -> u64 {
-	std::env::var("VERSATILES_MEMORY_LOG_SECS")
-		.ok()
+	interval_from(std::env::var("VERSATILES_MEMORY_LOG_SECS").ok().as_deref())
+}
+
+/// The interval a value of `VERSATILES_MEMORY_LOG_SECS` asks for: the default when it is unset or
+/// not a number.
+///
+/// Separate from reading the variable so that tests need not set it: tests run in parallel, and one
+/// that sets a process-wide variable changes what every other test reads.
+fn interval_from(value: Option<&str>) -> u64 {
+	value
 		.and_then(|s| s.trim().parse::<u64>().ok())
 		.unwrap_or(DEFAULT_INTERVAL_SECS)
 }
@@ -75,7 +83,11 @@ impl Drop for HeartbeatGuard {
 /// when it goes out of scope.
 #[must_use]
 pub fn start() -> Option<HeartbeatGuard> {
-	let secs = interval_secs();
+	start_with(interval_secs())
+}
+
+/// [`start`] with the interval given rather than read from the environment.
+fn start_with(secs: u64) -> Option<HeartbeatGuard> {
 	if secs == 0 || process_rss_bytes().is_none() {
 		return None;
 	}
@@ -107,11 +119,11 @@ mod tests {
 	}
 
 	#[test]
-	fn test_interval_default_when_unset() {
-		// The env var is almost certainly unset in the test environment.
-		if std::env::var("VERSATILES_MEMORY_LOG_SECS").is_err() {
-			assert_eq!(interval_secs(), DEFAULT_INTERVAL_SECS);
-		}
+	fn test_interval_from_the_variable() {
+		assert_eq!(interval_from(None), DEFAULT_INTERVAL_SECS);
+		assert_eq!(interval_from(Some("0")), 0);
+		assert_eq!(interval_from(Some(" 15 ")), 15);
+		assert_eq!(interval_from(Some("soon")), DEFAULT_INTERVAL_SECS);
 	}
 
 	#[cfg(target_os = "linux")]
@@ -123,9 +135,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_start_disabled_returns_none() {
-		// SAFETY: single-threaded test; we set then restore the env var.
-		unsafe { std::env::set_var("VERSATILES_MEMORY_LOG_SECS", "0") };
-		assert!(start().is_none(), "interval 0 must disable the heartbeat");
-		unsafe { std::env::remove_var("VERSATILES_MEMORY_LOG_SECS") };
+		assert!(start_with(0).is_none(), "interval 0 must disable the heartbeat");
 	}
 }
