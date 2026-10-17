@@ -86,9 +86,13 @@ impl TileJSON {
 	/// - `"tile_size"`: Interpreted as [`TileSize`].
 	/// - Any other key is stored in `self.values`.
 	///
+	/// The four `tile_*` keys are optional extensions, so a value that cannot
+	/// be read is logged and dropped rather than failing the whole document.
+	///
 	/// # Errors
 	/// Returns an error if:
-	/// - A known key is present but invalid (e.g., non-numeric bounds).
+	/// - A known key other than the `tile_*` extensions is present but invalid
+	///   (e.g., non-numeric bounds).
 	/// - Vector layers fail to parse.
 	pub fn from_object(object: &JsonObject) -> Result<TileJSON> {
 		let mut r = TileJSON::default();
@@ -107,16 +111,16 @@ impl TileJSON {
 						VectorLayers::from_json(v).map_err(|e| anyhow!("Failed to parse 'vector_layers': {e}"))?;
 				}
 				"tile_type" => {
-					r.tile_type = Some(TileType::try_from(v.as_str()?)?);
+					r.tile_type = optional_extension(k, v.as_str().and_then(TileType::try_from));
 				}
 				"tile_format" => {
-					r.tile_format = Some(TileFormat::try_from_mime(v.as_str()?)?);
+					r.tile_format = optional_extension(k, v.as_str().and_then(TileFormat::try_from_mime));
 				}
 				"tile_schema" => {
-					r.tile_schema = Some(TileSchema::try_from(v.as_str()?)?);
+					r.tile_schema = optional_extension(k, v.as_str().and_then(TileSchema::try_from));
 				}
 				"tile_size" => {
-					r.tile_size = Some(TileSize::try_from(v.as_number()?)?);
+					r.tile_size = optional_extension(k, v.as_number().and_then(TileSize::try_from));
 				}
 				_ => {
 					// Everything else goes into `values`
@@ -687,6 +691,17 @@ impl TileJSON {
 	}
 }
 
+/// Keeps a parsed `tile_*` extension value, or logs why it was dropped.
+///
+/// The VersaTiles TileJSON extension adds no required fields, so a value this
+/// version cannot read — a newer schema, an unusual media type — must not make
+/// the whole document unreadable.
+fn optional_extension<T>(key: &str, value: Result<T>) -> Option<T> {
+	value
+		.inspect_err(|e| log::warn!("ignoring TileJSON '{key}': {e}"))
+		.ok()
+}
+
 /// Combines two text values into a separator-joined union, skipping empty inputs
 /// and not re-appending an `addition` that is already present as a segment of
 /// `current`. Used by [`TileJSON::merge`] for keys like `attribution` so that
@@ -967,6 +982,38 @@ mod tests {
 		let lines = tj.to_pretty_lines(40);
 		assert!(lines.len() > 1);
 		Ok(())
+	}
+
+	/// The extension adds no required fields, so a value this version does not
+	/// know is dropped and the rest of the document is still read.
+	#[test]
+	fn should_ignore_unreadable_extension_values() {
+		for (key, value) in [
+			("tile_type", r#""hologram""#),
+			("tile_format", r#""image/x-unknown""#),
+			("tile_schema", r#""shortbread@9.9""#),
+			("tile_schema", r#""dem/unknown""#),
+			("tile_size", "300"),
+			("tile_size", r#""large""#),
+		] {
+			let json = format!(r#"{{"tilejson":"3.0.0","tiles":["{{z}}/{{x}}/{{y}}"],"minzoom":2,"{key}":{value}}}"#);
+			let tj = TileJSON::try_from(json.as_str()).unwrap_or_else(|e| panic!("{key}={value} failed: {e}"));
+			assert_eq!(tj.zoom_min(), Some(2), "{key}={value}");
+			assert!(tj.tile_type.is_none() && tj.tile_format.is_none(), "{key}={value}");
+			assert!(tj.tile_schema.is_none() && tj.tile_size.is_none(), "{key}={value}");
+		}
+	}
+
+	#[test]
+	fn should_keep_readable_extension_values() {
+		let tj = TileJSON::try_from(
+			r#"{"tilejson":"3.0.0","tile_type":"raster","tile_format":"image/webp","tile_schema":"dem/terrarium","tile_size":512}"#,
+		)
+		.unwrap();
+		assert_eq!(tj.tile_format, Some(TileFormat::WEBP));
+		assert_eq!(tj.tile_schema, Some(TileSchema::RasterDEMTerrarium));
+		assert_eq!(tj.tile_size.map(|s| s.size()), Some(512));
+		assert!(tj.tile_type.is_some());
 	}
 
 	#[test]
