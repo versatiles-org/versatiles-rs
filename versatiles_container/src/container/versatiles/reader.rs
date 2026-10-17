@@ -148,12 +148,16 @@ impl VersaTilesReader {
 		};
 
 		let phase = Instant::now();
-		let block_index_blob = reader
-			.read_range(&header.blocks_range)
-			.await
-			.context("Failed reading the block index")?;
-		let block_index =
-			BlockIndex::from_brotli_blob(&block_index_blob).context("Failed decompressing the block index")?;
+		// Writers up to 5.3.0 wrote an empty container without a block index.
+		let block_index = if header.blocks_range.length == 0 {
+			BlockIndex::new_empty()
+		} else {
+			let block_index_blob = reader
+				.read_range(&header.blocks_range)
+				.await
+				.context("Failed reading the block index")?;
+			BlockIndex::from_brotli_blob(&block_index_blob).context("Failed decompressing the block index")?
+		};
 		log::trace!(
 			"versatiles: '{name}' block index ({} bytes, {} block(s)) read+decoded in {:.2}s",
 			header.blocks_range.length,
@@ -525,6 +529,56 @@ mod tests {
 		let runtime = TilesRuntime::default();
 		let reader = VersaTilesReader::open(&temp_file, runtime).await?;
 		Ok((temp_file, reader))
+	}
+
+	/// A source without tiles (a filter matching nothing) must still give a
+	/// file that opens: the writer stores an empty block index rather than a
+	/// zero-length range, which no reader up to 5.3.0 can decompress.
+	#[tokio::test]
+	async fn an_empty_source_writes_a_readable_container() -> Result<()> {
+		let source = MockReader::new_mock(
+			TilePyramid::new_empty(),
+			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
+		)?;
+		let runtime = TilesRuntime::default();
+
+		let mut data_writer = DataWriterBlob::new()?;
+		VersaTilesWriter::write_to_writer(&source, &mut data_writer, runtime.clone()).await?;
+		let mut data_reader: DataReader = Box::new(data_writer.to_reader());
+		let header = FileHeader::from_reader(&mut data_reader).await?;
+		assert!(
+			header.blocks_range.length > 0,
+			"the block index must not be zero-length"
+		);
+
+		let reader = VersaTilesReader::open_data(Box::new(data_writer.to_reader()), runtime).await?;
+		assert!(reader.tile_pyramid().await?.is_empty());
+		assert_eq!(
+			reader.tile_stream(TileBBox::new_full(3)?).await?.to_vec().await.len(),
+			0
+		);
+		Ok(())
+	}
+
+	/// Writers up to 5.3.0 wrote an empty container as a bare header with a
+	/// zero-length block range. Those files must open as empty.
+	#[tokio::test]
+	async fn a_header_only_container_opens_as_empty() -> Result<()> {
+		use versatiles_core::{GeoBBox, io::DataReaderBlob};
+
+		let header = FileHeader::new(
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			[0, 0],
+			&GeoBBox::new(0.0, 0.0, 0.0, 0.0)?,
+		)?;
+		let reader = VersaTilesReader::open_data(
+			Box::new(DataReaderBlob::from(header.to_blob()?)),
+			TilesRuntime::default(),
+		)
+		.await?;
+		assert!(reader.tile_pyramid().await?.is_empty());
+		Ok(())
 	}
 
 	/// A container's metadata is whatever bytes the file supplies. Opening one

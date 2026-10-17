@@ -283,13 +283,11 @@ impl TileSink for VersaTilesSink {
 		};
 
 		if remaining_keys.is_empty() && already_flushed == 0 {
-			// Genuinely empty sink — write a minimal header-only file.
-			let bbox = GeoBBox::new(0.0, 0.0, 0.0, 0.0)?;
-			let header = FileHeader::new(self.tile_format, self.tile_compression, [0, 0], &bbox)?;
-			let mut writer = self.create_writer().await?;
-			writer.append(&header.to_blob()?).await?;
-			fs::remove_dir_all(&self.temp_dir)?;
-			return Ok(());
+			// Genuinely empty sink: no block was flushed, so no output exists
+			// yet. Create it, so the path below writes the metadata and an
+			// empty block index — a header-only file has no index to read.
+			let mut output = self.output.lock().await;
+			self.ensure_output(&mut output).await?;
 		}
 
 		// 2. Flush any still-buffered (sparse / edge) blocks. Order matches
@@ -322,7 +320,14 @@ impl TileSink for VersaTilesSink {
 			.bounds
 			.unwrap_or_else(|| GeoBBox::new(-180.0, -85.051_13, 180.0, 85.051_13).expect("valid world bbox constants"));
 
-		let mut header = FileHeader::new(self.tile_format, self.tile_compression, [zoom_min, zoom_max], &bbox)?;
+		// No block written (an empty sink, or only empty blocks): the running
+		// range is still its initial `[u8::MAX, 0]`.
+		let zoom_range = if zoom_min <= zoom_max {
+			[zoom_min, zoom_max]
+		} else {
+			[0, 0]
+		};
+		let mut header = FileHeader::new(self.tile_format, self.tile_compression, zoom_range, &bbox)?;
 
 		// 4. Append metadata and block index after the block data that's
 		//    already been streamed to the writer.
@@ -767,7 +772,18 @@ mod tests {
 		let tilejson = TileJSON::default();
 		Box::new(sink).finish(&tilejson, &runtime).await?;
 
-		assert!(output.exists());
+		// The file must open and report no tiles, not just exist.
+		let reader = VersaTilesReader::open(&output, runtime).await?;
+		assert!(reader.tile_pyramid().await?.is_empty());
+		assert_eq!(
+			reader
+				.tile_stream(versatiles_core::TileBBox::new_full(0)?)
+				.await?
+				.to_vec()
+				.await
+				.len(),
+			0
+		);
 		Ok(())
 	}
 }

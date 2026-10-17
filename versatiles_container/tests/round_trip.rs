@@ -409,33 +409,23 @@ async fn versatiles_deduplicated_tiles_readable() -> Result<()> {
 	Ok(())
 }
 
-/// Verifies that empty tile sources (with no zoom levels) produce an error.
-/// The VersaTiles format requires a valid zoom range, so an empty tile_pyramid cannot be written.
+/// Verifies that an empty tile source (no zoom levels at all, e.g. a filter
+/// matching nothing) writes a container that opens and holds no tiles.
 #[tokio::test]
-async fn versatiles_empty_source_fails_gracefully() -> Result<()> {
+async fn versatiles_empty_source_writes_an_empty_container() -> Result<()> {
 	let temp_dir = TempDir::new()?;
 	let versatiles_path = temp_dir.path().join("empty_test.versatiles");
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
-	// Create an empty mock source (no zoom levels at all)
 	let source = MockReader::new_mock(
 		TilePyramid::new_empty(),
 		TileSourceMetadata::new(TileFormat::MVT, TileCompression::Uncompressed, Traversal::ANY, None),
 	)?;
 
-	// Writing should fail because the VersaTiles format requires valid minzoom/maxzoom
-	let result = VersaTilesWriter::write_to_path(&source, &versatiles_path, runtime.clone()).await;
-	assert!(
-		result.is_err(),
-		"Writing an empty source should fail because VersaTiles requires valid zoom range"
-	);
+	VersaTilesWriter::write_to_path(&source, &versatiles_path, runtime.clone()).await?;
 
-	let err = result.unwrap_err();
-	let err_chain = format!("{err:?}");
-	assert!(
-		err_chain.contains("minzoom") || err_chain.contains("maxzoom"),
-		"Error should mention zoom range issue: {err_chain}"
-	);
+	let reader = VersaTilesReader::open(&versatiles_path, runtime).await?;
+	assert!(reader.tile_pyramid().await?.is_empty());
 
 	Ok(())
 }

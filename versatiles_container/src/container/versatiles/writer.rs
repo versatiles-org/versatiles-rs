@@ -53,7 +53,7 @@ use futures::{SinkExt, StreamExt, channel::mpsc, try_join};
 use versatiles_core::{
 	compression::compress,
 	io::DataWriterTrait,
-	types::{Blob, ByteRange, TileCompression, TileCoord},
+	types::{Blob, ByteRange, GeoBBox, TileCompression, TileCoord},
 };
 
 use super::types::{BlockBuilder, BlockIndex, FileHeader};
@@ -127,20 +127,15 @@ impl TilesWriter for VersaTilesWriter {
 		let tile_pyramid = reader.tile_pyramid().await?;
 		log::trace!("convert_from - tile_pyramid: {tile_pyramid:#}");
 
-		// Create the file header, preferring TileJSON values over pyramid-calculated ones
+		// Create the file header, preferring TileJSON values over pyramid-calculated ones.
+		// An empty source has neither; it falls back as the sink does.
 		let tilejson = reader.tilejson();
-		let zoom_min = tilejson
-			.zoom_min()
-			.or(tile_pyramid.level_min())
-			.ok_or(anyhow!("invalid minzoom"))?;
-		let zoom_max = tilejson
-			.zoom_max()
-			.or(tile_pyramid.level_max())
-			.ok_or(anyhow!("invalid maxzoom"))?;
+		let zoom_min = tilejson.zoom_min().or(tile_pyramid.level_min()).unwrap_or(0);
+		let zoom_max = tilejson.zoom_max().or(tile_pyramid.level_max()).unwrap_or(zoom_min);
 		let bbox = tilejson
 			.bounds
 			.or(tile_pyramid.geo_extent())
-			.ok_or(anyhow!("invalid geo bounding box"))?;
+			.map_or_else(|| GeoBBox::new(-180.0, -85.051_13, 180.0, 85.051_13), Ok)?;
 		let mut header = FileHeader::new(*parameters.tile_format(), tile_compression, [zoom_min, zoom_max], &bbox)?;
 
 		// Convert the header to a blob and write it
@@ -192,7 +187,8 @@ impl VersaTilesWriter {
 		runtime: TilesRuntime,
 	) -> Result<ByteRange> {
 		if reader.tile_pyramid().await?.is_empty() {
-			return Ok(ByteRange::empty());
+			// Still a real (empty) index: readers cannot decompress a zero-length one.
+			return writer.append(&BlockIndex::new_empty().to_brotli_blob()?).await;
 		}
 
 		// Pipeline: tiles are compressed in parallel off the writer's critical path, then
