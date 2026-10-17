@@ -131,6 +131,9 @@ impl PropertyManager {
 
 		for properties in geo_property_iter {
 			for (k, v) in properties.iter() {
+				if *v == GeoValue::Null {
+					continue;
+				}
 				key_map.entry(k.clone()).and_modify(|n| *n += 1).or_insert(0);
 				val_map.entry(v.clone()).and_modify(|n| *n += 1).or_insert(0);
 			}
@@ -156,6 +159,10 @@ impl PropertyManager {
 		let mut tag_ids: Vec<u32> = Vec::new();
 
 		for (key, val) in properties {
+			// MVT has no null value; a missing property is how it says "no value".
+			if val == GeoValue::Null {
+				continue;
+			}
 			tag_ids.push(self.key.add(key));
 			tag_ids.push(self.val.add(val));
 		}

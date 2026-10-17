@@ -36,9 +36,14 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 				}
 				(2, 5) => Float(reader.read_f32().context("Failed to read f32 value")?),
 				(3, 1) => Double(reader.read_f64().context("Failed to read f64 value")?),
-				(4, 0) => Int(i64::try_from(
-					reader.read_varint().context("Failed to read varint for int value")?,
-				)?),
+				// `int64` is encoded as its two's complement in a 10-byte varint,
+				// so a negative value arrives as a `u64` above `i64::MAX`.
+				(4, 0) => Int(
+					reader
+						.read_varint()
+						.context("Failed to read varint for int value")?
+						.cast_signed(),
+				),
 				(5, 0) => UInt(reader.read_varint().context("Failed to read varint for uint value")?),
 				(6, 0) => Int(reader.read_svarint().context("Failed to read svarint value")?),
 				(7, 0) => Bool(reader.read_varint().context("Failed to read varint for bool value")? != 0),
@@ -54,7 +59,9 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 		let mut writer = ValueWriterBlob::new_le();
 
 		match self {
-			GeoValue::Null => {}
+			// MVT has no null: an empty `Value` message is unreadable, so the
+			// property tables leave null properties out before this is reached.
+			GeoValue::Null => bail!("MVT cannot store a null value"),
 			GeoValue::String(s) => {
 				writer
 					.write_pbf_key(1, 2)
@@ -249,5 +256,29 @@ mod tests {
 		];
 		assert_eq!(blob.into_vec(), expected);
 		Ok(())
+	}
+
+	/// `int_value` (field 4) is a protobuf `int64`: a negative number is its
+	/// two's complement in a 10-byte varint, not an error.
+	#[test]
+	fn test_read_negative_int_value() -> Result<()> {
+		let data = vec![
+			0x20, // PBF key (field number 4, wire type 0)
+			0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, // -2 as int64
+		];
+		let mut reader = ValueReaderSlice::new_le(&data);
+		assert_eq!(GeoValue::read(&mut reader)?, GeoValue::Int(-2));
+
+		let data = vec![0x20, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01]; // i64::MIN
+		let mut reader = ValueReaderSlice::new_le(&data);
+		assert_eq!(GeoValue::read(&mut reader)?, GeoValue::Int(i64::MIN));
+		Ok(())
+	}
+
+	/// MVT has no null value; writing one as an empty message would produce a
+	/// tile that does not decode.
+	#[test]
+	fn test_to_blob_null_is_refused() {
+		assert!(GeoValue::Null.to_blob().is_err());
 	}
 }

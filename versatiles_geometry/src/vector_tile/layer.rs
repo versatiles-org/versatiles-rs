@@ -459,6 +459,21 @@ mod tests {
 		Ok(())
 	}
 
+	/// MVT has no null. A null property (GeoJSON `{"x": null}`) is left out,
+	/// so the layer encodes and decodes instead of writing an empty `Value`
+	/// that no reader accepts.
+	#[test]
+	fn null_properties_are_left_out() -> Result<()> {
+		let feature = point_feature_with_props(1, 1.0, 2.0, vec![("x", GeoValue::Null), ("y", GeoValue::from(3))]);
+		let layer = make_layer(vec![feature])?;
+		let blob = layer.to_blob()?;
+
+		let decoded = VectorTileLayer::read(&mut ValueReaderSlice::new_le(blob.as_slice()))?;
+		let features = decoded.to_features()?;
+		assert_eq!(format!("{:?}", features[0].properties), "{\"y\": UInt(3)}");
+		Ok(())
+	}
+
 	#[test]
 	fn test_from_features() -> Result<()> {
 		let features = vec![GeoFeature::new_example()];
