@@ -123,7 +123,10 @@ impl DataReaderTrait for DataReaderFile {
 		#[cfg(windows)]
 		{
 			use std::os::windows::fs::FileExt;
-			self.file.seek_read(&mut buffer, range.offset).with_context(|| {
+			read_exact_at_with(&mut buffer, range.offset, |buf, offset| {
+				self.file.seek_read(buf, offset)
+			})
+			.with_context(|| {
 				format!(
 					"failed to read {} bytes at offset {} in file '{}'",
 					range.length, range.offset, self.name
@@ -164,9 +167,7 @@ impl DataReaderTrait for DataReaderFile {
 		#[cfg(windows)]
 		{
 			use std::os::windows::fs::FileExt;
-			self
-				.file
-				.seek_read(&mut buffer, 0)
+			read_exact_at_with(&mut buffer, 0, |buf, offset| self.file.seek_read(buf, offset))
 				.with_context(|| format!("failed to read all {} bytes from file '{}'", self.size, self.name))?;
 		}
 
@@ -181,6 +182,36 @@ impl DataReaderTrait for DataReaderFile {
 	fn name(&self) -> &str {
 		&self.name
 	}
+}
+
+/// Fills `buffer` from `offset` with a positional read that may return fewer
+/// bytes than asked, as Windows' `seek_read` does — unlike Unix's
+/// `read_exact_at`, it has no "exact" variant. A short read continues where it
+/// stopped; reaching the end of the file first is an error, not a buffer whose
+/// tail is silently left zero.
+#[cfg(any(windows, test))]
+fn read_exact_at_with(
+	mut buffer: &mut [u8],
+	mut offset: u64,
+	mut read_at: impl FnMut(&mut [u8], u64) -> std::io::Result<usize>,
+) -> std::io::Result<()> {
+	while !buffer.is_empty() {
+		match read_at(buffer, offset) {
+			Ok(0) => {
+				return Err(std::io::Error::new(
+					std::io::ErrorKind::UnexpectedEof,
+					format!("end of file at offset {offset}, {} bytes short", buffer.len()),
+				));
+			}
+			Ok(n) => {
+				buffer = &mut buffer[n..];
+				offset += n as u64;
+			}
+			Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+			Err(e) => return Err(e),
+		}
+	}
+	Ok(())
 }
 
 impl Read for DataReaderFile {
@@ -206,6 +237,56 @@ mod tests {
 
 	use super::*;
 	use crate::assert_wildcard;
+
+	/// A positional read over `data` that returns at most `chunk` bytes, as
+	/// Windows' `seek_read` may.
+	fn short_reads(data: &[u8], chunk: usize) -> impl FnMut(&mut [u8], u64) -> std::io::Result<usize> + '_ {
+		move |buf, offset| {
+			let start = usize::try_from(offset).unwrap().min(data.len());
+			let n = buf.len().min(chunk).min(data.len() - start);
+			buf[..n].copy_from_slice(&data[start..start + n]);
+			Ok(n)
+		}
+	}
+
+	/// Short reads are continued until the buffer is full.
+	#[test]
+	fn read_exact_at_with_continues_short_reads() {
+		let data: Vec<u8> = (0..100).collect();
+		let mut buffer = vec![0u8; 30];
+		read_exact_at_with(&mut buffer, 50, short_reads(&data, 7)).unwrap();
+		assert_eq!(buffer, &data[50..80]);
+	}
+
+	/// Running out of file is an error, not a zero-filled tail.
+	#[test]
+	fn read_exact_at_with_errors_at_end_of_file() {
+		let data: Vec<u8> = (0..100).collect();
+		let mut buffer = vec![0u8; 30];
+		let error = read_exact_at_with(&mut buffer, 90, short_reads(&data, 7)).unwrap_err();
+		assert_eq!(error.kind(), std::io::ErrorKind::UnexpectedEof);
+	}
+
+	/// An interrupted read is retried; other errors are passed on.
+	#[test]
+	fn read_exact_at_with_retries_interrupted_reads() {
+		let mut calls = 0;
+		let mut buffer = [0u8; 4];
+		read_exact_at_with(&mut buffer, 0, |buf, _| {
+			calls += 1;
+			if calls == 1 {
+				return Err(std::io::ErrorKind::Interrupted.into());
+			}
+			buf.fill(9);
+			Ok(buf.len())
+		})
+		.unwrap();
+		assert_eq!(buffer, [9; 4]);
+
+		let error =
+			read_exact_at_with(&mut buffer, 0, |_, _| Err(std::io::ErrorKind::PermissionDenied.into())).unwrap_err();
+		assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+	}
 
 	// Test the 'new' method for valid and invalid files
 	#[tokio::test]

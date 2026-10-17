@@ -3,7 +3,7 @@ use std::{
 	sync::{Arc, atomic::AtomicU64},
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
 use reqwest::Url;
 
@@ -144,6 +144,19 @@ impl NetworkReader for DataReaderSftp {
 #[async_trait]
 impl DataReaderTrait for DataReaderSftp {
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+		// Checked before anything is allocated or requested: the range comes
+		// from the file's own index, and a crafted one would otherwise allocate
+		// its full length — and be retried — before the read fails.
+		let end = range
+			.offset
+			.checked_add(range.length)
+			.context("range offset + length overflows u64")?;
+		ensure!(
+			end <= self.size,
+			"range {range} is outside file '{}', which is {} bytes long",
+			self.name,
+			self.size
+		);
 		self.network_read_range(range).await
 	}
 
@@ -218,6 +231,24 @@ mod tests {
 			let reader = DataReaderSftp::open(&url, None).await.unwrap();
 			let result = reader.read_range(&ByteRange::new(5, 0)).await.unwrap();
 			assert!(result.is_empty());
+		}
+
+		/// A range past the end is refused before its length is allocated, as
+		/// the file and HTTP readers do; a crafted index could otherwise ask
+		/// for terabytes.
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
+		async fn read_range_past_eof_is_refused() {
+			let server = TestSftpServer::start().await;
+			server.write_file("/test.bin", b"hello").await;
+			let url = server.url("/test.bin");
+			let reader = DataReaderSftp::open(&url, None).await.unwrap();
+
+			let error = reader.read_range(&ByteRange::new(0, 1 << 40)).await.unwrap_err();
+			assert!(format!("{error:#}").contains("is outside file"), "{error:#}");
+			assert!(reader.read_range(&ByteRange::new(4, 2)).await.is_err());
+			assert!(reader.read_range(&ByteRange::new(u64::MAX, 1)).await.is_err());
+			assert_eq!(reader.read_range(&ByteRange::new(4, 1)).await.unwrap().as_slice(), b"o");
 		}
 
 		#[tokio::test(flavor = "current_thread")]
