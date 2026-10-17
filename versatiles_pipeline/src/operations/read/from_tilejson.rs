@@ -807,7 +807,10 @@ mod tests {
 			.tile(&TileCoord::new(1, 0, 1).unwrap())
 			.await?
 			.expect("tile should be present");
-		assert_eq!(tile.into_blob(&TileCompression::Uncompressed)?.as_slice(), b"relative_tile");
+		assert_eq!(
+			tile.into_blob(&TileCompression::Uncompressed)?.as_slice(),
+			b"relative_tile"
+		);
 		Ok(())
 	}
 

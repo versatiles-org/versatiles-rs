@@ -697,9 +697,7 @@ impl TileJSON {
 /// version cannot read — a newer schema, an unusual media type — must not make
 /// the whole document unreadable.
 fn optional_extension<T>(key: &str, value: Result<T>) -> Option<T> {
-	value
-		.inspect_err(|e| log::warn!("ignoring TileJSON '{key}': {e}"))
-		.ok()
+	value.inspect_err(|e| log::warn!("ignoring TileJSON '{key}': {e}")).ok()
 }
 
 /// Combines two text values into a separator-joined union, skipping empty inputs
