@@ -19,7 +19,7 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 use versatiles_core::{TileBBox, TileBBoxMap, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
@@ -49,6 +49,9 @@ struct Operation {
 	metadata: TileSourceMetadata,
 	sources: Arc<Vec<Box<dyn TileSource>>>,
 	tilejson: TileJSON,
+	/// Where tiles that cannot be read or merged are reported; a stream cannot
+	/// carry the error.
+	runtime: TilesRuntime,
 }
 
 /// Combine several `VectorTile`s by merging layers with identical names.
@@ -151,6 +154,7 @@ impl Operation {
 			metadata,
 			sources: Arc::new(sources),
 			tilejson,
+			runtime: factory.runtime(),
 		}) as Box<dyn TileSource>)
 	}
 }
@@ -197,47 +201,57 @@ impl TileSource for Operation {
 		let bboxes: Vec<TileBBox> = bbox.iter_grid(grid_size).collect();
 		let sources = Arc::clone(&self.sources);
 		let format = *self.metadata.tile_format();
+		let runtime = self.runtime.clone();
 
 		// Stage 1: read raw source tiles per chunk concurrently across all sources,
 		// then insert in source order so the merge stays deterministic. Bounded
 		// read-ahead caps resident raw tiles to
 		// `READ_AHEAD × grid_size² × n_sources ≤ max_tiles_in_flight()`.
 		let groups = TileStream::from_streams_bounded(
-			stream::iter(bboxes).map(move |chunk_bbox| {
-				let sources = Arc::clone(&sources);
-				async move {
-					let mut tiles = TileBBoxMap::<Vec<Tile>>::new_default(chunk_bbox).expect("grid cell fits in usize");
+			stream::iter(bboxes).map({
+				let runtime = runtime.clone();
+				move |chunk_bbox| {
+					let sources = Arc::clone(&sources);
+					let runtime = runtime.clone();
+					async move {
+						let mut tiles = TileBBoxMap::<Vec<Tile>>::new_default(chunk_bbox).expect("grid cell fits in usize");
 
-					let per_source = join_all((0..sources.len()).map(|i| {
-						let sources = Arc::clone(&sources);
-						async move {
-							sources[i]
-								.tile_stream(chunk_bbox)
-								.await
-								.expect("tile_stream succeeded for requested bbox")
-								.to_vec()
-								.await
-						}
-					}))
-					.await;
-					for source_tiles in per_source {
-						for (coord, tile) in source_tiles {
-							tiles.get_mut(&coord).expect("coord is within bbox").push(tile);
-						}
-					}
-
-					TileStream::from_vec(
-						tiles
-							.into_iter()
-							.filter_map(|(coord, vec_tiles)| {
-								if vec_tiles.is_empty() {
-									None
-								} else {
-									Some((coord, vec_tiles))
+						let per_source = join_all((0..sources.len()).map(|i| {
+							let sources = Arc::clone(&sources);
+							let runtime = runtime.clone();
+							async move {
+								match sources[i].tile_stream(chunk_bbox).await {
+									Ok(stream) => stream.to_vec().await,
+									Err(error) => {
+										runtime.record_error(
+											&format!("from_merged_vector reading source {i} in {chunk_bbox:?}"),
+											&error,
+										);
+										Vec::new()
+									}
 								}
-							})
-							.collect(),
-					)
+							}
+						}))
+						.await;
+						for source_tiles in per_source {
+							for (coord, tile) in source_tiles {
+								tiles.get_mut(&coord).expect("coord is within bbox").push(tile);
+							}
+						}
+
+						TileStream::from_vec(
+							tiles
+								.into_iter()
+								.filter_map(|(coord, vec_tiles)| {
+									if vec_tiles.is_empty() {
+										None
+									} else {
+										Some((coord, vec_tiles))
+									}
+								})
+								.collect(),
+						)
+					}
 				}
 			}),
 			super::gathering::READ_AHEAD,
@@ -247,7 +261,15 @@ impl TileSource for Operation {
 		// skip decode/encode (see `merge_tiles`); only true overlaps re-encode.
 		// Running merge inline avoids a second spawn_blocking pool competing with the
 		// writer's brotli stage; merge is fast (< 1 ms per tile) relative to brotli.
-		Ok(groups.map(move |_coord, vec_tiles| merge_tiles(vec_tiles, format).expect("valid tile merge")))
+		Ok(
+			groups.filter_map(move |coord, vec_tiles| match merge_tiles(vec_tiles, format) {
+				Ok(tile) => Some(tile),
+				Err(error) => {
+					runtime.record_error(&format!("from_merged_vector tile {}", coord.to_json()), &error);
+					None
+				}
+			}),
+		)
 	}
 }
 
@@ -281,6 +303,61 @@ mod tests {
 				p.get("filename").unwrap().to_string()
 			})
 			.join(",")
+	}
+
+	fn merged(sources: Vec<DummyVectorSource>, runtime: &TilesRuntime) -> Operation {
+		Operation {
+			metadata: sources[0].metadata().clone(),
+			sources: Arc::new(
+				sources
+					.into_iter()
+					.map(|s| Box::new(s) as Box<dyn TileSource>)
+					.collect(),
+			),
+			tilejson: TileJSON::default(),
+			runtime: runtime.clone(),
+		}
+	}
+
+	/// Two sources whose layers disagree on extent cannot be merged. That used
+	/// to panic inside the stream; now each such tile is reported to the
+	/// runtime and left out.
+	#[tokio::test]
+	async fn an_unmergeable_tile_is_reported_to_the_runtime() -> Result<()> {
+		let pyramid = TilePyramid::new_full_up_to(1);
+		let src1 = DummyVectorSource::new(&[("a", &[&[("k", "1")]])], Some(pyramid.clone()));
+		let mut src2 = DummyVectorSource::new(&[("a", &[&[("k", "2")]])], Some(pyramid));
+		src2.set_extent(512);
+		let runtime = TilesRuntime::new_silent();
+
+		let tiles = merged(vec![src1, src2], &runtime)
+			.tile_stream(TileBBox::new_full(1)?)
+			.await?
+			.to_vec()
+			.await;
+		assert_eq!(tiles.len(), 0);
+		assert_eq!(runtime.error_count(), 4);
+		Ok(())
+	}
+
+	/// A source whose `tile_stream` fails used to panic the stream; it is
+	/// reported, and the other sources' tiles still arrive.
+	#[tokio::test]
+	async fn a_failing_source_is_reported_to_the_runtime() -> Result<()> {
+		let pyramid = TilePyramid::new_full_up_to(1);
+		let src1 = DummyVectorSource::new(&[("a", &[&[("k", "1")]])], Some(pyramid.clone()));
+		let mut src2 = DummyVectorSource::new(&[("a", &[&[("k", "2")]])], Some(pyramid));
+		src2.set_failing_streams();
+		let runtime = TilesRuntime::new_silent();
+
+		let tiles = merged(vec![src1, src2], &runtime)
+			.tile_stream(TileBBox::new_full(1)?)
+			.await?
+			.to_vec()
+			.await;
+		assert_eq!(tiles.len(), 4);
+		assert_eq!(runtime.error_count(), 1);
+		Ok(())
 	}
 
 	#[tokio::test]

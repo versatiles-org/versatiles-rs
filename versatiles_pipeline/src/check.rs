@@ -860,7 +860,7 @@ mod tests {
 	fn a_value_in_the_wrong_format_is_reported() {
 		assert_eq!(
 			problems("from_color color=red"),
-			["'from_color' does not accept 'color=[red]': Invalid hex color 'red': invalid digit found in string"]
+			["'from_color' does not accept 'color=[red]': Invalid hex color 'red': 'r' is not a hex digit"]
 		);
 		assert_eq!(problems("from_color color=FF5733"), Vec::<String>::new());
 		assert_eq!(problems("from_color color=FF573380"), Vec::<String>::new());

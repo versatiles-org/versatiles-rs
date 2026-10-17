@@ -20,7 +20,7 @@ use std::sync::Arc;
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 use versatiles_core::{TileBBox, TileBBoxMap, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 
@@ -47,6 +47,9 @@ struct Operation {
 	metadata: TileSourceMetadata,
 	sources: Arc<Vec<Box<dyn TileSource>>>,
 	tilejson: TileJSON,
+	/// Where a source that cannot deliver its tiles is reported; a stream
+	/// cannot carry the error.
+	runtime: TilesRuntime,
 }
 
 impl Operation {
@@ -58,13 +61,13 @@ impl Operation {
 			.into_iter()
 			.collect::<Result<Vec<_>>>()?;
 
-		Ok(Box::new(Operation::new(sources).await?) as Box<dyn TileSource>)
+		Ok(Box::new(Operation::new(sources, factory.runtime()).await?) as Box<dyn TileSource>)
 	}
 }
 
 impl Operation {
 	#[context("Failed to create from_stacked operation")]
-	async fn new(sources: Vec<Box<dyn TileSource>>) -> Result<Operation> {
+	async fn new(sources: Vec<Box<dyn TileSource>>, runtime: TilesRuntime) -> Result<Operation> {
 		ensure!(sources.len() > 1, "must have at least two sources");
 
 		let mut tilejson = TileJSON::merge_all(sources.iter().map(|s| s.tilejson()))?;
@@ -94,6 +97,7 @@ impl Operation {
 			metadata,
 			sources: Arc::new(sources),
 			tilejson,
+			runtime,
 		})
 	}
 }
@@ -128,6 +132,7 @@ impl TileSource for Operation {
 		// We need the desired output compression inside the closure, so copy it.
 		let format = *self.metadata.tile_format();
 		let sources = Arc::clone(&self.sources);
+		let runtime = self.runtime.clone();
 
 		// Overlay keeps a single tile per coordinate (first non-empty source wins), so the
 		// budget counts one tile per coordinate. Bounded read-ahead caps resident tiles.
@@ -136,10 +141,11 @@ impl TileSource for Operation {
 		Ok(TileStream::from_streams_bounded(
 			stream::iter(sub_bboxes).map(move |bbox| {
 				let sources = Arc::clone(&sources);
+				let runtime = runtime.clone();
 				async move {
 					let mut tiles = TileBBoxMap::<Option<Tile>>::new_default(bbox).expect("grid cell fits in usize");
 
-					for source in sources.iter() {
+					for (index, source) in sources.iter().enumerate() {
 						let mut bbox_left = TileBBox::new_empty(bbox.level()).expect("bbox.level() is already a valid zoom");
 						for (coord, slot) in tiles.iter() {
 							if slot.is_none() {
@@ -150,18 +156,25 @@ impl TileSource for Operation {
 							continue;
 						}
 
-						let stream = source
-							.tile_stream(bbox_left)
-							.await
-							.expect("tile_stream succeeded for requested bbox");
+						// A failing source is reported and skipped, so the sources
+						// below it still fill the coordinates it would have covered.
+						let stream = match source.tile_stream(bbox_left).await {
+							Ok(stream) => stream,
+							Err(error) => {
+								runtime.record_error(&format!("from_stacked reading source {index} in {bbox_left:?}"), &error);
+								continue;
+							}
+						};
 						stream
 							.for_each(|coord, mut tile| {
 								let entry = tiles.get_mut(&coord).expect("coord is within bbox");
 								if entry.is_none() {
-									tile
-										.change_format(format, None, None)
-										.expect("all sources share the same tile format");
-									*entry = Some(tile);
+									match tile.change_format(format, None, None) {
+										Ok(()) => *entry = Some(tile),
+										Err(error) => {
+											runtime.record_error(&format!("from_stacked tile {}", coord.to_json()), &error);
+										}
+									}
 								}
 							})
 							.await;
@@ -338,10 +351,13 @@ mod tests {
 		src1.set_traversal(Traversal::new_any_size(1, 16).unwrap());
 		src2.set_traversal(Traversal::new(TraversalOrder::PMTiles, 4, 256).unwrap());
 
-		let op = Operation::new(vec![
-			operation_from_reader(Box::new(src1)),
-			operation_from_reader(Box::new(src2)),
-		])
+		let op = Operation::new(
+			vec![
+				operation_from_reader(Box::new(src1)),
+				operation_from_reader(Box::new(src2)),
+			],
+			TilesRuntime::new_silent(),
+		)
 		.await
 		.unwrap();
 
@@ -349,5 +365,31 @@ mod tests {
 			*op.metadata().traversal(),
 			Traversal::new(TraversalOrder::PMTiles, 4, 16).unwrap()
 		);
+	}
+
+	/// A source whose `tile_stream` fails used to panic the stream; it is
+	/// reported to the runtime, and the sources below it still fill in.
+	#[tokio::test]
+	async fn a_failing_source_is_reported_to_the_runtime() -> Result<()> {
+		use crate::operations::read::from_container::operation_from_reader;
+
+		let mut src1 = DummyVectorSource::new(&[("a", &[&[("k", "1")]])], Some(TilePyramid::new_full_up_to(1)));
+		src1.set_failing_streams();
+		let src2 = DummyVectorSource::new(&[("a", &[&[("k", "2")]])], Some(TilePyramid::new_full_up_to(1)));
+		let runtime = TilesRuntime::new_silent();
+
+		let op = Operation::new(
+			vec![
+				operation_from_reader(Box::new(src1)),
+				operation_from_reader(Box::new(src2)),
+			],
+			runtime.clone(),
+		)
+		.await?;
+
+		let tiles = op.tile_stream(TileBBox::new_full(1)?).await?.to_vec().await;
+		assert_eq!(tiles.len(), 4);
+		assert_eq!(runtime.error_count(), 1);
+		Ok(())
 	}
 }

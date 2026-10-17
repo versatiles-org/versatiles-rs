@@ -19,6 +19,10 @@ pub struct DummyVectorSource {
 	data: Arc<Vec<(String, Vec<Vec<(String, String)>>)>>,
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
+	/// Extent of every layer.
+	extent: u32,
+	/// Whether `tile_stream` fails, for tests of the error paths around it.
+	failing_streams: bool,
 }
 
 impl DummyVectorSource {
@@ -63,6 +67,8 @@ impl DummyVectorSource {
 			data: Arc::new(data),
 			metadata,
 			tilejson,
+			extent: 4096,
+			failing_streams: false,
 		}
 	}
 
@@ -81,6 +87,18 @@ impl DummyVectorSource {
 	#[allow(dead_code, reason = "a test-support setter; used only under cfg(test)")]
 	pub fn set_traversal(&mut self, traversal: Traversal) {
 		self.metadata.set_traversal(traversal);
+	}
+
+	#[allow(dead_code, reason = "a test-support setter; used only under cfg(test)")]
+	/// Gives every layer this extent instead of 4096.
+	pub fn set_extent(&mut self, extent: u32) {
+		self.extent = extent;
+	}
+
+	#[allow(dead_code, reason = "a test-support setter; used only under cfg(test)")]
+	/// Makes `tile_stream` fail, as a source whose storage is unreadable does.
+	pub fn set_failing_streams(&mut self) {
+		self.failing_streams = true;
 	}
 }
 
@@ -126,7 +144,7 @@ impl TileSource for DummyVectorSource {
 			}
 
 			// Add the layer to the layers vector
-			layers.push(VectorTileLayer::from_features(name.clone(), features, 4096, 1)?);
+			layers.push(VectorTileLayer::from_features(name.clone(), features, self.extent, 1)?);
 		}
 
 		let vector_tile = VectorTile::new(layers);
@@ -138,7 +156,9 @@ impl TileSource for DummyVectorSource {
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("dummy_vector_source::tile_stream {bbox:?}");
+		anyhow::ensure!(!self.failing_streams, "dummy vector source: the disk is on fire");
 		let data = Arc::clone(&self.data);
+		let extent = self.extent;
 		let tile_pyramid = self.metadata.tile_pyramid();
 
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
@@ -166,7 +186,7 @@ impl TileSource for DummyVectorSource {
 					features.push(feature);
 				}
 
-				layers.push(VectorTileLayer::from_features(name.clone(), features, 4096, 1).ok()?);
+				layers.push(VectorTileLayer::from_features(name.clone(), features, extent, 1).ok()?);
 			}
 
 			let vector_tile = VectorTile::new(layers);

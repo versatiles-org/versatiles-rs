@@ -1,6 +1,6 @@
 use anyhow::{Result, ensure};
 use versatiles_core::{
-	Blob, ByteRange, TileJSON, TilePyramid,
+	Blob, ByteRange, GeoBBox, TileJSON, TilePyramid,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 	utils::float_to_int,
 };
@@ -41,10 +41,12 @@ impl HeaderV3 {
 		use PMTilesCompression as PC;
 		use PMTilesType as PT;
 
+		// An empty source (a filter matching nothing) has no extent; it falls
+		// back to the world, as the VersaTiles writer does.
 		let bbox = tilejson
 			.bounds
 			.or_else(|| tile_pyramid.geo_extent())
-			.expect("bounds available from tilejson or pyramid");
+			.map_or_else(|| GeoBBox::new(-180.0, -85.051_13, 180.0, 85.051_13), Ok)?;
 		let center = tilejson.center.or_else(|| tile_pyramid.geo_center());
 
 		Ok(Self {

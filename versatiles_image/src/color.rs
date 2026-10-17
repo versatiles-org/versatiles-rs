@@ -26,6 +26,12 @@ use anyhow::{Result, anyhow, bail};
 pub fn parse_hex_color(hex: &str) -> Result<Vec<u8>> {
 	let hex = hex.trim_start_matches('#');
 
+	// Checked first, so that every character is one byte: the lengths and
+	// slices below count bytes, and a multi-byte character would split.
+	if let Some(c) = hex.chars().find(|c| !c.is_ascii_hexdigit()) {
+		bail!("Invalid hex color '{hex}': '{c}' is not a hex digit");
+	}
+
 	let expanded = match hex.len() {
 		3 => {
 			// RGB -> RRGGBB
@@ -252,5 +258,14 @@ mod tests {
 		assert!(parse_hex_color("FF").is_err());
 		assert!(parse_hex_color("FF5733FF0").is_err());
 		assert!(parse_hex_color("FFFFF").is_err());
+	}
+
+	/// Multi-byte characters used to panic: the length was counted in bytes and
+	/// the digits indexed by character (`a€`), or sliced off a char boundary (`aé€`).
+	#[test]
+	fn test_parse_hex_color_non_ascii_is_an_error() {
+		for hex in ["a€", "aé€", "€€€", "ffé", "#ü0"] {
+			assert!(parse_hex_color(hex).is_err(), "{hex}");
+		}
 	}
 }

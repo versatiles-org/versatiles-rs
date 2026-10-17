@@ -3,7 +3,10 @@
 //! This module provides [`TileSourceTraverseExt`], an extension trait that adds
 //! traversal capabilities to any [`TileSource`] implementation.
 
-use std::{sync::Arc, time::Instant};
+use std::{
+	sync::{Arc, Mutex},
+	time::Instant,
+};
 
 use anyhow::Result;
 use futures::{StreamExt, future::BoxFuture, stream};
@@ -115,15 +118,34 @@ pub trait TileSourceTraverseExt: TileSource {
 						log::trace!("Stream {bbox:?}");
 						let tracker2 = tracker.clone();
 						let read_operations = bboxes.iter().map(TileBBox::count_tiles).sum::<u64>();
+						// The sub-streams open lazily, inside the callback, so a
+						// failure cannot be returned from there. The first one is
+						// kept and returned once the callback is done, failing the
+						// traversal as the buffered path above does.
+						let failure: Arc<Mutex<Option<anyhow::Error>>> = Arc::default();
+						let failure2 = failure.clone();
 						let streams = stream::iter(bboxes).map(move |bbox| {
 							let tracker = tracker2.clone();
+							let failure = failure2.clone();
 							async move {
-								self.tile_stream(bbox).await.unwrap().inspect(move |_, _| {
-									tracker.inc(2);
-								})
+								match self.tile_stream(bbox).await {
+									Ok(stream) => stream.inspect(move |_, _| {
+										tracker.inc(2);
+									}),
+									Err(error) => {
+										failure
+											.lock()
+											.expect("poisoned mutex")
+											.get_or_insert(error.context(format!("reading tiles in {bbox:?}")));
+										TileStream::empty()
+									}
+								}
 							}
 						});
 						callback(bbox, TileStream::from_streams(streams)).await?;
+						if let Some(error) = failure.lock().expect("poisoned mutex").take() {
+							return Err(error);
+						}
 						tracker.inc_read_write(read_operations, bbox.count_tiles());
 					}
 				}
@@ -269,6 +291,8 @@ mod tests {
 		/// Optional delay in milliseconds before returning each tile.
 		tile_delay_micros: u64,
 		tile_pyramid: TilePyramid,
+		/// Whether `tile_stream` fails.
+		failing_streams: bool,
 	}
 
 	impl TestReader {
@@ -278,6 +302,7 @@ mod tests {
 				tile_pyramid: TilePyramid::new_full_up_to(max_level),
 				tilejson: TileJSON::default(),
 				tile_delay_micros: 0,
+				failing_streams: false,
 			}
 		}
 
@@ -290,6 +315,7 @@ mod tests {
 				tile_pyramid: TilePyramid::from_geo_bbox(min_level, max_level, &bbox).unwrap(),
 				tilejson: TileJSON::default(),
 				tile_delay_micros: 0,
+				failing_streams: false,
 			}
 		}
 	}
@@ -314,6 +340,7 @@ mod tests {
 
 		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 			log::trace!("test_reader::tile_stream {bbox:?}");
+			anyhow::ensure!(!self.failing_streams, "the disk is on fire");
 			let compression = *self.metadata.tile_compression();
 			let format = *self.metadata.tile_format();
 			let delay_micros = self.tile_delay_micros;
@@ -371,6 +398,30 @@ mod tests {
 		// Level 0: 1, Level 1: 4, Level 2: 16 = 21 tiles
 		assert_eq!(tile_count.load(Ordering::SeqCst), 21);
 		Ok(())
+	}
+
+	/// The direct (streaming) path used to `unwrap()` a failing `tile_stream`,
+	/// panicking where the buffered path returns the error.
+	#[tokio::test]
+	async fn a_failing_tile_stream_fails_the_streaming_traversal() {
+		let mut reader = TestReader::new(Traversal::ANY, 2);
+		reader.failing_streams = true;
+		let runtime = TilesRuntime::builder().with_memory_cache().build();
+
+		let error = reader
+			.traverse_all_tiles(
+				&Traversal::ANY,
+				|_bbox, stream| {
+					Box::pin(async move {
+						stream.to_vec().await;
+						Ok(())
+					})
+				},
+				runtime,
+			)
+			.await
+			.unwrap_err();
+		assert!(format!("{error:#}").contains("the disk is on fire"), "{error:#}");
 	}
 
 	#[tokio::test]

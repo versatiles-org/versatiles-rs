@@ -925,4 +925,21 @@ mod tests {
 		assert_eq!(*reader.metadata().tile_format(), TileFormat::BIN);
 		Ok(())
 	}
+
+	/// A source without bounds whose filter matches nothing used to abort the
+	/// process on the header's bounds; it writes an empty archive instead.
+	#[tokio::test]
+	async fn an_empty_source_without_bounds_writes_an_empty_archive() -> Result<()> {
+		let source = MockReader::new_mock(
+			TilePyramid::new_empty(),
+			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
+		)?;
+		let runtime = TilesRuntime::default();
+		let mut data_writer = DataWriterBlob::new()?;
+		PMTilesWriter::write_to_writer(&source, &mut data_writer, runtime.clone()).await?;
+
+		let reader = PMTilesReader::open_data(Box::new(DataReaderBlob::from(data_writer)), runtime).await?;
+		assert_eq!(reader.tile_entries()?.tile_count(), 0);
+		Ok(())
+	}
 }

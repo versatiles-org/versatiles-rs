@@ -13,7 +13,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, stream};
 use tokio::time::sleep;
@@ -37,7 +37,7 @@ struct Args {
 	/// How often to retry a failed tile request. Defaults to `3`.
 	#[vpl(default = "3")]
 	max_retries: Option<u16>,
-	/// How many tile requests may be in flight. Defaults to the I/O concurrency limit.
+	/// How many tile requests may be in flight, at least 1. Defaults to the I/O concurrency limit.
 	max_concurrent_requests: Option<u16>,
 }
 
@@ -71,6 +71,11 @@ impl Operation {
 
 		let max_retries = u32::from(args.max_retries.unwrap_or(3));
 		let max_concurrent_requests = args.max_concurrent_requests.unwrap_or(4) as usize;
+		// With no request allowed in flight, the tile stream would wait forever.
+		ensure!(
+			max_concurrent_requests >= 1,
+			"max_concurrent_requests must be at least 1"
+		);
 
 		let client = reqwest::Client::builder()
 			.user_agent(versatiles_core::io::user_agent())
@@ -813,6 +818,22 @@ mod tests {
 			b"relative_tile"
 		);
 		Ok(())
+	}
+
+	/// `buffer_unordered(0)` never yields, so zero requests in flight hung the
+	/// tile stream. It is refused before anything is fetched.
+	#[tokio::test]
+	async fn operation_build_refuses_zero_concurrent_requests() {
+		let factory = crate::PipelineFactory::new_dummy();
+		let vpl = crate::vpl::VPLNode::try_from_str(
+			r#"from_tilejson url="http://127.0.0.1:1/tiles.json" max_concurrent_requests=0"#,
+		)
+		.unwrap();
+		let err = Operation::build(vpl, &factory).await.unwrap_err();
+		assert!(
+			format!("{err:#}").contains("max_concurrent_requests must be at least 1"),
+			"{err:#}"
+		);
 	}
 
 	#[tokio::test]
