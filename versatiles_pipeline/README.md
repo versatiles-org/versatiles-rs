@@ -416,7 +416,7 @@ Reads one tile file and returns it for every requested coordinate.
 
 Reads tiles from a remote tile server described by a TileJSON endpoint.
 
-The TileJSON document is fetched once when the pipeline is built, and each tile is then requested individually through the URL template in its `tiles` array.
+The TileJSON document is fetched once when the pipeline is built, and each tile is then requested individually through the URL template in its `tiles` array. A relative template is resolved against the TileJSON's own URL.
 
 ### Parameters
 
