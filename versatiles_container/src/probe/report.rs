@@ -471,6 +471,27 @@ fn coverage_percent(tiles: u64, total: u64) -> u64 {
 	u64::try_from(percent).unwrap_or(100)
 }
 
+/// Inserts `entry` into `biggest`, kept sorted largest first and at most
+/// [`BIGGEST_TILES_LIMIT`] long.
+///
+/// `min_size` is the size below which an entry cannot get in. It is only a
+/// bound once the list is full: while there is room, every tile gets in, and
+/// raising the bound earlier — to the smallest entry so far — let a source
+/// whose sizes arrive in descending order keep a single entry.
+fn keep_biggest(biggest: &mut Vec<TileSizeEntry>, min_size: &mut u64, entry: TileSizeEntry) {
+	if entry.size < *min_size {
+		return;
+	}
+	let pos = biggest
+		.binary_search_by(|e| e.size.cmp(&entry.size).reverse())
+		.unwrap_or_else(|p| p);
+	biggest.insert(pos, entry);
+	biggest.truncate(BIGGEST_TILES_LIMIT);
+	if biggest.len() == BIGGEST_TILES_LIMIT {
+		*min_size = biggest.last().expect("the list is full").size;
+	}
+}
+
 /// Streams every tile's size, keeping totals, per-level totals and the biggest.
 async fn scan_tile_sizes(source: &dyn TileSource, runtime: &TilesRuntime) -> Result<TileSizeReport> {
 	let mut report = TileSizeReport::default();
@@ -497,16 +518,9 @@ async fn scan_tile_sizes(source: &dyn TileSource, runtime: &TilesRuntime) -> Res
 			level.size_sum += size;
 			progress.inc(1);
 
-			if size < min_size {
-				continue;
-			}
-
-			let pos = report
-				.biggest_tiles
-				.binary_search_by(|e| e.size.cmp(&size).reverse())
-				.unwrap_or_else(|p| p);
-			report.biggest_tiles.insert(
-				pos,
+			keep_biggest(
+				&mut report.biggest_tiles,
+				&mut min_size,
 				TileSizeEntry {
 					size,
 					x: coord.x,
@@ -514,10 +528,6 @@ async fn scan_tile_sizes(source: &dyn TileSource, runtime: &TilesRuntime) -> Res
 					z: coord.level,
 				},
 			);
-			if report.biggest_tiles.len() > BIGGEST_TILES_LIMIT {
-				report.biggest_tiles.pop();
-			}
-			min_size = report.biggest_tiles.last().expect("biggest_tiles is non-empty").size;
 		}
 		report.per_level.push(level);
 	}
@@ -653,6 +663,32 @@ async fn scan_vector_contents(
 mod tests {
 	use super::*;
 	use crate::TilesRuntime;
+
+	fn entry(size: u64) -> TileSizeEntry {
+		TileSizeEntry { z: 0, x: 0, y: 0, size }
+	}
+
+	/// Descending sizes used to keep one entry: the bound was raised to the
+	/// smallest entry after every insert, so each smaller tile was skipped.
+	#[test]
+	fn keep_biggest_fills_the_list_from_descending_sizes() {
+		let (mut biggest, mut min_size) = (Vec::new(), 0);
+		for size in (1..=100).rev() {
+			keep_biggest(&mut biggest, &mut min_size, entry(size));
+		}
+		let sizes: Vec<u64> = biggest.iter().map(|e| e.size).collect();
+		assert_eq!(sizes, (91..=100).rev().collect::<Vec<_>>());
+	}
+
+	#[test]
+	fn keep_biggest_keeps_the_largest_of_any_order() {
+		let (mut biggest, mut min_size) = (Vec::new(), 0);
+		for size in [5, 50, 1, 99, 7, 60, 3, 70, 2, 80, 4, 90, 6, 40, 30] {
+			keep_biggest(&mut biggest, &mut min_size, entry(size));
+		}
+		let sizes: Vec<u64> = biggest.iter().map(|e| e.size).collect();
+		assert_eq!(sizes, [99, 90, 80, 70, 60, 50, 40, 30, 7, 6]);
+	}
 
 	async fn berlin_report(depth: ProbeDepth) -> Result<ProbeReport> {
 		let runtime = TilesRuntime::new_silent();

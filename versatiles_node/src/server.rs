@@ -27,7 +27,10 @@ use anyhow::Context;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use tokio::sync::Mutex;
-use versatiles::{config::Config, server::TileServer as RustTileServer};
+use versatiles::{
+	config::Config,
+	server::{TileServer as RustTileServer, Url},
+};
 use versatiles_container::{DataLocation, TileSource as RustTileSource, TilesRuntime};
 
 use crate::{
@@ -255,10 +258,13 @@ impl TileServer {
 	/// Returns true if the source was found and removed, false otherwise.
 	#[napi]
 	pub async fn remove_static_source(&self, url_prefix: String) -> Result<bool> {
-		// Remove from our list (source of truth)
+		// Remove from our list (source of truth). Prefixes are compared the way
+		// the server compares them — normalised, with a missing one meaning
+		// "/" — or the list and the running server disagree on what was removed.
+		let target = Url::from(url_prefix.as_str()).to_dir();
 		let mut sources = self.static_sources.lock().await;
 		let initial_len = sources.len();
-		sources.retain(|(_, p)| p.as_ref() != Some(&url_prefix));
+		sources.retain(|(_, p)| Url::from(p.as_deref().unwrap_or("/")).to_dir() != target);
 		let was_removed = sources.len() < initial_len;
 		drop(sources);
 

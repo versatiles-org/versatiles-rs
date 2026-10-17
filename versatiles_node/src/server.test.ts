@@ -446,6 +446,18 @@ describe('TileServer', () => {
 			await expect(httpGet(`${baseUrl}/files/cities.csv`)).rejects.toThrow(/HTTP 404/);
 		});
 
+		it('should remove a static source by a prefix written differently', async () => {
+			// The server normalises '/files' and '/files/' to the same prefix, so
+			// the list it is kept in step with has to as well.
+			await server.addStaticSource(TESTDATA_DIR, '/files');
+			expect(await server.removeStaticSource('/files/')).toBe(true);
+			await expect(httpGet(`${baseUrl}/files/cities.csv`)).rejects.toThrow(/HTTP 404/);
+
+			// A source added without a prefix is mounted at '/'.
+			await server.addStaticSource(TESTDATA_DIR);
+			expect(await server.removeStaticSource('/')).toBe(true);
+		});
+
 		it('should return false when removing non-existent static source', async () => {
 			const removed = await server.removeStaticSource('/nonexistent');
 			expect(removed).toBe(false);

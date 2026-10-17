@@ -145,6 +145,11 @@ impl MBTilesTileSink {
 				&JsonObject::from(vec![("vector_layers", vector_layers)]).stringify(),
 			)?;
 		}
+		// Not in the MBTiles spec; see the writer. Without it, DEM tiles
+		// assembled into an MBTiles file read back as an ordinary image.
+		if let Some(tile_schema) = tilejson.tile_schema {
+			self.set_metadata("tile_schema", tile_schema.as_str())?;
+		}
 
 		for key in ["name", "author", "type", "description", "version", "license"] {
 			if let Some(value) = tilejson.str(key) {
@@ -187,6 +192,35 @@ impl TileSink for MBTilesTileSink {
 mod tests {
 	use super::*;
 	use crate::{MBTilesReader, TileSource, TilesRuntime};
+
+	/// The sink stores the tile schema as the writer does, so elevation tiles
+	/// assembled into an MBTiles file read back as elevation.
+	#[tokio::test]
+	async fn the_tile_schema_is_stored_and_read_back() -> Result<()> {
+		use versatiles_core::TileSchema;
+
+		let temp = assert_fs::NamedTempFile::new("dem_sink.mbtiles")?;
+		let runtime = TilesRuntime::default();
+		let sink = MBTilesTileSink::open(
+			temp.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
+		sink
+			.write_tile(&TileCoord::new(3, 1, 2)?, &Blob::from(vec![0u8; 16]))
+			.await?;
+
+		let tilejson = TileJSON {
+			tile_schema: Some(TileSchema::RasterDEMTerrarium),
+			..Default::default()
+		};
+		Box::new(sink).finish(&tilejson, &runtime).await?;
+
+		let reader = MBTilesReader::open(&temp, runtime)?;
+		assert_eq!(reader.tilejson().tile_schema, Some(TileSchema::RasterDEMTerrarium));
+		Ok(())
+	}
 
 	#[tokio::test]
 	async fn write_and_read_back() -> Result<()> {

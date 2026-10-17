@@ -113,7 +113,7 @@ pub struct Subcommand {
 	bbox: Option<String>,
 
 	/// also include additional tiles surrounding the bounding box as a border
-	#[arg(long, value_name = "int", display_order = 1)]
+	#[arg(long, value_name = "int", display_order = 1, requires = "bbox")]
 	bbox_border: Option<u32>,
 
 	/// set new compression
@@ -397,6 +397,20 @@ mod tests {
 		assert!(parse_tile_format("webp,abc").is_err()); // invalid quality
 		assert!(parse_tile_format("webp,80,abc").is_err()); // invalid effort
 		assert!(parse_tile_format("unknown").is_err());
+	}
+
+	/// A border around no bounding box used to be ignored without a word.
+	#[test]
+	fn bbox_border_without_bbox_is_refused() {
+		let error = run_command(vec![
+			"versatiles",
+			"convert",
+			"--bbox-border=2",
+			"../testdata/berlin.mbtiles",
+			"out.versatiles",
+		])
+		.unwrap_err();
+		assert!(format!("{error:#}").contains("--bbox"), "{error:#}");
 	}
 
 	#[test]

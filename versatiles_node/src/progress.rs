@@ -95,7 +95,12 @@ impl From<&ProgressState> for ProgressData {
 			estimated_seconds_remaining,
 			eta_timestamp: eta,
 			message: Some(data.message.clone()),
-			percentage: data.position as f64 / data.total as f64 * 100.0,
+			// A total of 0 (nothing to do, or not known yet) is 0 %, not NaN.
+			percentage: if data.total == 0 {
+				0.0
+			} else {
+				data.position as f64 / data.total as f64 * 100.0
+			},
 			position: data.position as f64,
 			speed,
 			total: data.total as f64,
@@ -159,6 +164,26 @@ mod tests {
 		assert!(progress_data.estimated_seconds_remaining.is_some());
 		assert!(progress_data.eta_timestamp.is_some());
 		assert_eq!(progress_data.message, Some("Test progress".to_string()));
+	}
+
+	/// A total of 0 used to give a `percentage` of NaN.
+	#[test]
+	fn test_progress_data_conversion_with_zero_total() {
+		let start = Instant::now();
+		let state = ProgressState {
+			id: ProgressId(1),
+			message: "Nothing to do".to_string(),
+			position: 0,
+			total: 0,
+			start,
+			next_draw: start,
+			next_emit: start,
+			finished: false,
+		};
+
+		let progress_data = ProgressData::from(&state);
+
+		assert_relative_eq!(progress_data.percentage, 0.0);
 	}
 
 	#[test]

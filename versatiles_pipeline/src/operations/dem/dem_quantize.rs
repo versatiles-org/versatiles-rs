@@ -40,16 +40,26 @@ struct Operation {
 	encoding: DemEncoding,
 }
 
-/// Compute the round-to-nearest quantizer for a tile from its coordinates and parameters.
+/// Compute the round-to-nearest quantizer for a tile from its coordinates, its
+/// width in pixels, and the parameters.
+///
+/// The width is the decoded image's, not an assumed 256: a 512-px tile has
+/// pixels half the ground size, and the step has to halve with them.
 ///
 /// Returns `(mask_24, round_add)`. Apply per pixel by reconstructing the 24-bit raw
 /// elevation, adding `round_add`, clamping to 24 bits, then ANDing with `mask_24`. This
 /// rounds each value to the nearest multiple of the per-tile step `2^zero_bits` instead of
 /// truncating downward, which halves the worst-case elevation error and removes the
 /// systematic downward bias — at the same step (same slope error) and the same size.
-fn compute_quantizer(coord: &TileCoord, elevation_error: f64, slope_error: f64, encoding: DemEncoding) -> (u32, u32) {
+fn compute_quantizer(
+	coord: &TileCoord,
+	tile_pixels: u32,
+	elevation_error: f64,
+	slope_error: f64,
+	encoding: DemEncoding,
+) -> (u32, u32) {
 	let tile_ground_meters = coord.ground_size_meters();
-	let pixel_meters = tile_ground_meters / 256.0;
+	let pixel_meters = tile_ground_meters / f64::from(tile_pixels.max(1));
 
 	// Criterion 1: elevation error
 	let max_step_resolution = elevation_error * pixel_meters;
@@ -130,9 +140,16 @@ impl TileTransform for Operation {
 		// Time per-tile decode+quantize; trace slow tiles — decoding one large image
 		// is single-threaded and can dominate when few tiles are in flight.
 		let started = std::time::Instant::now();
-		let (mask_24, round_add) = compute_quantizer(coord, self.elevation_error, self.slope_error, self.encoding);
+		let image = tile.as_image_mut()?;
+		let (mask_24, round_add) = compute_quantizer(
+			coord,
+			image.width(),
+			self.elevation_error,
+			self.slope_error,
+			self.encoding,
+		);
 
-		match tile.as_image_mut()? {
+		match image {
 			DynamicImage::ImageRgb8(img) => {
 				for p in img.pixels_mut() {
 					let [r, g, b] = &mut p.0;
@@ -175,7 +192,7 @@ mod tests {
 
 	/// Per-channel masks `(mask_r, mask_g, mask_b)` derived from the quantizer, for tests.
 	fn masks(coord: &TileCoord, elevation_error: f64, slope_error: f64, encoding: DemEncoding) -> (u8, u8, u8) {
-		let (mask_24, _round_add) = compute_quantizer(coord, elevation_error, slope_error, encoding);
+		let (mask_24, _round_add) = compute_quantizer(coord, 256, elevation_error, slope_error, encoding);
 		(
 			((mask_24 >> 16) & 0xFF) as u8,
 			((mask_24 >> 8) & 0xFF) as u8,
@@ -184,6 +201,21 @@ mod tests {
 	}
 
 	// ── compute_quantizer unit tests ─────────────────────────────────────
+
+	/// A 512-px tile has pixels half the ground size of a 256-px one, so its
+	/// step is one bit finer; the 256 that was hardcoded doubled the error.
+	#[test]
+	fn the_step_follows_the_tile_width() {
+		let coord = TileCoord::new(10, 500, 300).unwrap();
+		let (mask_256, round_256) = compute_quantizer(&coord, 256, 0.1, 1.0, DemEncoding::Mapbox);
+		let (mask_512, round_512) = compute_quantizer(&coord, 512, 0.1, 1.0, DemEncoding::Mapbox);
+		assert_eq!(
+			mask_512,
+			mask_256 | (mask_256 >> 1) & 0x00FF_FFFF,
+			"one bit fewer zeroed"
+		);
+		assert_eq!(round_512 * 2, round_256);
+	}
 
 	#[test]
 	fn test_masks_zoom0_equator_mapbox() {
@@ -300,7 +332,7 @@ mod tests {
 	fn test_round_add_is_half_step() {
 		// round_add must be exactly half the quantization step (0 when no bits zeroed).
 		let coord = TileCoord::new(8, 128, 128).unwrap();
-		let (mask_24, round_add) = compute_quantizer(&coord, 0.5, 1.0, DemEncoding::Mapbox);
+		let (mask_24, round_add) = compute_quantizer(&coord, 256, 0.5, 1.0, DemEncoding::Mapbox);
 		let step = (!mask_24 & 0x00FF_FFFF) + 1; // 2^zero_bits
 		assert_eq!(round_add, step / 2);
 	}
