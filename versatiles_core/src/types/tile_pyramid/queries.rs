@@ -227,13 +227,17 @@ impl TilePyramid {
 		GeoBBox::new(west_lon, south_lat, east_lon, north_lat).ok()
 	}
 
-	/// Calculates a geographic center from the bounding box of the highest
-	/// level, at a middle zoom level.
+	/// Calculates a geographic center from the [`geo_extent`](Self::geo_extent),
+	/// at a middle zoom level.
+	///
+	/// The center is the middle of the same box that bounds are derived from.
+	/// It used to be the middle of the highest level, which put a view of the
+	/// whole tileset, at a low zoom, on whatever region was most detailed.
 	///
 	/// Returns `None` if the pyramid is empty.
 	#[must_use]
 	pub fn geo_center(&self) -> Option<GeoCenter> {
-		let bbox = self.geo_bbox_of_level_max()?;
+		let bbox = self.geo_extent()?;
 		let level = (self.level_min()? + 2).min(self.level_max()?);
 		let center_lon = f64::midpoint(bbox.x_min, bbox.x_max);
 		let center_lat = f64::midpoint(bbox.y_min, bbox.y_max);
@@ -423,6 +427,33 @@ mod tests {
 		assert_eq!(Some(world), p.geo_extent());
 		assert_eq!((world.x_min, world.x_max), (-180.0, 180.0));
 		assert_eq!(Some(world), PyramidInfo::geo_extent(&p), "agrees with the trait");
+	}
+
+	/// The center belongs to the extent, not to the most detailed region.
+	#[test]
+	fn center_is_the_middle_of_the_extent() {
+		let guadeloupe = GeoBBox::new(-61.69, 15.83, -61.01, 16.5).unwrap();
+		let mut p = TilePyramid::new_full_up_to(8);
+		p.insert_bbox(&TileBBox::from_geo_bbox(19, &guadeloupe).unwrap())
+			.unwrap();
+
+		let GeoCenter(lon, lat, zoom) = p.geo_center().unwrap();
+		assert!(lon.abs() < 1e-9 && lat.abs() < 1e-9, "({lon}, {lat})");
+		assert_eq!(zoom, 2);
+	}
+
+	/// A single region keeps the center of its highest level: the coarse
+	/// tiles below it add nothing to the extent.
+	#[test]
+	fn center_of_one_region_is_unchanged() {
+		let liechtenstein = GeoBBox::new(9.47, 47.05, 9.64, 47.27).unwrap();
+		let p = TilePyramid::from_geo_bbox(0, 14, &liechtenstein).unwrap();
+		let top = p.geo_bbox_of_level_max().unwrap();
+		let GeoCenter(lon, lat, _) = p.geo_center().unwrap();
+		assert_eq!(
+			(lon, lat),
+			(f64::midpoint(top.x_min, top.x_max), f64::midpoint(top.y_min, top.y_max))
+		);
 	}
 
 	#[test]
