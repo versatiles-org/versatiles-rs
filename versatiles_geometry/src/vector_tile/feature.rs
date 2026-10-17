@@ -585,9 +585,35 @@ impl VectorTileFeature {
 			Ok(())
 		}
 
+		/// Rounds a ring to the grid `write_coord` writes it on, dropping the
+		/// repeated vertices that rounding produces.
+		fn round_ring(ring: LineString<f64>) -> LineString<f64> {
+			let mut coords: Vec<Coord<f64>> = ring
+				.0
+				.into_iter()
+				.map(|c| Coord {
+					x: c.x.round(),
+					y: c.y.round(),
+				})
+				.collect();
+			coords.dedup();
+			LineString(coords)
+		}
+
+		fn round_polygon(polygon: Polygon<f64>) -> Polygon<f64> {
+			let (exterior, interiors) = polygon.into_inner();
+			Polygon::new(round_ring(exterior), interiors.into_iter().map(round_ring).collect())
+		}
+
 		fn write_polygons(polygons: MultiPolygon<f64>) -> Result<Blob> {
 			let mut writer = ValueWriterBlob::new_le();
 			let point0 = &mut (0i64, 0i64);
+
+			// Round to the integer grid first. Winding and degeneracy are
+			// properties of the rings as written, and rounding can flip a
+			// sliver's orientation or collapse it: judged on the floats, such a
+			// ring was written inverted, as an inner ring the reader drops.
+			let polygons = MultiPolygon(polygons.0.into_iter().map(round_polygon).collect());
 
 			// Normalise ring winding to MVT 2.1 §4.3.3.3 before writing varints.
 			// Callers can hand us geometry from any source (geojson, shapefile,
@@ -1146,6 +1172,40 @@ mod tests {
 	}
 
 	// ── ring_is_degenerate ────────────────────────────────────────────────
+
+	/// Winding used to be normalised on the float coordinates, before they
+	/// were rounded. This sliver is counter-clockwise as given but clockwise on
+	/// the integer grid, so it was written as an inner ring with no exterior —
+	/// which the reader drops.
+	#[test]
+	fn winding_is_normalised_on_the_rounded_ring() -> Result<()> {
+		let sliver = Polygon::new(
+			LineString::from(vec![(0.0, 0.0), (20.0, 0.6), (10.0, 0.4), (0.0, 0.0)]),
+			vec![],
+		);
+		let feature = VectorTileFeature::from_geometry(None, vec![], Geometry::Polygon(sliver))?;
+		match feature.to_geometry()? {
+			Geometry::MultiPolygon(mp) => {
+				assert_eq!(mp.0.len(), 1, "the sliver must survive the round trip");
+				assert!(ring_signed_double_area(&mp.0[0].exterior().0) > 0.0);
+			}
+			other => panic!("expected a polygon, got {other:?}"),
+		}
+		Ok(())
+	}
+
+	/// A ring that only collapses once rounded is left out, as one that is
+	/// degenerate as given.
+	#[test]
+	fn a_ring_degenerate_on_the_grid_is_left_out() -> Result<()> {
+		let flat = Polygon::new(
+			LineString::from(vec![(0.0, 0.0), (20.0, 0.2), (10.0, 0.1), (0.0, 0.0)]),
+			vec![],
+		);
+		let feature = VectorTileFeature::from_geometry(None, vec![], Geometry::Polygon(flat))?;
+		assert_eq!(feature.geom_type, GeomType::Unknown);
+		Ok(())
+	}
 
 	#[test]
 	fn ring_is_degenerate_too_few_vertices() {

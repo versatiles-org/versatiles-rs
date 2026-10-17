@@ -130,6 +130,29 @@ mod tests {
 		);
 	}
 
+	/// Re-encoding the fixture through `from_features` — decode to geometry,
+	/// round, rewind, write — gives a tile the validator has nothing to say
+	/// about.
+	#[tokio::test]
+	async fn re_encoded_fixture_validates_clean() -> Result<()> {
+		let layers = tile()
+			.await?
+			.layers
+			.into_iter()
+			.map(|layer| {
+				let (name, extent, version) = (
+					layer.name.clone(),
+					layer.extent.unwrap_or(4096),
+					layer.version.unwrap_or(2),
+				);
+				VectorTileLayer::from_features(name, layer.to_features()?, extent, version)
+			})
+			.collect::<Result<Vec<_>>>()?;
+		let issues = crate::vector_tile::validate_tile(&VectorTile::new(layers));
+		assert!(issues.is_empty(), "{issues:?}");
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn from_to_blob() -> Result<()> {
 		let tile1 = tile().await.context("Failed to get initial VectorTile")?;
