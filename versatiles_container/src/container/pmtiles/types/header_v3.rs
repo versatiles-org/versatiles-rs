@@ -48,6 +48,16 @@ impl HeaderV3 {
 			.or_else(|| tile_pyramid.geo_extent())
 			.map_or_else(|| GeoBBox::new(-180.0, -85.051_13, 180.0, 85.051_13), Ok)?;
 		let center = tilejson.center.or_else(|| tile_pyramid.geo_center());
+		let min_zoom = tilejson.zoom_min().or(tile_pyramid.level_min()).unwrap_or(0);
+		let max_zoom = tilejson
+			.zoom_max()
+			.or(tile_pyramid.level_max())
+			.unwrap_or(14)
+			.max(min_zoom);
+		// Within the archive's zoom range: the default of 5 used to land above
+		// `max_zoom` for a tileset ending at a lower zoom, which a client then
+		// opened on an empty map.
+		let center_zoom = center.map_or(5, |c| c.2).clamp(min_zoom, max_zoom);
 
 		Ok(Self {
 			root_dir: ByteRange::new(0, 0),
@@ -61,13 +71,13 @@ impl HeaderV3 {
 			internal_compression: PC::Gzip,
 			tile_compression: PC::from_value(*parameters.tile_compression())?,
 			tile_type: PT::from_value(*parameters.tile_format())?,
-			min_zoom: tilejson.zoom_min().or(tile_pyramid.level_min()).unwrap_or(0),
-			max_zoom: tilejson.zoom_max().or(tile_pyramid.level_max()).unwrap_or(14),
+			min_zoom,
+			max_zoom,
 			min_lon_e7: float_to_int(bbox.x_min * 1e7).expect("lon*1e7 fits in i32"),
 			min_lat_e7: float_to_int(bbox.y_min * 1e7).expect("lat*1e7 fits in i32"),
 			max_lon_e7: float_to_int(bbox.x_max * 1e7).expect("lon*1e7 fits in i32"),
 			max_lat_e7: float_to_int(bbox.y_max * 1e7).expect("lat*1e7 fits in i32"),
-			center_zoom: center.map_or(5, |c| c.2),
+			center_zoom,
 			center_lon_e7: center.map_or_else(
 				|| float_to_int((bbox.x_min + bbox.x_max) * 5e6).expect("lon midpoint fits in i32"),
 				|c| float_to_int(c.0 * 1e7).expect("lon*1e7 fits in i32"),
@@ -161,6 +171,21 @@ impl HeaderV3 {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// Without a declared centre the zoom defaulted to 5, above the maximum of
+	/// a tileset that ends lower.
+	#[test]
+	fn the_center_zoom_lies_within_the_zoom_range() -> Result<()> {
+		use versatiles_core::{TileCompression, TileFormat};
+
+		use crate::Traversal;
+
+		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None);
+		let header = HeaderV3::from_parameters(&metadata, &TilePyramid::new_full_up_to(3), &TileJSON::default())?;
+		assert_eq!((header.min_zoom, header.max_zoom), (0, 3));
+		assert!(header.center_zoom <= 3, "{}", header.center_zoom);
+		Ok(())
+	}
 
 	#[test]
 	fn header_serialization_deserialization() {

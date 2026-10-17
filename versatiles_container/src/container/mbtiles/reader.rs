@@ -56,7 +56,7 @@
 
 use std::{path::Path, sync::Arc};
 
-use anyhow::{Result, anyhow, bail, ensure};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
 use r2d2_sqlite::{
@@ -222,50 +222,104 @@ impl MBTilesReader {
 					}
 					_ => bail!("unknown tile format '{value}' in mbtiles metadata of '{}'", self.name),
 				},
-				// https://github.com/mapbox/mbtiles-spec/blob/master/1.3/spec.md#content
-				"bounds" => {
-					let bounds = value
-						.split(',')
-						.map(str::parse::<f64>)
-						.collect::<Result<Vec<f64>, _>>()?;
-					self.tilejson.limit_bbox(GeoBBox::try_from(bounds)?);
-				}
-				"name" | "attribution" | "author" | "description" | "license" | "type" | "version" => {
-					self.tilejson.set_string(key, value)?;
-				}
-				"center" => {
-					let parts = value
-						.split(',')
-						.map(str::parse::<f64>)
-						.collect::<Result<Vec<f64>, _>>()?;
-					self.tilejson.center = Some(GeoCenter::try_from(parts)?);
-				}
-				// Written by this crate's MBTiles writer; see there. A value
-				// this version does not know is left out, not an error: the
-				// file is still readable.
-				"tile_schema" => {
-					if let Ok(tile_schema) = TileSchema::try_from(value) {
-						self.tilejson.tile_schema = Some(tile_schema);
+				// Everything but the format is optional. A value that does not
+				// parse is left out with a warning, as `tile_schema` always was:
+				// the tiles are still readable, and refusing the whole file over
+				// a two-part `center` helps nobody.
+				_ => {
+					if let Err(error) = self.load_optional_meta_data(key, value) {
+						log::warn!(
+							"ignoring unreadable metadata '{key}' in mbtiles '{}': {error:#}",
+							self.name
+						);
 					}
 				}
-				"minzoom" => self.tilejson.set_zoom_min(value.parse::<u8>()?),
-				"maxzoom" => self.tilejson.set_zoom_max(value.parse::<u8>()?),
-				"json" => {
-					let json = parse_json_str(value).with_context(|| format!("failed to parse JSON: {value}"))?;
-					let object = json.as_object().with_context(|| anyhow!("expected JSON object"))?;
-					let vector_layers = object
-						.get("vector_layers")
-						.with_context(|| anyhow!("expected 'vector_layers'"))?;
-					self.tilejson.set_vector_layers(vector_layers)?;
-				}
-				_ => {}
 			}
 		}
 
-		self.metadata.set_tile_format(tile_format?);
-		self.metadata.set_tile_compression(compression?);
+		let tile_format = tile_format?;
+		let mut compression = compression?;
+		if tile_format == MVT {
+			compression = self.check_pbf_compression(compression)?;
+		}
+		self.metadata.set_tile_format(tile_format);
+		self.metadata.set_tile_compression(compression);
 
 		Ok(())
+	}
+
+	/// Applies one optional metadata entry to the TileJSON.
+	///
+	/// See <https://github.com/mapbox/mbtiles-spec/blob/master/1.3/spec.md#content>.
+	fn load_optional_meta_data(&mut self, key: &str, value: &str) -> Result<()> {
+		match key {
+			"bounds" => {
+				let bounds = value
+					.split(',')
+					.map(|v| v.trim().parse::<f64>())
+					.collect::<Result<Vec<f64>, _>>()?;
+				self.tilejson.limit_bbox(GeoBBox::try_from(bounds)?);
+			}
+			"name" | "attribution" | "author" | "description" | "license" | "type" | "version" => {
+				self.tilejson.set_string(key, value)?;
+			}
+			"center" => {
+				let parts = value
+					.split(',')
+					.map(|v| v.trim().parse::<f64>())
+					.collect::<Result<Vec<f64>, _>>()?;
+				self.tilejson.center = Some(GeoCenter::try_from(parts)?);
+			}
+			// Written by this crate's MBTiles writer; see there.
+			"tile_schema" => self.tilejson.tile_schema = Some(TileSchema::try_from(value)?),
+			"minzoom" => self.tilejson.set_zoom_min(value.trim().parse::<u8>()?),
+			"maxzoom" => self.tilejson.set_zoom_max(value.trim().parse::<u8>()?),
+			"json" => {
+				let json = parse_json_str(value).context("failed to parse JSON")?;
+				let object = json.as_object().context("expected a JSON object")?;
+				// The spec puts `vector_layers` here for vector tiles; a raster
+				// file may keep anything else in `json`, which is not an error.
+				if let Some(vector_layers) = object.get("vector_layers") {
+					self.tilejson.set_vector_layers(vector_layers)?;
+				}
+			}
+			_ => {}
+		}
+		Ok(())
+	}
+
+	/// `format=pbf` means gzipped vector tiles, but not every writer gzips
+	/// them. Copied through as gzip, uncompressed tiles became a container that
+	/// claims a compression its tiles do not have, so the first tile is asked.
+	///
+	/// Gzip and zstd announce themselves; an uncompressed MVT starts with the
+	/// key of its first layer (field 3, length-delimited: `0x1A`). Brotli has
+	/// no signature, so anything else keeps what the metadata implies.
+	fn check_pbf_compression(&self, declared: TileCompression) -> Result<TileCompression> {
+		let conn = self.pool.get()?;
+		let first: Option<Vec<u8>> = conn
+			.query_row(
+				"SELECT tile_data FROM tiles WHERE tile_data IS NOT NULL LIMIT 1",
+				[],
+				|row| row.get(0),
+			)
+			.optional()?;
+		let Some(first) = first else {
+			return Ok(declared);
+		};
+		let detected = match first.as_slice() {
+			[0x1F, 0x8B, ..] => Gzip,
+			[0x28, 0xB5, 0x2F, 0xFD, ..] => TileCompression::Zstd,
+			[0x1A, ..] => Uncompressed,
+			_ => declared,
+		};
+		if detected != declared {
+			log::warn!(
+				"mbtiles '{}' declares format=pbf, which means gzip, but its tiles are {detected}; reading them as {detected}",
+				self.name
+			);
+		}
+		Ok(detected)
 	}
 
 	/// Compute the exact tile coverage pyramid from the `tiles` table.
@@ -373,10 +427,11 @@ impl TileSource for MBTilesReader {
 		if !entries.is_empty() {
 			let p = print.get_list("metadata").await;
 			for (name, value) in &entries {
-				let display_value = if value.len() > 100 {
-					format!("{}...", &value[..100])
-				} else {
-					value.clone()
+				// Cut at a character, not a byte: slicing at byte 100 panicked
+				// inside a multi-byte character.
+				let display_value = match value.char_indices().nth(100) {
+					Some((end, _)) => format!("{}...", &value[..end]),
+					None => value.clone(),
 				};
 				p.add_key_value(name, &display_value).await;
 			}
@@ -783,6 +838,78 @@ mod read_only_tests {
 			"if SQLite stops writing sidecars for read-only WAL access, this limitation is gone \
 			 and the comment above it should go too"
 		);
+		Ok(())
+	}
+
+	/// A minimal MBTiles with the given metadata rows and one tile at 0/0/0.
+	fn mbtiles_with(dir: &Path, metadata: &[(&str, &str)], tile: &[u8]) -> Result<std::path::PathBuf> {
+		let path = dir.join("test.mbtiles");
+		let conn = r2d2_sqlite::rusqlite::Connection::open(&path)?;
+		conn.execute("CREATE TABLE metadata (name text, value text)", [])?;
+		for (name, value) in metadata {
+			conn.execute("INSERT INTO metadata VALUES (?1, ?2)", [name, value])?;
+		}
+		conn.execute(
+			"CREATE TABLE tiles (zoom_level integer, tile_column integer, tile_row integer, tile_data blob)",
+			[],
+		)?;
+		conn.execute("INSERT INTO tiles VALUES (0, 0, 0, ?1)", [tile])?;
+		Ok(path)
+	}
+
+	/// `format=pbf` means gzip, but uncompressed tiles were copied through
+	/// labelled as gzip. The first tile now says what they are.
+	#[tokio::test]
+	async fn uncompressed_pbf_tiles_are_read_as_uncompressed() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let raw_mvt = [0x1A, 0x00];
+		let path = mbtiles_with(dir.path(), &[("format", "pbf")], &raw_mvt)?;
+		let reader = MBTilesReader::open(&path, TilesRuntime::default())?;
+		assert_eq!(reader.metadata().tile_compression(), &Uncompressed);
+
+		let gzipped = versatiles_core::compression::compress_gzip(&Blob::from(raw_mvt.to_vec()))?;
+		let dir = tempfile::tempdir()?;
+		let path = mbtiles_with(dir.path(), &[("format", "pbf")], gzipped.as_slice())?;
+		let reader = MBTilesReader::open(&path, TilesRuntime::default())?;
+		assert_eq!(reader.metadata().tile_compression(), &Gzip);
+		Ok(())
+	}
+
+	/// Optional metadata that does not parse is left out, not a reason to
+	/// refuse the file.
+	#[tokio::test]
+	async fn unreadable_optional_metadata_is_ignored() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let path = mbtiles_with(
+			dir.path(),
+			&[
+				("format", "png"),
+				("center", "13.4,52.5"),
+				("bounds", "a,b,c,d"),
+				("minzoom", "low"),
+				("json", "{\"something\":\"else\"}"),
+				("name", "kept"),
+			],
+			b"png",
+		)?;
+		let reader = MBTilesReader::open(&path, TilesRuntime::default())?;
+		assert_eq!(reader.tilejson().center, None);
+		assert_eq!(reader.tilejson().str("name"), Some("kept"));
+		Ok(())
+	}
+
+	/// The probe shortens long metadata values at a character, not a byte.
+	#[cfg(feature = "cli")]
+	#[tokio::test]
+	async fn probe_shortens_multibyte_metadata() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let description = "é".repeat(80);
+		let path = mbtiles_with(dir.path(), &[("format", "png"), ("description", &description)], b"png")?;
+		let reader = MBTilesReader::open(&path, TilesRuntime::default())?;
+		let mut printer = PrettyPrint::new();
+		reader
+			.probe_container(&mut printer.category("container").await, &TilesRuntime::default())
+			.await?;
 		Ok(())
 	}
 }

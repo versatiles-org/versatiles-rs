@@ -242,12 +242,11 @@ impl TilesRuntime {
 	/// ```
 	#[must_use]
 	pub fn create_progress(&self, message: &str, total: u64) -> ProgressHandle {
-		self
-			.inner
-			.progress_factory
-			.lock()
-			.expect("poisoned mutex")
-			.create(message, total)
+		// The lock is released before the handle exists: creating it emits an
+		// event, and a listener that creates a progress itself used to
+		// deadlock on this mutex.
+		let prepared = self.inner.progress_factory.lock().expect("poisoned mutex").prepare();
+		prepared.create(message, total)
 	}
 
 	/// Write tiles to a filesystem path, picking the writer from its extension.
@@ -342,6 +341,34 @@ mod tests {
 		assert!(captured[0].contains("Step"));
 		assert!(captured[1].contains("Warning"));
 		assert!(captured[2].contains("Error"));
+	}
+
+	/// A listener that creates a progress of its own, on the event a new
+	/// progress emits, used to deadlock on the factory's mutex.
+	#[test]
+	fn a_listener_may_create_a_progress() {
+		use std::sync::atomic::{AtomicBool, Ordering};
+
+		let runtime = TilesRuntime::new();
+		let inner = runtime.clone();
+		let nested = Arc::new(AtomicBool::new(false));
+		let nested_clone = nested.clone();
+		runtime.events().subscribe(move |event| {
+			if matches!(event, crate::Event::Progress { .. }) && !nested_clone.swap(true, Ordering::SeqCst) {
+				let _ = inner.create_progress("nested", 1);
+			}
+		});
+
+		let (done, finished) = std::sync::mpsc::channel();
+		std::thread::spawn(move || {
+			let progress = runtime.create_progress("outer", 10);
+			progress.inc(1);
+			done.send(()).unwrap();
+		});
+		finished
+			.recv_timeout(std::time::Duration::from_secs(10))
+			.expect("creating a progress from a listener deadlocked");
+		assert!(nested.load(Ordering::SeqCst), "the listener never ran");
 	}
 
 	#[test]

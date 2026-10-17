@@ -49,7 +49,7 @@ use versatiles_derive::context;
 
 use crate::{
 	ProgressHandle, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime,
-	Traversal,
+	Traversal, container::tile_path::parse_tile_component,
 };
 
 /// Reader for tiles stored inside a tar archive.
@@ -78,30 +78,32 @@ struct ParsedTile {
 }
 
 /// Try to parse a tile path like `{z}/{x}/{y}.<format>[.<compression>]`.
-fn try_parse_tile_path<R: AsyncRead + Unpin>(entry: &Entry<R>, path_vec: &[&str]) -> Result<Option<ParsedTile>> {
+///
+/// `None` for any entry that is not one — including a three-part path whose
+/// parts are not numbers, such as `assets/fonts/font.png`, which used to fail
+/// the whole archive.
+fn try_parse_tile_path<R: AsyncRead + Unpin>(entry: &Entry<R>, path_vec: &[&str]) -> Option<ParsedTile> {
 	if path_vec.len() != 3 {
-		return Ok(None);
+		return None;
 	}
 
-	let level = path_vec[0].parse::<u8>()?;
-	let x = path_vec[1].parse::<u32>()?;
+	let level = parse_tile_component::<u8>(path_vec[0])?;
+	let x = parse_tile_component::<u32>(path_vec[1])?;
 
 	let mut filename = String::from(path_vec[2]);
 	let compression = TileCompression::from_filename(&mut filename);
-	let Some(format) = TileFormat::from_filename(&mut filename) else {
-		return Ok(None);
-	};
+	let format = TileFormat::from_filename(&mut filename)?;
 
-	let y = filename.parse::<u32>()?;
-	let coord = TileCoord::new(level, x, y)?;
+	let y = parse_tile_component::<u32>(&filename)?;
+	let coord = TileCoord::new(level, x, y).ok()?;
 
-	Ok(Some(ParsedTile {
+	Some(ParsedTile {
 		coord,
 		format,
 		compression,
 		offset: entry.raw_file_position(),
 		length: entry.effective_size(),
-	}))
+	})
 }
 
 impl TarTilesReader {
@@ -195,7 +197,7 @@ impl TarTilesReader {
 			drop(path);
 			let path_vec: Vec<&str> = path_tmp_string.split('/').collect();
 
-			if let Some(tile) = try_parse_tile_path(&entry, &path_vec)? {
+			if let Some(tile) = try_parse_tile_path(&entry, &path_vec) {
 				if let Some(f) = &tile_format {
 					ensure!(
 						f == &tile.format,
@@ -248,7 +250,9 @@ impl TarTilesReader {
 				// anything looks at what it contains. The ceiling is the one the
 				// decompressor already applies, so metadata cannot arrive larger
 				// than it could be decompressed to anyway.
-				let declared = entry.header().raw_file_size().unwrap_or(0);
+				// The entry's effective size, which a PAX header can raise above
+				// the one in the plain header — what `read_to_end` reads.
+				let declared = entry.effective_size();
 				let limit = max_decompressed_bytes();
 				if limit > 0 && declared > limit {
 					bail!(
@@ -566,6 +570,34 @@ pub mod tests {
 				.to_string(),
 			"no tiles found in tar"
 		);
+		Ok(())
+	}
+
+	/// Three-part paths that are not tiles — assets beside the tiles, a
+	/// zero-padded level, a position outside its level — are skipped. The
+	/// first used to fail the whole archive, and `01/…` to collide with `1/…`.
+	#[tokio::test]
+	async fn three_part_paths_that_are_not_tiles_are_skipped() -> Result<()> {
+		let filename = assert_fs::NamedTempFile::new("not_tiles.tar")?;
+		let mut a = tokio_tar::Builder::new_non_terminated(tokio::fs::File::create(&filename).await?);
+		for (name, data) in [
+			("assets/fonts/a.png", [9u8].as_ref()),
+			("01/1/1.bin", [8].as_ref()),
+			("1/1/1.bin", [1].as_ref()),
+			("1/2/0.bin", [7].as_ref()),
+		] {
+			let mut header = tokio_tar::Header::new_gnu();
+			header.set_size(data.len() as u64);
+			header.set_cksum();
+			a.append_data(&mut header, name, data).await?;
+		}
+		a.finish().await?;
+		drop(a);
+
+		let reader = TarTilesReader::open(&filename, TilesRuntime::default()).await?;
+		assert_eq!(reader.tile_map.len(), 1);
+		let mut tile = reader.tile(&TileCoord::new(1, 1, 1)?).await?.unwrap();
+		assert_eq!(tile.as_blob(&TileCompression::Uncompressed)?.as_slice(), [1]);
 		Ok(())
 	}
 

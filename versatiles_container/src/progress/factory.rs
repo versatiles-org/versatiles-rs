@@ -29,9 +29,36 @@ impl ProgressFactory {
 	/// * `total` - Total number of items/bytes to process
 	/// * `event_bus` - Event bus to emit progress events to
 	pub fn create(&mut self, message: &str, total: u64) -> ProgressHandle {
+		self.prepare().create(message, total)
+	}
+
+	/// Takes the next id and what a handle needs, without creating it.
+	///
+	/// Creating a handle emits an event, and listeners run synchronously; a
+	/// caller holding a lock on the factory hands that lock to every listener,
+	/// and one that creates a progress of its own deadlocks. This is the part
+	/// that needs the lock.
+	pub(crate) fn prepare(&mut self) -> PreparedProgress {
 		self.next_id = self.next_id.wrapping_add(1);
-		let id = crate::ProgressId(self.next_id);
-		ProgressHandle::new(id, message.to_string(), total, self.event_bus.clone(), self.silent)
+		PreparedProgress {
+			id: crate::ProgressId(self.next_id),
+			event_bus: self.event_bus.clone(),
+			silent: self.silent,
+		}
+	}
+}
+
+/// A progress handle's id and surroundings, taken from the factory.
+pub(crate) struct PreparedProgress {
+	id: crate::ProgressId,
+	event_bus: EventBus,
+	silent: bool,
+}
+
+impl PreparedProgress {
+	/// Creates the handle, emitting its first event.
+	pub(crate) fn create(self, message: &str, total: u64) -> ProgressHandle {
+		ProgressHandle::new(self.id, message.to_string(), total, self.event_bus, self.silent)
 	}
 }
 

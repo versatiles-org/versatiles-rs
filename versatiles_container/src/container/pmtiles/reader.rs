@@ -48,7 +48,7 @@
 
 use std::{fmt::Debug, mem::size_of, path::Path, sync::Arc};
 
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use moka::future::Cache;
 #[cfg(feature = "cli")]
@@ -103,6 +103,18 @@ fn too_deep() -> anyhow::Error {
 /// billion tiles, so 2^32 keeps three times that in reserve while still refusing
 /// a `run_length` that exists only to make the reader count to 2^32.
 const MAX_UNDECLARED_ADDRESSED_TILES: u64 = 1 << 32;
+
+/// The directory walk passed its limit; [`calc_tile_pyramid`] says which.
+#[derive(Debug)]
+struct TooManyTiles;
+
+impl std::fmt::Display for TooManyTiles {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("PMTiles directories address more tiles than allowed")
+	}
+}
+
+impl std::error::Error for TooManyTiles {}
 
 /// Reader for `PMTiles` v3 containers.
 ///
@@ -408,14 +420,46 @@ fn calc_tile_pyramid(
 	compression: TileCompression,
 	addressed_tiles_count: u64,
 ) -> Result<TilePyramid> {
+	calc_tile_pyramid_capped(
+		root_bytes_uncompressed,
+		leaves_bytes,
+		compression,
+		addressed_tiles_count,
+		MAX_UNDECLARED_ADDRESSED_TILES,
+	)
+}
+
+/// [`calc_tile_pyramid`] with the cap as a parameter, so a test can reach it
+/// without expanding four billion tiles.
+fn calc_tile_pyramid_capped(
+	root_bytes_uncompressed: &Blob,
+	leaves_bytes: &Blob,
+	compression: TileCompression,
+	addressed_tiles_count: u64,
+	cap: u64,
+) -> Result<TilePyramid> {
 	// The header's count is itself untrusted, so it bounds the walk rather than
 	// being believed: a file may declare fewer tiles than it addresses and be
 	// rejected, but it cannot declare more than the cap below and use that as a
 	// licence to spin.
-	let limit = if addressed_tiles_count == 0 {
-		MAX_UNDECLARED_ADDRESSED_TILES
+	//
+	// The error names which of the two bounds was hit. It used to blame the
+	// header even when the header declared no count, or more than the cap.
+	let (limit, reason) = if addressed_tiles_count == 0 {
+		(
+			cap,
+			format!("the header declares no count, and this reader expands at most {cap} without one"),
+		)
+	} else if addressed_tiles_count > cap {
+		(
+			cap,
+			format!("the header declares {addressed_tiles_count}, more than the {cap} this reader expands"),
+		)
 	} else {
-		addressed_tiles_count.min(MAX_UNDECLARED_ADDRESSED_TILES)
+		(
+			addressed_tiles_count,
+			String::from("which the header does not account for"),
+		)
 	};
 
 	let mut pyramid = TilePyramid::new_empty();
@@ -429,7 +473,14 @@ fn calc_tile_pyramid(
 		leaves_bytes,
 		compression,
 		0,
-	)?;
+	)
+	.map_err(|e| {
+		if e.is::<TooManyTiles>() {
+			anyhow::anyhow!("PMTiles directories address more than {limit} tiles: {reason}")
+		} else {
+			e
+		}
+	})?;
 
 	fn parse_directories(
 		pyramid: &mut TilePyramid,
@@ -457,10 +508,9 @@ fn calc_tile_pyramid(
 					// bounded in memory; the running total keeps it bounded in
 					// time.
 					*total_entries += u64::from(entry.run_length);
-					ensure!(
-						*total_entries <= limit,
-						"PMTiles directories address more than {limit} tiles, which the header does not account for"
-					);
+					if *total_entries > limit {
+						return Err(TooManyTiles.into());
+					}
 
 					for i in 0..u64::from(entry.run_length) {
 						let tile_id = i
@@ -731,6 +781,30 @@ mod tests {
 		let message = format!("{error:#}");
 		assert!(message.contains("address more than 8 tiles"), "unhelpful: {message}");
 
+		Ok(())
+	}
+
+	/// Without a declared count the cap applies, and the error says so rather
+	/// than blaming the header.
+	#[test]
+	fn the_cap_without_a_declared_count_is_named() -> Result<()> {
+		let mut entries = super::super::types::EntriesV3::new();
+		entries.push(super::super::types::EntryV3::new(0, ByteRange::new(0, 10), 50));
+		let blob = entries.as_slice().serialize_entries()?;
+
+		let error = calc_tile_pyramid_capped(&blob, &Blob::default(), TileCompression::Uncompressed, 0, 8)
+			.expect_err("more than the cap must be an error");
+		assert!(
+			format!("{error:#}").contains("declares no count"),
+			"unhelpful: {error:#}"
+		);
+
+		let error = calc_tile_pyramid_capped(&blob, &Blob::default(), TileCompression::Uncompressed, 100, 8)
+			.expect_err("more than the cap must be an error");
+		assert!(
+			format!("{error:#}").contains("declares 100, more than the 8"),
+			"unhelpful: {error:#}"
+		);
 		Ok(())
 	}
 

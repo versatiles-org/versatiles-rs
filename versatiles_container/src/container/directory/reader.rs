@@ -56,7 +56,10 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
+use crate::{
+	SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal,
+	container::tile_path::parse_tile_component,
+};
 
 /// A reader for tiles stored in a directory structure.
 ///
@@ -129,13 +132,20 @@ impl DirectoryReader {
 		let mut container_form: Option<TileFormat> = None;
 		let mut container_comp: Option<TileCompression> = None;
 		for (name1, entry1) in usable_entries(dir)? {
-			// z level
-			if let Ok(level) = name1.parse::<u8>() {
+			// z level: a directory named like one. A *file* named `3`, or a
+			// directory named `03`, is not a level — the first used to fail the
+			// whole open on `read_dir`, the second to collide with `3`.
+			if let Some(level) = parse_tile_component::<u8>(&name1)
+				&& entry1.file_type().is_ok_and(|t| t.is_dir())
+			{
 				for (name2, entry2) in usable_entries(&entry1.path())? {
 					// x level
-					let Ok(x) = name2.parse::<u32>() else {
+					let Some(x) = parse_tile_component::<u32>(&name2) else {
 						continue;
 					};
+					if !entry2.file_type().is_ok_and(|t| t.is_dir()) {
+						continue;
+					}
 
 					for (mut filename, entry3) in usable_entries(&entry2.path())? {
 						// y level
@@ -147,11 +157,13 @@ impl DirectoryReader {
 						}
 						let file_form = this_form.expect("checked is_none above");
 
-						let numeric3 = filename.parse::<u32>();
-						if numeric3.is_err() {
+						let Some(y) = parse_tile_component::<u32>(&filename) else {
 							continue;
-						}
-						let y = numeric3?;
+						};
+						// A position outside the level is not a tile either.
+						let Ok(coord) = TileCoord::new(level, x, y) else {
+							continue;
+						};
 
 						if let Some(form) = container_form {
 							if form != file_form {
@@ -173,7 +185,6 @@ impl DirectoryReader {
 							container_comp = Some(file_comp);
 						}
 
-						let coord = TileCoord::new(level, x, y)?;
 						tile_map.insert(coord, entry3.path());
 					}
 				}
@@ -633,6 +644,27 @@ mod tests {
 			);
 		}
 
+		Ok(())
+	}
+
+	/// A file named like a level is not one, and a zero-padded name is not a
+	/// second spelling of a number. The first used to fail the open, the
+	/// second to collide with the plain name.
+	#[tokio::test]
+	async fn names_that_only_look_like_levels_are_skipped() -> Result<()> {
+		let dir = assert_fs::TempDir::new()?;
+		fs::write(dir.path().join("3"), b"not a level")?;
+		fs::create_dir_all(dir.path().join("01/1"))?;
+		fs::write(dir.path().join("01/1/1.png"), b"padded")?;
+		fs::create_dir_all(dir.path().join("1/1"))?;
+		fs::write(dir.path().join("1/1/1.png"), b"plain")?;
+		fs::write(dir.path().join("1/1/01.png"), b"padded y")?;
+		fs::write(dir.path().join("1/1/9.png"), b"outside level 1")?;
+
+		let reader = DirectoryReader::open(dir.path(), TilesRuntime::default())?;
+		assert_eq!(reader.tile_map.len(), 1);
+		let mut tile = reader.tile(&TileCoord::new(1, 1, 1)?).await?.unwrap();
+		assert_eq!(tile.as_blob(&TileCompression::Uncompressed)?.as_slice(), b"plain");
 		Ok(())
 	}
 }

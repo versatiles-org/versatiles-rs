@@ -68,6 +68,9 @@ enum BodyError {
 	TooLarge { limit: u64 },
 }
 
+/// The most [`read_body_limited`] reserves up front on the peer's word.
+const MAX_PREALLOCATED_BODY: u64 = 16 * 1024 * 1024;
+
 /// Read a response body, refusing to buffer more than `limit` bytes.
 ///
 /// `Response::bytes()` buffers whatever the peer sends: a server answering a
@@ -79,9 +82,12 @@ async fn read_body_limited(response: reqwest::Response, limit: u64) -> std::resu
 	use futures::StreamExt;
 
 	// Only as a starting size, and only when the peer's claim is plausible —
-	// it is not trusted as a bound.
+	// it is not trusted as a bound. Capped as well: `limit` is the range length
+	// asked for, which itself comes from the file being read, so a crafted
+	// index naming gigabytes would otherwise reserve them before a byte
+	// arrives. Past the cap the vector grows as the data does.
 	let mut body = match response.content_length() {
-		Some(len) if len <= limit => Vec::with_capacity(usize::try_from(len).unwrap_or(0)),
+		Some(len) if len <= limit => Vec::with_capacity(usize::try_from(len.min(MAX_PREALLOCATED_BODY)).unwrap_or(0)),
 		_ => Vec::new(),
 	};
 

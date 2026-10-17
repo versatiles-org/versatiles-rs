@@ -34,6 +34,7 @@ mod directory;
 pub use directory::{DirectoryReader, DirectoryTileSink, DirectoryWriter};
 
 mod tile_chunking;
+mod tile_path;
 
 mod versatiles;
 pub use versatiles::{VersaTilesReader, VersaTilesSink, VersaTilesWriter};

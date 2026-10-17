@@ -52,28 +52,37 @@ pub fn windows_for_sample(fraction: f64, deepest_tiles: u64) -> u32 {
 /// is returned unsplit — small low-zoom levels get scanned in full.
 /// Placement is hash-based so the same (level, bbox, k) always yields the same
 /// windows.
+///
+/// The windows are cells of a grid of side `s` laid from the bbox's corner, so
+/// no two of them overlap: placed freely, two windows could share tiles, which
+/// the sampled report then counted twice. A cell at the far edge may be smaller.
 pub fn plan_windows(level: u8, bbox: &TileBBox, k: u32, s: u32) -> Result<Vec<TileBBox>> {
 	let (cols, rows) = (bbox.width(), bbox.height());
 	let (sw, sh) = (s.min(cols), s.min(rows));
-	if u64::from(k) * u64::from(sw) * u64::from(sh) >= bbox.count_tiles() {
+	let (grid_x, grid_y) = (cols.div_ceil(sw), rows.div_ceil(sh));
+	if u64::from(k) * u64::from(sw) * u64::from(sh) >= bbox.count_tiles()
+		|| u64::from(k) >= u64::from(grid_x) * u64::from(grid_y)
+	{
 		return Ok(vec![*bbox]);
 	}
-	let (x_min, y_min) = (bbox.x_min()?, bbox.y_min()?);
-	let (span_x, span_y) = (cols - sw + 1, rows - sh + 1);
+	let (x_min, y_min, x_max, y_max) = (bbox.x_min()?, bbox.y_min()?, bbox.x_max()?, bbox.y_max()?);
 
-	let mut corners: BTreeSet<(u32, u32)> = BTreeSet::new();
+	let mut cells: BTreeSet<(u32, u32)> = BTreeSet::new();
 	let mut i = 0u32;
-	while corners.len() < k as usize && i < k.saturating_mul(8).max(k) {
+	while cells.len() < k as usize && i < k.saturating_mul(8).max(k) {
 		let seed = (u64::from(level) << 40) ^ (u64::from(i) << 1);
-		let x0 = x_min + u32::try_from(mix64(seed) % u64::from(span_x)).unwrap_or(0);
-		let y0 = y_min + u32::try_from(mix64(seed ^ 1) % u64::from(span_y)).unwrap_or(0);
-		corners.insert((x0, y0));
+		let gx = u32::try_from(mix64(seed) % u64::from(grid_x)).unwrap_or(0);
+		let gy = u32::try_from(mix64(seed ^ 1) % u64::from(grid_y)).unwrap_or(0);
+		cells.insert((gx, gy));
 		i += 1;
 	}
 
-	corners
+	cells
 		.into_iter()
-		.map(|(x0, y0)| TileBBox::from_min_and_max(level, x0, y0, x0 + sw - 1, y0 + sh - 1))
+		.map(|(gx, gy)| {
+			let (x0, y0) = (x_min + gx * sw, y_min + gy * sh);
+			TileBBox::from_min_and_max(level, x0, y0, (x0 + sw - 1).min(x_max), (y0 + sh - 1).min(y_max))
+		})
 		.collect()
 }
 
@@ -103,6 +112,23 @@ pub fn build_scan_plan(bboxes: impl Iterator<Item = TileBBox>, sample: Option<f6
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// Two windows used to be able to share tiles, counted twice by the
+	/// sampled report.
+	#[test]
+	fn windows_do_not_overlap() -> Result<()> {
+		let bbox = TileBBox::new_full(10)?;
+		let windows = plan_windows(10, &bbox, 40, WINDOW_SIZE)?;
+		assert_eq!(windows.len(), 40);
+		for (i, a) in windows.iter().enumerate() {
+			for b in &windows[i + 1..] {
+				let mut overlap = *a;
+				overlap.intersect_bbox(b)?;
+				assert!(overlap.is_empty(), "{a:?} and {b:?} overlap");
+			}
+		}
+		Ok(())
+	}
 
 	#[test]
 	fn parse_sample_validates_range() {
