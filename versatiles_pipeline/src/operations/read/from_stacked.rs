@@ -33,6 +33,7 @@ use crate::{
 /// Overlays several tile sources, taking each tile from the first source that has it.
 struct Args {
 	/// The sources to stack, in priority order, all with the same format.
+	#[vpl(min_sources = 2)]
 	sources: Vec<VPLPipeline>,
 }
 

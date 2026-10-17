@@ -37,6 +37,7 @@ use crate::{
 /// one replacing the other.
 struct Args {
 	/// The sources to merge, all of which must provide vector tiles.
+	#[vpl(min_sources = 2)]
 	sources: Vec<VPLPipeline>,
 }
 

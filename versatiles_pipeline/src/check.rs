@@ -250,10 +250,15 @@ fn check_sources(node: &VPLNode, fields: &[VPLFieldMeta], path: &[usize], proble
 		return;
 	};
 
-	if sources.is_required && node.sources.is_empty() {
+	if node.sources.len() < sources.min_sources {
+		let needed = match sources.min_sources {
+			1 => "one source".to_string(),
+			2 => "two sources".to_string(),
+			n => format!("{n} sources"),
+		};
 		problems.push(VplProblem::new(
 			path,
-			format!("'{}' needs at least one source", node.name),
+			format!("'{}' needs at least {needed}", node.name),
 		));
 	}
 }
@@ -281,6 +286,24 @@ mod tests {
 		);
 		assert_eq!(
 			problems("from_stacked [ from_debug format=png, from_debug format=png ]"),
+			Vec::<String>::new()
+		);
+	}
+
+	/// `from_stacked` and `from_merged_vector` refuse a single source when
+	/// built; `check` used to pass it.
+	#[test]
+	fn a_stack_of_one_is_reported() {
+		assert_eq!(
+			problems("from_stacked [ from_debug format=png ]"),
+			["'from_stacked' needs at least two sources"]
+		);
+		assert_eq!(
+			problems("from_merged_vector [ from_debug format=mvt ]"),
+			["'from_merged_vector' needs at least two sources"]
+		);
+		assert_eq!(
+			problems("from_stacked_raster [ from_debug format=png ]"),
 			Vec::<String>::new()
 		);
 	}
@@ -719,7 +742,11 @@ mod tests {
 
 	#[test]
 	fn composite_without_sources() {
-		assert_eq!(problems("from_stacked"), ["'from_stacked' needs at least one source"]);
+		assert_eq!(problems("from_stacked"), ["'from_stacked' needs at least two sources"]);
+		assert_eq!(
+			problems("from_stacked_raster"),
+			["'from_stacked_raster' needs at least one source"]
+		);
 	}
 
 	#[test]

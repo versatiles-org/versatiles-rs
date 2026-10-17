@@ -1222,6 +1222,9 @@ struct FieldMeta {
 	/// emitted, so a reference to an argument that does not exist is a compile
 	/// error rather than a lie in the metadata.
 	refers_to: Option<FieldReference>,
+	/// For the `sources` field, how many sources the operation needs, from
+	/// `#[vpl(min_sources = N)]`, 1 when unset; 0 for every other field.
+	min_sources: usize,
 }
 
 /// Processed field information returned by `process_field`.
@@ -1238,17 +1241,19 @@ enum ProcessedField {
 /// The `sources` pseudo-field, which takes upstream pipelines rather than a
 /// value — no type mapping, no parser, no count to hold it to.
 fn process_sources_field(
+	field: &Field,
 	field_str: String,
 	field_type_str: String,
 	raw_comment: String,
-	field_type: &syn::Type,
 ) -> Result<(String, ProcessedField, FieldMeta), syn::Error> {
+	let field_type = &field.ty;
 	if field_type_str != "Vec<VPLPipeline>" {
 		return Err(syn::Error::new_spanned(
 			field_type,
 			format!("type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'"),
 		));
 	}
+	let min_sources = extract_sources_attrs(&field.attrs)?;
 	let doc = format!("### Sources\n\n{raw_comment}");
 	let parser = quote! { sources: node.sources.clone() };
 	let meta = FieldMeta {
@@ -1268,8 +1273,37 @@ fn process_sources_field(
 		bounds_type: None,
 		default: None,
 		refers_to: None,
+		min_sources,
 	};
 	Ok((field_str, ProcessedField::Sources { doc, parser }, meta))
+}
+
+/// Reads `#[vpl(min_sources = N)]` off the `sources` field: how many sources
+/// the operation needs, 1 when unset.
+///
+/// Every other `#[vpl(…)]` key is an error here. They describe a value, and a
+/// list of pipelines is not one — before this, a `default` or `accepts` on
+/// `sources` was accepted and then ignored.
+fn extract_sources_attrs(attrs: &[Attribute]) -> Result<usize, syn::Error> {
+	let mut min_sources = 1;
+	for attr in attrs {
+		if !attr.path().is_ident("vpl") {
+			continue;
+		}
+		attr.parse_nested_meta(|meta| {
+			if meta.path.is_ident("min_sources") {
+				let value: syn::LitInt = meta.value()?.parse()?;
+				min_sources = value.base10_parse()?;
+				if min_sources == 0 {
+					return Err(meta.error("`min_sources` must be at least 1; `sources` is always required"));
+				}
+				Ok(())
+			} else {
+				Err(meta.error("the `sources` field takes only `#[vpl(min_sources = N)]`"))
+			}
+		})?;
+	}
+	Ok(min_sources)
 }
 
 /// Which files an argument takes, from its type and its own declaration.
@@ -1336,7 +1370,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		.to_string();
 
 	if field_str == "sources" {
-		return process_sources_field(field_str, field_type_str, raw_comment, field_type);
+		return process_sources_field(field, field_str, field_type_str, raw_comment);
 	}
 
 	let Some(mapping) = find_type_mapping(&field_type_str) else {
@@ -1407,6 +1441,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		default,
 		refers_to,
 		accepts,
+		min_sources: 0,
 	};
 
 	Ok((
@@ -1571,6 +1606,7 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 	let rtype = &m.rust_type;
 	let required = m.is_required;
 	let is_sources = m.is_sources;
+	let min_sources = m.min_sources;
 	let fdoc = &m.doc;
 	// For enum-typed fields, ask the enum itself for its accepted
 	// variants — single source of truth, kept in sync with the
@@ -1679,6 +1715,7 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 			accepts: #accepts_expr,
 			validate: #validate_expr,
 			default: #default_expr,
+			min_sources: #min_sources,
 		}
 	}
 }
@@ -2136,6 +2173,46 @@ mod tests {
 		// Ensure docs includes Sources section
 		assert!(code.contains("### Sources"));
 		assert!(code.contains("List of sources"));
+	}
+
+	fn decode_sources_field(attr: &proc_macro2::TokenStream) -> Result<String, syn::Error> {
+		let input: DeriveInput = parse_quote!(
+			struct Pipeline {
+				#attr
+				sources: Vec<VPLPipeline>,
+			}
+		);
+		let syn::Data::Struct(data_struct) = &input.data else {
+			panic!("Expected struct data")
+		};
+		decode_struct(input.clone(), data_struct.clone()).map(|ts| ts.to_string().replace(' ', ""))
+	}
+
+	/// `min_sources` reaches the metadata; without it a sources field needs one.
+	#[test]
+	fn test_sources_minimum() {
+		assert!(
+			decode_sources_field(&quote::quote!())
+				.unwrap()
+				.contains("min_sources:1usize")
+		);
+		let code = decode_sources_field(&quote::quote!(#[vpl(min_sources = 2)])).unwrap();
+		assert!(code.contains("min_sources:2usize"), "{code}");
+		assert!(decode_sources_field(&quote::quote!(#[vpl(min_sources = 0)])).is_err());
+	}
+
+	/// An attribute meant for a value used to be accepted on `sources` and
+	/// ignored.
+	#[test]
+	fn test_sources_refuse_value_attributes() {
+		for attr in [
+			quote::quote!(#[vpl(default = "x")]),
+			quote::quote!(#[vpl(accepts_any)]),
+			quote::quote!(#[vpl(layer_of_source)]),
+		] {
+			let err = decode_sources_field(&attr).unwrap_err().to_string();
+			assert!(err.contains("takes only"), "{err}");
+		}
 	}
 
 	#[test]

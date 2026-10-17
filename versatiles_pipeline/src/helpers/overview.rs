@@ -11,7 +11,6 @@ use versatiles_container::{
 };
 use versatiles_core::{Blob, TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
-use versatiles_image::traits::DynamicImageTraitInfo;
 
 use super::overview_cache::BlockCache;
 
@@ -214,7 +213,11 @@ impl OverviewCore {
 			source_pyramid.level_max()
 		);
 
+		// Below the base, only what is composed from it: the source's own
+		// tiles there are never read, so its levels there are not this
+		// operation's to declare.
 		let mut new_pyramid = source_pyramid.as_ref().clone();
+		new_pyramid.set_level_min(level_base);
 		let mut level_bbox = new_pyramid.level_ref(level_base).to_bbox();
 		while !level_bbox.is_empty() && level_bbox.level() > 0 {
 			level_bbox.level_down();
@@ -445,7 +448,11 @@ impl OverviewCore {
 								.copy_from(&image1, (coord1.x % 2) * half_size, (coord1.y % 2) * half_size)
 								.expect("half_size sub-image fits at quadrant offset");
 						}
-						image_tmp.into_optional().map(|image| (coord0, image))
+						// Kept even when fully transparent: the coordinate stream
+						// counts every parent of a source tile, and the two
+						// streams have to agree. The source stored the
+						// transparent tiles underneath, too.
+						Some((coord0, image_tmp))
 					})
 				},
 			))

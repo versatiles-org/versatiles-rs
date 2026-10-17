@@ -67,6 +67,8 @@ struct Args {
 #[derive(Debug)]
 struct Operation {
 	source: Box<dyn TileSource>,
+	/// The source's, with the pyramid narrowed to an overridden zoom range.
+	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 }
 
@@ -145,7 +147,29 @@ impl Operation {
 			tilejson.vector_layers = vector_layers;
 		}
 
-		Ok(Self { source, tilejson })
+		// The zoom range is derived again from the pyramid by every operation
+		// downstream (`update_from_pyramid`), so an override that left the
+		// pyramid alone was undone one step later. The pyramid follows it
+		// instead. It can only narrow: a range wider than the source's adds no
+		// tiles, and downstream reports the levels that exist.
+		let mut metadata = source.metadata().clone();
+		let zoom = (tilejson.zoom_min(), tilejson.zoom_max());
+		if zoom != (source.tilejson().zoom_min(), source.tilejson().zoom_max()) {
+			let mut pyramid = source.tile_pyramid().await?.as_ref().clone();
+			if let Some(zoom_min) = zoom.0 {
+				pyramid.set_level_min(zoom_min);
+			}
+			if let Some(zoom_max) = zoom.1 {
+				pyramid.set_level_max(zoom_max);
+			}
+			metadata.set_tile_pyramid(pyramid);
+		}
+
+		Ok(Self {
+			source,
+			metadata,
+			tilejson,
+		})
 	}
 }
 
@@ -188,7 +212,7 @@ impl TileSource for Operation {
 	}
 
 	fn metadata(&self) -> &TileSourceMetadata {
-		self.source.metadata()
+		&self.metadata
 	}
 
 	fn tilejson(&self) -> &TileJSON {
@@ -196,17 +220,23 @@ impl TileSource for Operation {
 	}
 
 	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self.source.tile_pyramid().await
+		match self.metadata.tile_pyramid() {
+			Some(pyramid) => Ok(pyramid),
+			None => self.source.tile_pyramid().await,
+		}
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("meta_update::tile_stream {bbox:?}");
-		self.source.tile_stream(bbox).await
+		self.source.tile_stream(self.metadata.intersection_bbox(&bbox)).await
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.tile_coord_stream(bbox).await
+		self
+			.source
+			.tile_coord_stream(self.metadata.intersection_bbox(&bbox))
+			.await
 	}
 }
 
@@ -232,6 +262,30 @@ mod tests {
 	/// backslashes) must be escaped or parsing fails.
 	fn vpl_quote(path: &std::path::Path) -> String {
 		path.to_str().unwrap().replace('\\', "\\\\").replace('"', "\\\"")
+	}
+
+	/// A zoom range narrowed by `meta_update` used to be undone by the next
+	/// operation, which derives the range from the pyramid again. The pyramid
+	/// and the streams now follow the override.
+	#[tokio::test]
+	async fn a_narrowed_zoom_range_survives_the_next_operation() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				r#"from_debug format=mvt | filter level_max=8
+                 | meta_update tilejson_update="{\"minzoom\":3,\"maxzoom\":5}"
+                 | vector_filter_layers filter=none"#,
+			)
+			.await?;
+
+		assert_eq!(op.tilejson().zoom_min(), Some(3));
+		assert_eq!(op.tilejson().zoom_max(), Some(5));
+		let pyramid = op.tile_pyramid().await?;
+		assert_eq!((pyramid.level_min(), pyramid.level_max()), (Some(3), Some(5)));
+		assert_eq!(op.tile_stream(TileBBox::new_full(6)?).await?.to_vec().await.len(), 0);
+		assert_eq!(op.tile_stream(TileBBox::new_full(2)?).await?.to_vec().await.len(), 0);
+		assert_eq!(op.tile_stream(TileBBox::new_full(3)?).await?.to_vec().await.len(), 64);
+		Ok(())
 	}
 
 	#[tokio::test]

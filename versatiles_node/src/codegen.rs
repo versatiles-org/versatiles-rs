@@ -623,6 +623,7 @@ mod tests {
 			refers_to: None,
 			accepts: None,
 			default: None,
+			min_sources: 0,
 		}
 	}
 
@@ -633,6 +634,7 @@ mod tests {
 			bounds: None,
 			refers_to: None,
 			default: None,
+			min_sources: 0,
 			..plain_field(rust_type)
 		}
 	}
@@ -687,6 +689,7 @@ mod tests {
 				refers_to: None,
 				accepts: None,
 				default: None,
+				min_sources: 0,
 			}],
 		}];
 
@@ -762,6 +765,7 @@ mod tests {
 					refers_to: None,
 					accepts: None,
 					default: None,
+					min_sources: 0,
 				},
 				VPLFieldMeta {
 					name: "level_max".to_string(),
@@ -775,6 +779,7 @@ mod tests {
 					refers_to: None,
 					accepts: None,
 					default: None,
+					min_sources: 0,
 				},
 			],
 		}];
@@ -808,6 +813,7 @@ mod tests {
 					refers_to: None,
 					accepts: None,
 					default: None,
+					min_sources: 1,
 				},
 				VPLFieldMeta {
 					name: "format".to_string(),
@@ -821,6 +827,7 @@ mod tests {
 					refers_to: None,
 					accepts: None,
 					default: None,
+					min_sources: 0,
 				},
 			],
 		}];

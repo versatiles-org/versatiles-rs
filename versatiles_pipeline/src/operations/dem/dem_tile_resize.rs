@@ -16,6 +16,11 @@ use crate::{PipelineFactory, helpers::tile_resize::TileResizeCore, vpl::VPLNode}
 /// averages the decoded 24-bit elevation rather than the R, G and B channels
 /// separately, which for a DEM would mix the high byte of one pixel with the low
 /// byte of another.
+///
+/// The zoom levels shift as in `raster_tile_resize`: splitting moves each tile
+/// one level up, except level 0, which is downscaled; merging moves four tiles
+/// one level down, so the source's level 0 is not used — level 0 of the result
+/// is merged from the source's level 1.
 pub struct Args {
 	/// Target tile size in pixels, which must differ from the source's.
 	pub tile_size: TileSize,

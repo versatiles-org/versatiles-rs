@@ -422,7 +422,7 @@ The TileJSON document is fetched once when the pipeline is built, and each tile 
 
 - **`url`: URL (required)** - URL of the TileJSON endpoint.
 - _`max_retries`: u16 (optional)_ - How often to retry a failed tile request. Defaults to `3`.
-- _`max_concurrent_requests`: u16 (optional)_ - How many tile requests may be in flight. Defaults to the I/O concurrency limit.
+- _`max_concurrent_requests`: u16 (optional)_ - How many tile requests may be in flight, at least 1. Defaults to the I/O concurrency limit.
 
 ---
 
@@ -466,6 +466,8 @@ Values are rounded to the nearest multiple of the step rather than truncated, wh
 Converts DEM tiles between 256 and 512 pixels by splitting or merging them.
 
 The counterpart to `raster_tile_resize` for elevation data: downscaling averages the decoded 24-bit elevation rather than the R, G and B channels separately, which for a DEM would mix the high byte of one pixel with the low byte of another.
+
+The zoom levels shift as in `raster_tile_resize`: splitting moves each tile one level up, except level 0, which is downscaled; merging moves four tiles one level down, so the source's level 0 is not used — level 0 of the result is merged from the source's level 1.
 
 ### Parameters
 
@@ -630,7 +632,7 @@ Levels are held in memory between being built and being consumed, within `VERSAT
 
 Converts raster tiles between 256 and 512 pixels by splitting or merging them.
 
-Changing the tile size shifts the zoom levels with it, because the ground resolution of a pixel has to stay the same. `tile_size=256` splits each 512-pixel tile into four 256-pixel tiles one zoom level higher, except at level 0, which has no level below it to move to and is downscaled instead. `tile_size=512` merges four 256-pixel tiles into one 512-pixel tile one zoom level lower.
+Changing the tile size shifts the zoom levels with it, because the ground resolution of a pixel has to stay the same. `tile_size=256` splits each 512-pixel tile into four 256-pixel tiles one zoom level higher, except at level 0, which has no level below it to move to and is downscaled instead. `tile_size=512` merges four 256-pixel tiles into one 512-pixel tile one zoom level lower, so the result ends one level below the source. The source's level 0 would have to move to level −1 and is not used: level 0 of the result is merged from the source's level 1, the same area in more detail.
 
 ### Parameters
 

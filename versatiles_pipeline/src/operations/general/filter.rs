@@ -3,7 +3,7 @@ use std::{collections::HashSet, fmt::Debug, sync::Arc};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{GeoBBox, GeoCrop, TileBBox, TileJSON, TileStream, ZoomLevel};
+use versatiles_core::{GeoBBox, GeoCrop, TileBBox, TileCoord, TileJSON, TileStream, ZoomLevel};
 use versatiles_derive::context;
 
 use crate::{PipelineFactory, helpers::location::ContainerLocation, vpl::VPLNode};
@@ -152,11 +152,7 @@ impl TileSource for Operation {
 		}
 
 		if let Some(mask) = &self.mask {
-			let mut coord_stream = mask.tile_coord_stream(bbox).await?;
-			let mut allowed = HashSet::new();
-			while let Some((coord, _)) = coord_stream.next().await {
-				allowed.insert(coord);
-			}
+			let allowed = mask_coords(mask.as_ref(), bbox).await?;
 			let source_stream = self.source.tile_stream(bbox).await?;
 			Ok(source_stream.filter_coord(move |coord| {
 				let contains = allowed.contains(&coord);
@@ -172,12 +168,29 @@ impl TileSource for Operation {
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
+		// The source's coordinates the mask allows, as `tile_stream` yields:
+		// the mask's own coordinates counted tiles the source does not have.
 		if let Some(mask) = &self.mask {
-			mask.tile_coord_stream(bbox).await
+			let allowed = mask_coords(mask.as_ref(), bbox).await?;
+			let source_stream = self.source.tile_coord_stream(bbox).await?;
+			Ok(source_stream.filter_coord(move |coord| {
+				let contains = allowed.contains(&coord);
+				async move { contains }
+			}))
 		} else {
 			self.source.tile_coord_stream(bbox).await
 		}
 	}
+}
+
+/// The coordinates `mask` has tiles at within `bbox`.
+async fn mask_coords(mask: &dyn TileSource, bbox: TileBBox) -> Result<HashSet<TileCoord>> {
+	let mut coord_stream = mask.tile_coord_stream(bbox).await?;
+	let mut allowed = HashSet::new();
+	while let Some((coord, _)) = coord_stream.next().await {
+		allowed.insert(coord);
+	}
+	Ok(allowed)
 }
 
 crate::operations::macros::define_transform_factory!("filter", Args, Operation);
@@ -344,6 +357,29 @@ mod tests {
 		assert_eq!(count, 0, "Expected no tiles outside filtered bbox");
 
 		Ok(())
+	}
+
+	/// With a mask, the coordinate stream used to be the mask's: it counted
+	/// tiles the source does not have, which `tile_stream` never yields.
+	#[tokio::test]
+	async fn a_mask_does_not_add_coordinates_the_source_lacks() -> Result<()> {
+		use crate::helpers::dummy_vector_source::DummyVectorSource;
+
+		let sparse = TilePyramid::from_tile_coords([TileCoord::new(3, 0, 0)?, TileCoord::new(3, 7, 7)?].into_iter());
+		let source = DummyVectorSource::new(&[("a", &[&[("k", "v")]])], Some(sparse.clone()));
+		let mask = DummyVectorSource::new(&[("a", &[&[("k", "v")]])], Some(TilePyramid::new_full_up_to(8)));
+		let mut metadata = source.metadata().clone();
+		metadata.set_tile_pyramid(sparse);
+		let op = Operation {
+			metadata,
+			source: Box::new(source),
+			mask: Some(Box::new(mask)),
+			tilejson: TileJSON::default(),
+		};
+
+		let bbox = TileBBox::new_full(3)?;
+		assert_eq!(op.tile_coord_stream(bbox).await?.drain_and_count().await, 2);
+		versatiles_container::testing::assert_stream_counts_agree(&op, bbox).await
 	}
 
 	#[tokio::test]

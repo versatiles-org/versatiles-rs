@@ -198,9 +198,17 @@ impl TileSource for DummyVectorSource {
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.intersection_bbox(&bbox);
+		// The pyramid's own coordinates, as `tile_stream` yields them: its
+		// bounding box also holds the gaps of a sparse pyramid.
+		let tile_pyramid = self.metadata.tile_pyramid();
 		Ok(TileStream::from_iter_coord(
 			bbox.into_iter_coords_zorder(),
-			move |_coord| Some(()),
+			move |coord| {
+				tile_pyramid
+					.as_ref()
+					.is_none_or(|pyramid| pyramid.includes_coord(&coord))
+					.then_some(())
+			},
 		))
 	}
 }

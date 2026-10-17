@@ -340,6 +340,51 @@ mod tests {
 		Ok(())
 	}
 
+	/// Fully transparent source tiles compose into fully transparent parents.
+	/// The tile stream used to drop those while the coordinate stream counted
+	/// them.
+	#[tokio::test]
+	async fn transparent_parents_are_counted_and_produced_alike() -> Result<()> {
+		let pyramid = TilePyramid::from_geo_bbox(6, 6, &paris())?;
+		let mut source = DummyImageSource::from_color(&[0, 0, 0, 0], 256, TileFormat::PNG, Some(pyramid))?;
+		source.tilejson_mut().set_tile_size(256)?;
+		let op = Operation::build(
+			VPLNode::try_from_str("raster_overview level=6")?,
+			Box::new(source),
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+		let pyramid = op.metadata().tile_pyramid().unwrap();
+
+		for level in [5, 4, 3] {
+			let bbox = pyramid.level_ref(level).to_bbox();
+			assert_stream_counts_agree(&op, bbox).await?;
+			assert!(!op.tile_stream(bbox).await?.to_vec().await.is_empty(), "level {level}");
+		}
+		Ok(())
+	}
+
+	/// Below the base level the operation declares what it composes from the
+	/// base, not whatever levels the source happens to have there: it never
+	/// reads those.
+	#[tokio::test]
+	async fn levels_below_the_base_cover_only_what_the_base_composes() -> Result<()> {
+		let mut pyramid = TilePyramid::new_full_up_to(3);
+		pyramid.insert_bbox(&TilePyramid::from_geo_bbox(6, 6, &paris())?.level_ref(6).to_bbox())?;
+		let mut source = DummyImageSource::from_color(&[255, 0, 0], 256, TileFormat::PNG, Some(pyramid))?;
+		source.tilejson_mut().set_tile_size(256)?;
+		let op = Operation::build(
+			VPLNode::try_from_str("raster_overview level=6")?,
+			Box::new(source),
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+
+		let declared = op.metadata().tile_pyramid().unwrap();
+		assert_eq!(declared.level_ref(3).count_tiles(), 1, "Paris is one tile at zoom 3");
+		assert_stream_counts_agree(&op, TileBBox::new_full(3)?).await
+	}
+
 	/// Reading a tile must not consume it.
 	///
 	/// The cache is drained by `remove`, so the first read of an overview tile

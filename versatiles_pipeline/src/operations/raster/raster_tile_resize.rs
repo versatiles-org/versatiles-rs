@@ -17,7 +17,9 @@ use crate::{PipelineFactory, helpers::tile_resize::TileResizeCore, vpl::VPLNode}
 /// 512-pixel tile into four 256-pixel tiles one zoom level higher, except at
 /// level 0, which has no level below it to move to and is downscaled instead.
 /// `tile_size=512` merges four 256-pixel tiles into one 512-pixel tile one zoom
-/// level lower.
+/// level lower, so the result ends one level below the source. The source's
+/// level 0 would have to move to level −1 and is not used: level 0 of the result
+/// is merged from the source's level 1, the same area in more detail.
 pub struct Args {
 	/// Target tile size in pixels, which must differ from the source's.
 	pub tile_size: TileSize,

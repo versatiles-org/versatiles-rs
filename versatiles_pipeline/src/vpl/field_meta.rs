@@ -212,4 +212,11 @@ pub struct VPLFieldMeta {
 	/// missing — so the two are one fact stated twice, not two facts free to
 	/// drift.
 	pub default: Option<String>,
+	/// For the `sources` field, how many sources the operation needs; 0 for
+	/// every other field.
+	///
+	/// From `#[vpl(min_sources = N)]`, 1 when unset. `from_stacked` and
+	/// `from_merged_vector` need two, and `check` used to pass a single one
+	/// that building then refused.
+	pub min_sources: usize,
 }
