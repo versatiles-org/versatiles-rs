@@ -77,6 +77,10 @@ pub trait TileSourceTraverseExt: TileSource {
 				.sum();
 			log::trace!("traverse: estimated {count} tile(s) for progress");
 
+			// Reads and writes are counted against this: a write box is padded to
+			// the destination's block size, so it is clipped to the pyramid before
+			// it is counted, as the read boxes are. Unclipped, the bar reached 100%
+			// long before the end.
 			let progress = runtime.create_progress("processing tiles", count);
 			let tracker = Arc::new(ProgressTracker::new(progress));
 
@@ -112,7 +116,7 @@ pub trait TileSourceTraverseExt: TileSource {
 						let tracker2 = tracker.clone();
 						let stream = TileStream::from_stream(inner).inspect(move |_, _| tracker2.inc(1));
 						callback(bbox, stream).await?;
-						tracker.inc_write(bbox.count_tiles());
+						tracker.inc_write(bbox.intersection_pyramid(&tile_pyramid).count_tiles());
 					}
 					Stream(bboxes, bbox) => {
 						log::trace!("Stream {bbox:?}");
@@ -146,7 +150,7 @@ pub trait TileSourceTraverseExt: TileSource {
 						if let Some(error) = failure.lock().expect("poisoned mutex").take() {
 							return Err(error);
 						}
-						tracker.inc_read_write(read_operations, bbox.count_tiles());
+						tracker.inc_read_write(read_operations, bbox.intersection_pyramid(&tile_pyramid).count_tiles());
 					}
 				}
 			}
@@ -397,6 +401,40 @@ mod tests {
 
 		// Level 0: 1, Level 1: 4, Level 2: 16 = 21 tiles
 		assert_eq!(tile_count.load(Ordering::SeqCst), 21);
+		Ok(())
+	}
+
+	/// The progress total counts the read boxes; the writes are counted
+	/// against it too. A write box is padded to the destination's block size,
+	/// so unclipped it counted tiles outside the pyramid and the bar reached
+	/// 100% early. Clipped, the writes add up to exactly the reads.
+	#[test]
+	fn clipped_write_boxes_count_what_the_reads_count() -> Result<()> {
+		use TraversalTranslationStep::{Pop, Push, Stream};
+		use versatiles_core::GeoBBox;
+
+		let pyramid = TilePyramid::from_geo_bbox(3, 9, &GeoBBox::new(13.0, 52.0, 14.0, 53.0)?)?;
+		let read = Traversal::new(TraversalOrder::DepthFirst, 1, 16)?;
+		let write = Traversal::new_any_size(256, 256)?;
+		let steps = translate_traversals(&pyramid, &read, &write)?;
+
+		let (mut reads, mut writes, mut padded) = (0, 0, 0);
+		for step in &steps {
+			match step {
+				Push(bboxes, _) => reads += bboxes.iter().map(TileBBox::count_tiles).sum::<u64>(),
+				Pop(_, bbox) => {
+					writes += bbox.intersection_pyramid(&pyramid).count_tiles();
+					padded += bbox.count_tiles();
+				}
+				Stream(bboxes, bbox) => {
+					reads += bboxes.iter().map(TileBBox::count_tiles).sum::<u64>();
+					writes += bbox.intersection_pyramid(&pyramid).count_tiles();
+					padded += bbox.count_tiles();
+				}
+			}
+		}
+		assert!(padded > reads, "the fixture should pad its write boxes");
+		assert_eq!(writes, reads);
 		Ok(())
 	}
 

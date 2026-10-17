@@ -881,7 +881,7 @@ Each row of a CSV or TSV file is matched to the features whose `id_field_tiles` 
 - **`id_field_tiles`: String (required)** - Feature property holding the id to match on.
 - **`id_field_data`: String (required)** - Column in the data file holding the id to match on.
 - _`replace_properties`: bool (optional)_ - Whether to replace a feature's properties instead of merging. Defaults to `false`.
-- _`remove_non_matching`: bool (optional)_ - Whether to drop features that have no matching row. Defaults to `false`.
+- _`remove_non_matching`: bool (optional)_ - Whether to drop features that match no row, or lack the id field. Defaults to `false`.
 - _`include_id`: bool (optional)_ - Whether to keep the id column among the written properties. Defaults to `false`.
 - _`field_separator`: char (optional)_ - Character separating a row's fields. Defaults to `,` for `.csv` and a tab for `.tsv`.
 - _`decimal_separator`: char (optional)_ - Decimal separator for parsing numbers, so `,` reads `1.234,56`. Defaults to `.`.

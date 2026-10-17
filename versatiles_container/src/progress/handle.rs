@@ -311,7 +311,9 @@ impl ProgressHandle {
 
 		let get_line = |bar_str| format!("{msg}▕{bar_str}▏{pos}/{total} ({percent:>3}%) {per_sec_str:>5} {eta_str:>5}");
 
-		let available_bar_width = terminal_width() - get_line("").chars().count();
+		// Saturating: a terminal narrower than the text around the bar used to
+		// underflow here — a panic in a debug build, a huge bar in a release one.
+		let available_bar_width = terminal_width().saturating_sub(get_line("").chars().count());
 		let bar_str = make_bar(pos, total, available_bar_width);
 		let line = get_line(&bar_str);
 

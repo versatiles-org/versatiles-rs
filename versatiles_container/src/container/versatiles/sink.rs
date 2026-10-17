@@ -18,7 +18,7 @@
 //! Supports both local paths and `sftp://` URLs as output destinations.
 
 use std::{
-	collections::{HashMap, hash_map::Entry},
+	collections::{HashMap, HashSet, hash_map::Entry},
 	env,
 	fs::{self, File},
 	io::{BufReader, BufWriter, Write},
@@ -44,6 +44,48 @@ type BlockKey = (u8, u32, u32);
 
 /// Number of tiles in a fully populated block (256 × 256).
 const FULL_BLOCK_TILE_COUNT: u32 = 256 * 256;
+
+/// Which coordinates of each open block have been written, and which blocks
+/// were flushed full.
+///
+/// Distinct coordinates rather than writes: counted by writes, a coordinate
+/// written twice made a block look full early, flush, and come back as a
+/// second block under the same key — whose index entry then replaced the
+/// first one's, orphaning its tiles. A repeated coordinate is skipped (the
+/// first write wins, as with [`deduplicating_tile_sink`](crate::deduplicating_tile_sink)),
+/// and so is any write to a block already flushed full, which can only be one.
+#[derive(Default)]
+struct BlockCounts {
+	open: HashMap<BlockKey, BlockTiles>,
+	full: HashSet<BlockKey>,
+}
+
+/// One bit per tile of a 256×256 block, and how many are set.
+struct BlockTiles {
+	seen: Box<[u64]>,
+	count: u32,
+}
+
+impl BlockTiles {
+	fn new() -> Self {
+		Self {
+			seen: vec![0u64; (FULL_BLOCK_TILE_COUNT / 64) as usize].into_boxed_slice(),
+			count: 0,
+		}
+	}
+
+	/// Marks the tile at `coord`; `false` when it was marked already.
+	fn insert(&mut self, coord: &TileCoord) -> bool {
+		let index = ((coord.y % 256) * 256 + (coord.x % 256)) as usize;
+		let (word, bit) = (index / 64, 1u64 << (index % 64));
+		if self.seen[word] & bit != 0 {
+			return false;
+		}
+		self.seen[word] |= bit;
+		self.count += 1;
+		true
+	}
+}
 
 /// State kept for the final output writer, created lazily on first flush.
 ///
@@ -72,9 +114,10 @@ pub struct VersaTilesSink {
 	temp_dir: PathBuf,
 	/// Per-block buffer files keyed by (level, block_x, block_y).
 	block_writers: Mutex<HashMap<BlockKey, BufWriter<File>>>,
-	/// Running tile count per block. When a block reaches `FULL_BLOCK_TILE_COUNT`
-	/// tiles, it is flushed to the output and evicted from both maps.
-	block_tile_counts: Mutex<HashMap<BlockKey, u32>>,
+	/// Which tiles each block has received. When a block holds
+	/// `FULL_BLOCK_TILE_COUNT` distinct tiles, it is flushed to the output and
+	/// evicted from both maps.
+	block_tile_counts: Mutex<BlockCounts>,
 	/// Output writer + running block index, lazily created on the first flush.
 	// `tokio::sync::Mutex`, unlike the two above: the guard is held across the
 	// awaits in `ensure_output` and `flush_block_to_output`, which a `std` guard
@@ -96,11 +139,7 @@ impl VersaTilesSink {
 	) -> Result<Box<dyn TileSink>> {
 		let _ = runtime; // used only with the sftp feature
 
-		let temp_dir = if destination.starts_with("sftp://") {
-			env::temp_dir().join(format!("versatiles_sink_{}", std::process::id()))
-		} else {
-			PathBuf::from(destination).with_extension("versatiles.tmp")
-		};
+		let temp_dir = Self::temp_dir_for(destination);
 		fs::create_dir_all(&temp_dir)?;
 
 		Ok(Box::new(Self {
@@ -109,11 +148,28 @@ impl VersaTilesSink {
 			tile_compression,
 			temp_dir,
 			block_writers: Mutex::new(HashMap::new()),
-			block_tile_counts: Mutex::new(HashMap::new()),
+			block_tile_counts: Mutex::new(BlockCounts::default()),
 			output: tokio::sync::Mutex::new(None),
 			#[cfg(feature = "sftp")]
 			ssh_identity: runtime.ssh_identity().map(PathBuf::from),
 		}))
+	}
+
+	/// Where the block files for `destination` go: beside a local output, in
+	/// the system temp directory for an SFTP one.
+	///
+	/// Unique per sink, not per process: `Drop` removes the directory, so two
+	/// SFTP sinks sharing one deleted each other's block files.
+	fn temp_dir_for(destination: &str) -> PathBuf {
+		if destination.starts_with("sftp://") {
+			env::temp_dir().join(format!(
+				"versatiles_sink_{}_{}",
+				std::process::id(),
+				uuid::Uuid::new_v4().simple()
+			))
+		} else {
+			PathBuf::from(destination).with_extension("versatiles.tmp")
+		}
 	}
 
 	/// Path for a block's temporary file.
@@ -215,7 +271,7 @@ impl VersaTilesSink {
 			w.flush()?;
 		}
 		// Counter is no longer needed once the block is being flushed.
-		self.block_tile_counts.lock().expect("poisoned mutex").remove(key);
+		self.block_tile_counts.lock().expect("poisoned mutex").open.remove(key);
 		Ok(())
 	}
 }
@@ -231,6 +287,20 @@ impl TileSink for VersaTilesSink {
 		// it without deadlocking.
 		let is_full = {
 			let mut writers = self.block_writers.lock().expect("poisoned mutex");
+			let mut counts = self.block_tile_counts.lock().expect("poisoned mutex");
+			if counts.full.contains(&block_key) {
+				return Ok(());
+			}
+			let tiles = counts.open.entry(block_key).or_insert_with(BlockTiles::new);
+			if !tiles.insert(coord) {
+				return Ok(());
+			}
+			let is_full = tiles.count >= FULL_BLOCK_TILE_COUNT;
+			if is_full {
+				counts.full.insert(block_key);
+			}
+			drop(counts);
+
 			// Not `or_insert_with`: opening the temp file is fallible — a large
 			// conversion holds one per unflushed block and can hit the process
 			// descriptor limit — and the closure has no way to report that.
@@ -246,11 +316,7 @@ impl TileSink for VersaTilesSink {
 
 			coord.write_to_cache(writer)?;
 			blob.write_to_cache(writer)?;
-
-			let mut counts = self.block_tile_counts.lock().expect("poisoned mutex");
-			let count = counts.entry(block_key).or_insert(0);
-			*count += 1;
-			*count >= FULL_BLOCK_TILE_COUNT
+			is_full
 		};
 
 		// Step 2: if the block just hit 256×256 tiles it can never be
@@ -273,7 +339,7 @@ impl TileSink for VersaTilesSink {
 			for (_, mut w) in writers.drain() {
 				w.flush()?;
 			}
-			self.block_tile_counts.lock().expect("poisoned mutex").clear();
+			self.block_tile_counts.lock().expect("poisoned mutex").open.clear();
 			keys
 		};
 
@@ -536,6 +602,55 @@ mod tests {
 	/// * the temp directory is otherwise empty,
 	/// * the running block index inside the output state holds one block,
 	/// * the output writer has already advanced past the placeholder header.
+	#[test]
+	fn sftp_sinks_get_their_own_temp_dirs() {
+		let a = VersaTilesSink::temp_dir_for("sftp://host/out.versatiles");
+		let b = VersaTilesSink::temp_dir_for("sftp://host/out.versatiles");
+		assert_ne!(a, b);
+	}
+
+	/// A coordinate written twice used to count twice: the block looked full
+	/// one tile early, was flushed, and its last tile started a second block
+	/// under the same key, whose index entry replaced the first — 65 535 tiles
+	/// written and not indexed. The first write of a coordinate wins.
+	#[tokio::test]
+	async fn a_repeated_coordinate_does_not_split_its_block() -> Result<()> {
+		let temp_dir = assert_fs::TempDir::new()?;
+		let output = temp_dir.path().join("repeated.versatiles");
+		let runtime = TilesRuntime::default();
+		let sink = VersaTilesSink::open(
+			output.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
+
+		let first = TileCoord::new(8, 0, 0)?;
+		sink.write_tile(&first, &Blob::from("first")).await?;
+		sink.write_tile(&first, &Blob::from("again")).await?;
+		for y in 0..256u32 {
+			for x in 0..256u32 {
+				if (x, y) != (0, 0) {
+					sink.write_tile(&TileCoord::new(8, x, y)?, &Blob::from("tile")).await?;
+				}
+			}
+		}
+		// After the block is full, a further write to it is a repeat too.
+		sink.write_tile(&first, &Blob::from("late")).await?;
+		sink.finish(&TileJSON::default(), &runtime).await?;
+
+		let reader = VersaTilesReader::open(&output, runtime).await?;
+		let tiles = reader
+			.tile_stream(versatiles_core::TileBBox::new_full(8)?)
+			.await?
+			.to_vec()
+			.await;
+		assert_eq!(tiles.len(), 65_536);
+		let tile = reader.tile(&first).await?.unwrap();
+		assert_eq!(tile.into_blob(&TileCompression::Uncompressed)?.as_slice(), b"first");
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn full_block_flushes_before_finish() -> Result<()> {
 		// Zoom 8 has exactly one block (8192/256 = 32? wait, 2^8 = 256 tiles
@@ -568,7 +683,7 @@ mod tests {
 				tile_compression: TileCompression::Uncompressed,
 				temp_dir: temp_dir_path,
 				block_writers: Mutex::new(HashMap::new()),
-				block_tile_counts: Mutex::new(HashMap::new()),
+				block_tile_counts: Mutex::new(BlockCounts::default()),
 				output: tokio::sync::Mutex::new(None),
 				#[cfg(feature = "sftp")]
 				ssh_identity: None,
@@ -592,7 +707,7 @@ mod tests {
 				"block writers should have been evicted after full-block flush"
 			);
 			let counts = sink.block_tile_counts.lock().unwrap();
-			assert!(counts.is_empty(), "tile counter should have been cleared");
+			assert!(counts.open.is_empty(), "tile counter should have been cleared");
 		}
 
 		// Temp file for the block must have been deleted.
@@ -659,7 +774,7 @@ mod tests {
 			tile_compression: TileCompression::Uncompressed,
 			temp_dir: expected_tmp.clone(),
 			block_writers: Mutex::new(HashMap::new()),
-			block_tile_counts: Mutex::new(HashMap::new()),
+			block_tile_counts: Mutex::new(BlockCounts::default()),
 			output: tokio::sync::Mutex::new(None),
 			#[cfg(feature = "sftp")]
 			ssh_identity: None,

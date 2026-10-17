@@ -316,10 +316,22 @@ impl VectorTileLayer {
 			.map(|feature| {
 				// MVT feature.id is a uint64. GeoJSON / Shapefile inputs often
 				// have string ids (e.g. USGS earthquake IDs like
-				// "official17000127050000000"); silently drop those rather
-				// than failing the whole tile. A `log::warn!` once would be
-				// nicer but the layer encoder has no across-tile state.
-				let id = feature.id.and_then(|id| id.as_u64().ok());
+				// "official17000127050000000"), and GeoJSON allows negative or
+				// fractional ones; those are dropped rather than failing the
+				// whole tile, and said so once per process.
+				let id = feature.id.and_then(|id| {
+					let as_u64 = id.as_u64().ok();
+					if as_u64.is_none() {
+						static WARNED: std::sync::Once = std::sync::Once::new();
+						WARNED.call_once(|| {
+							log::warn!(
+								"feature id {id:?} is not an unsigned integer, which is all an MVT feature id can be; \
+								 ids like it are left out"
+							);
+						});
+					}
+					as_u64
+				});
 				VectorTileFeature::from_geometry(
 					id,
 					property_manager.encode_tag_ids(feature.properties),

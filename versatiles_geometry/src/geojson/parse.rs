@@ -170,43 +170,49 @@ pub fn parse_geojson_feature(iter: &mut ByteIterator) -> Result<GeoFeature> {
 	})
 }
 
-/// Parses a GeoJSON `id` field (string or integer). Returns the corresponding [`GeoValue`].
+/// Parses a GeoJSON `id` field: a string or any number, as RFC 7946 §3.2
+/// allows. Returns the corresponding [`GeoValue`].
+///
+/// A non-negative integer becomes a `UInt`, which is what an MVT feature id can
+/// hold. Any other number is kept as parsed; the MVT encoder leaves such an id
+/// out, as it does a string id.
 #[context("parsing GeoJSON id field")]
 fn parse_geojson_id(iter: &mut ByteIterator) -> Result<GeoValue> {
 	iter.skip_whitespace();
 	match iter.expect_peeked_byte()? {
 		b'"' => parse_quoted_json_string(iter).map(GeoValue::from),
-		d if d.is_ascii_digit() => parse_number_as::<u64>(iter).map(GeoValue::UInt),
+		d if d.is_ascii_digit() || d == b'-' => parse_geojson_number(iter),
 		c => Err(iter.format_error(&format!(
-			"expected a string or integer, but got character '{}'",
+			"expected a string or number, but got character '{}'",
 			c as char
 		))),
 	}
 }
 
-/// Parses a numeric value and returns a typed [`GeoValue`].
+/// Parses any JSON number into a typed [`GeoValue`].
 ///
-/// Detects `f64` if a decimal point is present, `i64` for negative integers,
-/// and `u64` for non‑negative integers.
+/// An integer stays an integer while it fits: `u64` when non-negative, `i64`
+/// when negative. Everything else JSON allows — a fraction, an exponent
+/// (`1e5`), an integer beyond 64 bits — is a double, as it would be in
+/// JavaScript. A number too large for a double (`1e999`) is an error rather
+/// than infinity, which no format we write can store.
 #[context("parsing numeric GeoJSON value")]
 fn parse_geojson_number(iter: &mut ByteIterator) -> Result<GeoValue> {
 	let number = parse_number_as_string(iter)?;
 
-	Ok(if number.contains('.') {
-		GeoValue::from(number.parse::<f64>().map_err(|_| iter.format_error("invalid double"))?)
-	} else if number.contains('-') {
-		GeoValue::from(
-			number
-				.parse::<i64>()
-				.map_err(|_| iter.format_error("invalid integer"))?,
-		)
-	} else {
-		GeoValue::from(
-			number
-				.parse::<u64>()
-				.map_err(|_| iter.format_error("invalid integer"))?,
-		)
-	})
+	if !number.contains(['.', 'e', 'E']) {
+		if let Ok(value) = number.parse::<u64>() {
+			return Ok(GeoValue::from(value));
+		}
+		if let Ok(value) = number.parse::<i64>() {
+			return Ok(GeoValue::from(value));
+		}
+	}
+	let value = number.parse::<f64>().map_err(|_| iter.format_error("invalid number"))?;
+	if !value.is_finite() {
+		return Err(iter.format_error(&format!("number {number} is too large")));
+	}
+	Ok(GeoValue::from(value))
 }
 
 /// Parses a GeoJSON property value: string, number, boolean, or null.
@@ -882,6 +888,51 @@ mod tests {
 		}]}"#;
 		let collection = parse_geojson(json)?;
 		assert_eq!(collection.features.len(), 1);
+		Ok(())
+	}
+
+	fn parse_value_str(json: &str) -> Result<GeoValue> {
+		use std::io::Cursor;
+
+		use versatiles_core::byte_iterator::ByteIterator;
+		parse_geojson_value(&mut ByteIterator::from_reader(Cursor::new(json.to_string()), true))
+	}
+
+	fn parse_id_str(json: &str) -> Result<GeoValue> {
+		use std::io::Cursor;
+
+		use versatiles_core::byte_iterator::ByteIterator;
+		parse_geojson_id(&mut ByteIterator::from_reader(Cursor::new(json.to_string()), true))
+	}
+
+	/// Any JSON number parses: exponents and integers beyond 64 bits used to
+	/// be refused, which refused the whole file.
+	#[test]
+	fn test_parse_geojson_any_number() -> Result<()> {
+		assert_eq!(parse_value_str("1e5")?, GeoValue::Double(100_000.0));
+		assert_eq!(parse_value_str("-2.5E-3")?, GeoValue::Double(-0.0025));
+		assert_eq!(parse_value_str("42")?, GeoValue::UInt(42));
+		assert_eq!(parse_value_str("-42")?, GeoValue::Int(-42));
+		assert_eq!(
+			parse_value_str("18446744073709551616")?,
+			GeoValue::Double(18_446_744_073_709_551_616.0)
+		);
+		assert_eq!(
+			parse_value_str("-9223372036854775809")?,
+			GeoValue::Double(-9_223_372_036_854_775_809.0)
+		);
+		assert!(parse_value_str("1e999").is_err());
+		Ok(())
+	}
+
+	/// RFC 7946 allows any number as an id. A non-negative integer stays one;
+	/// the rest are kept as parsed, for the MVT encoder to leave out.
+	#[test]
+	fn test_parse_geojson_any_numeric_id() -> Result<()> {
+		assert_eq!(parse_id_str("7")?, GeoValue::UInt(7));
+		assert_eq!(parse_id_str("-7")?, GeoValue::Int(-7));
+		assert_eq!(parse_id_str("7.5")?, GeoValue::Double(7.5));
+		assert_eq!(parse_id_str("1e3")?, GeoValue::Double(1000.0));
 		Ok(())
 	}
 

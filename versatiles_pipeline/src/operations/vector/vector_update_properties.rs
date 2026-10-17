@@ -42,7 +42,7 @@ struct Args {
 	#[vpl(default = "false")]
 	replace_properties: Option<bool>,
 
-	/// Whether to drop features that have no matching row. Defaults to `false`.
+	/// Whether to drop features that match no row, or lack the id field. Defaults to `false`.
 	#[vpl(default = "false")]
 	remove_non_matching: Option<bool>,
 
@@ -132,8 +132,9 @@ impl VectorTransform for Runner {
 		layer
 			.expect("early-returned above if layer is None")
 			.filter_map_properties(|mut prop| {
-				// For every feature grab its identifier; if absent, log a warning
-				// and keep the feature unchanged.
+				// For every feature grab its identifier; if absent, the feature
+				// matches no row — dropped with `remove_non_matching`, otherwise
+				// kept unchanged with a warning.
 				if let Some(id) = prop.get(&self.args.id_field_tiles) {
 					// Look up the ID in our CSV‑derived map.  When found, merge or replace
 					// the properties according to the flags.
@@ -152,6 +153,9 @@ impl VectorTransform for Runner {
 						log::info!("id \"{id}\" not found in data source");
 					}
 				} else {
+					if self.args.remove_non_matching.unwrap_or(false) {
+						return None;
+					}
 					log::warn!("id field \"{}\" not found", self.args.id_field_tiles);
 				}
 				Some(prop)
@@ -221,6 +225,49 @@ mod tests {
 		]);
 		let layer = VectorTileLayer::from_features(String::from("test_layer"), vec![feature], 4096, 1).unwrap();
 		VectorTile::new(vec![layer])
+	}
+
+	/// `remove_non_matching` drops every feature that matches no row. One
+	/// without the id field matches none, and used to be kept.
+	#[test]
+	fn remove_non_matching_drops_features_without_the_id_field() {
+		let with_id = |id: &str| {
+			let mut feature = GeoFeature::new(example_geometry());
+			feature.properties = GeoProperties::from(vec![("id", GeoValue::from(id))]);
+			feature
+		};
+		let without_id = GeoFeature::new(example_geometry());
+		let layer = VectorTileLayer::from_features(
+			String::from("test_layer"),
+			vec![with_id("feature_1"), with_id("unknown"), without_id],
+			4096,
+			1,
+		)
+		.unwrap();
+
+		let runner = Runner {
+			args: Args {
+				data_source_path: FileLocation::try_from("data.csv").unwrap(),
+				id_field_tiles: "id".to_string(),
+				id_field_data: "id".to_string(),
+				layer_name: "test_layer".to_string(),
+				replace_properties: None,
+				remove_non_matching: Some(true),
+				include_id: None,
+				field_separator: None,
+				decimal_separator: None,
+			},
+			properties_map: HashMap::from([(
+				"feature_1".to_string(),
+				GeoProperties::from(vec![("value", GeoValue::from("x"))]),
+			)]),
+		};
+
+		let tile = runner
+			.run(&TileCoord::new(0, 0, 0).unwrap(), VectorTile::new(vec![layer]))
+			.unwrap()
+			.unwrap();
+		assert_eq!(tile.layers[0].features.len(), 1);
 	}
 
 	#[tokio::test]

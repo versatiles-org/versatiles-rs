@@ -48,7 +48,7 @@
 
 use std::{fmt::Debug, mem::size_of, path::Path, sync::Arc};
 
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use moka::future::Cache;
 #[cfg(feature = "cli")]
@@ -81,6 +81,17 @@ use crate::{
 /// the format produces in practice; three leaves room to spare and is the bound
 /// the tile-lookup path has always applied.
 const MAX_DIRECTORY_DEPTH: usize = 3;
+
+/// The error for a tile whose directory entry is nested deeper than
+/// [`MAX_DIRECTORY_DEPTH`]. The tile is in the file and cannot be reached, which
+/// is not the same as absent: the two lookups used to disagree, one calling it
+/// "not found", the other dropping it as a gap.
+fn too_deep() -> anyhow::Error {
+	anyhow::anyhow!(
+		"PMTiles leaf directories nest more than {MAX_DIRECTORY_DEPTH} levels deep; the file is malformed or a leaf \
+		 directory points at itself"
+	)
+}
 
 /// Ceiling on how many tiles the directory walk may expand when the header does
 /// not say.
@@ -249,7 +260,8 @@ impl PMTilesReader {
 	/// Internal helper to look up a tile by its Hilbert index.
 	///
 	/// Traverses up to three levels of PMTiles directories to locate the tile data.
-	/// Returns `Ok(None)` if the tile does not exist in the directory structure.
+	/// Returns `Ok(None)` if the tile does not exist in the directory structure,
+	/// and an error if its entry is nested deeper than that.
 	#[expect(
 		clippy::too_many_arguments,
 		reason = "a private helper threading the directory-traversal state; grouping it would only move the list"
@@ -298,7 +310,7 @@ impl PMTilesReader {
 				return Ok(None);
 			}
 		}
-		bail!("not found")
+		Err(too_deep())
 	}
 
 	/// Resolve a tile's byte range by Hilbert index without reading tile data.
@@ -341,7 +353,7 @@ impl PMTilesReader {
 				.map_err(|e: Arc<anyhow::Error>| anyhow::anyhow!("{e:#}"))?;
 		}
 
-		Ok(None)
+		Err(too_deep())
 	}
 
 	/// Build read chunks by resolving tile byte ranges and coalescing nearby ones.
@@ -430,11 +442,9 @@ fn calc_tile_pyramid(
 	) -> Result<()> {
 		log::trace!("parse_directories");
 
-		ensure!(
-			depth < MAX_DIRECTORY_DEPTH,
-			"PMTiles leaf directories nest more than {MAX_DIRECTORY_DEPTH} levels deep; \
-			 the file is malformed or a leaf directory points at itself"
-		);
+		if depth >= MAX_DIRECTORY_DEPTH {
+			return Err(too_deep());
+		}
 
 		let entries = EntriesV3::from_blob(dir)?;
 
@@ -657,6 +667,51 @@ mod tests {
 			"unhelpful message: {message}"
 		);
 
+		Ok(())
+	}
+
+	/// The same self-referential directory, met by the two tile lookups. One
+	/// used to say "not found" without context, the other to drop the tile as a
+	/// gap; both now say what the pyramid walk says.
+	#[tokio::test]
+	async fn the_tile_lookups_refuse_a_self_referential_leaf_directory() -> Result<()> {
+		let mut blob = leaf_pointer_dir(5)?;
+		for _ in 0..4 {
+			let next = leaf_pointer_dir(blob.len())?;
+			let done = next.len() == blob.len();
+			blob = next;
+			if done {
+				break;
+			}
+		}
+		let root = Arc::new(super::super::types::EntriesV3::from_blob(&blob)?);
+		let leaves = Arc::new(blob.clone());
+		let cache = Cache::builder().build();
+		let data_reader: DataReader = Box::new(versatiles_core::io::DataReaderBlob::from(blob));
+
+		let range =
+			PMTilesReader::resolve_tile_range(0, Arc::clone(&root), &cache, &leaves, 0, TileCompression::Uncompressed)
+				.await
+				.expect_err("the stream path must not drop the tile as a gap");
+		assert!(
+			format!("{range:#}").contains("nest more than 3 levels deep"),
+			"{range:#}"
+		);
+
+		let tile = PMTilesReader::lookup_tile_by_id(
+			0,
+			&data_reader,
+			root,
+			&cache,
+			&leaves,
+			0,
+			&TileCompression::Uncompressed,
+			&TileFormat::MVT,
+			&TileCompression::Uncompressed,
+		)
+		.await
+		.expect_err("the tile path must say why");
+		assert!(format!("{tile:#}").contains("nest more than 3 levels deep"), "{tile:#}");
 		Ok(())
 	}
 
