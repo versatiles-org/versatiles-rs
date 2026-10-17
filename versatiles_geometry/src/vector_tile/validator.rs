@@ -341,7 +341,7 @@ mod tests {
 				}
 			}
 			if geom_type == GeomType::MultiPolygon {
-				writer.write_varint(7).unwrap(); // ClosePath
+				writer.write_varint(15).unwrap(); // ClosePath, count=1
 			}
 		}
 		VectorTileFeature {
@@ -421,7 +421,7 @@ mod tests {
 		writer.write_svarint(0).unwrap();
 		writer.write_svarint(0).unwrap(); // (0,0)
 		writer.write_svarint(0).unwrap();
-		writer.write_varint(7).unwrap(); // ClosePath
+		writer.write_varint(15).unwrap(); // ClosePath, count=1
 		let feature = VectorTileFeature {
 			id: None,
 			tag_ids: vec![],

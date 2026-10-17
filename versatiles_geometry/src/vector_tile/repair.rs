@@ -140,7 +140,7 @@ mod tests {
 					prev = (ix, iy);
 				}
 			}
-			writer.write_varint(7).unwrap(); // ClosePath
+			writer.write_varint(15).unwrap(); // ClosePath, count=1
 		}
 		VectorTileFeature {
 			id: None,

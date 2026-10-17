@@ -579,7 +579,9 @@ impl VectorTileFeature {
 				}
 			}
 
-			writer.write_varint(7)?; // ClosePath command
+			// ClosePath with a count of 1, which MVT 2.1 §4.3.3.3 requires: strict
+			// readers (fast-mvt, used for MLT) refuse a count of 0.
+			writer.write_varint(15)?;
 			Ok(())
 		}
 
@@ -910,7 +912,7 @@ mod tests {
 				writer.write_svarint(iy - prev.1).unwrap();
 				prev = (ix, iy);
 			}
-			writer.write_varint(7).unwrap(); // ClosePath
+			writer.write_varint(15).unwrap(); // ClosePath, count=1
 		}
 		VectorTileFeature {
 			id: None,
