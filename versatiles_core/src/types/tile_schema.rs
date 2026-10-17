@@ -1,5 +1,5 @@
 use anyhow::bail;
-use enumset::{EnumSet, EnumSetType};
+use enumset::EnumSetType;
 
 use super::TileType;
 
@@ -164,7 +164,7 @@ impl TryFrom<&str> for TileSchema {
 
 	fn try_from(value: &str) -> Result<Self, Self::Error> {
 		use TileSchema::{
-			RasterDEMMapbox, RasterDEMTerrarium, RasterDEMVersatiles, RasterRGB, RasterRGBA, VectorOpenMapTiles,
+			RasterDEMMapbox, RasterDEMTerrarium, RasterDEMVersatiles, RasterRGB, RasterRGBA, Unknown, VectorOpenMapTiles,
 			VectorOther, VectorShortbread1_0, VectorShortbread1_1,
 		};
 		Ok(match value.to_lowercase().as_str() {
@@ -177,13 +177,12 @@ impl TryFrom<&str> for TileSchema {
 			"shortbread@1.0" => VectorShortbread1_0,
 			"shortbread@1.1" => VectorShortbread1_1,
 			"other" => VectorOther,
+			// What `as_str` writes for `Unknown`, so a schema that was written
+			// out reads back; not offered in `variants`, nor in the list below.
+			"unknown" => Unknown,
 			_ => bail!(
 				"Invalid tile schema: {value}. Only supported schemas are: {}",
-				EnumSet::<TileSchema>::all()
-					.iter()
-					.map(|s| s.as_str().to_string())
-					.collect::<Vec<_>>()
-					.join(", ")
+				Self::variants().join(", ")
 			),
 		})
 	}
@@ -253,6 +252,18 @@ mod tests {
 		}
 
 		assert!(TileSchema::try_from("invalid").is_err());
+	}
+
+	/// `as_str` is documented as loss-less: every schema reads back, `Unknown`
+	/// included, which used to be written as "unknown" and then refused — by
+	/// an error that listed "unknown" among the supported schemas.
+	#[test]
+	fn every_schema_round_trips() {
+		for schema in enumset::EnumSet::<TileSchema>::all() {
+			assert_eq!(TileSchema::try_from(schema.as_str()).unwrap(), schema);
+		}
+		let error = TileSchema::try_from("invalid").unwrap_err().to_string();
+		assert!(!error.contains("unknown"), "{error}");
 	}
 
 	#[test]

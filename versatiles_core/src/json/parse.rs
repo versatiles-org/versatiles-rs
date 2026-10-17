@@ -52,11 +52,23 @@ fn parse_json_at_depth(iter: &mut ByteIterator, depth: usize) -> Result<JsonValu
 			.map(|i| JsonValue::Array(JsonArray(i))),
 		b'{' => parse_json_object(iter, depth),
 		b'"' => parse_quoted_json_string(iter).map(JsonValue::String),
-		d if d.is_ascii_digit() || d == b'.' || d == b'-' => parse_number_as::<f64>(iter).map(JsonValue::Number),
+		d if d.is_ascii_digit() || d == b'.' || d == b'-' => parse_finite_number(iter).map(JsonValue::Number),
 		b't' => parse_tag(iter, "true").map(|()| JsonValue::Boolean(true)),
 		b'f' => parse_tag(iter, "false").map(|()| JsonValue::Boolean(false)),
 		b'n' => parse_tag(iter, "null").map(|()| JsonValue::Null),
 		c => Err(iter.format_error(&format!("unexpected character '{}'", c as char))),
+	}
+}
+
+/// Parse a number, refusing one too large for an `f64`: `1e999` would
+/// otherwise become infinity, which JSON cannot represent and which no format
+/// we write can store.
+fn parse_finite_number(iter: &mut ByteIterator) -> Result<f64> {
+	let number = parse_number_as::<f64>(iter)?;
+	if number.is_finite() {
+		Ok(number)
+	} else {
+		Err(iter.format_error("number is too large"))
 	}
 }
 
@@ -79,6 +91,14 @@ fn parse_json_object(iter: &mut ByteIterator, depth: usize) -> Result<JsonValue>
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// `1e999` overflows an `f64` to infinity, which JSON cannot represent.
+	#[test]
+	fn a_number_too_large_for_a_double_is_refused() {
+		assert!(parse_json_str("1e999").is_err());
+		assert!(parse_json_str("[-1e999]").is_err());
+		assert!(parse_json_str("1e308").is_ok());
+	}
 
 	/// Recursive descent means nesting depth is stack depth. Without a bound,
 	/// `[[[[…]]]]` in a container's metadata overflowed the stack and aborted the

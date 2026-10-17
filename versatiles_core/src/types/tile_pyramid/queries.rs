@@ -3,22 +3,40 @@
 use anyhow::Result;
 
 use super::TilePyramid;
-use crate::{GeoBBox, GeoCenter, TileBBox, TileCoord, TileCover};
+use crate::{GeoBBox, GeoCenter, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover};
 
 impl TilePyramid {
 	/// Returns a reference to the [`TileCover`] at the given zoom level.
+	///
+	/// # Panics
+	///
+	/// If `level` is above [`MAX_ZOOM_LEVEL`]; a pyramid has no such level.
 	#[must_use]
 	pub fn level_ref(&self, level: u8) -> &TileCover {
-		&self.levels[level as usize]
+		self
+			.levels
+			.get(level as usize)
+			.unwrap_or_else(|| panic!("zoom level {level} is above the maximum of {MAX_ZOOM_LEVEL}"))
 	}
 	/// Returns a mutable reference to the [`TileCover`] at the given zoom level.
+	///
+	/// # Panics
+	///
+	/// If `level` is above [`MAX_ZOOM_LEVEL`]; a pyramid has no such level.
 	#[must_use]
 	pub fn level_mut(&mut self, level: u8) -> &mut TileCover {
-		self.levels.get_mut(level as usize).expect("level <= MAX_ZOOM_LEVEL")
+		self
+			.levels
+			.get_mut(level as usize)
+			.unwrap_or_else(|| panic!("zoom level {level} is above the maximum of {MAX_ZOOM_LEVEL}"))
 	}
 
 	/// Returns the bounding box of the given zoom level, or an empty bbox if
 	/// the level is empty.
+	///
+	/// # Panics
+	///
+	/// If `level` is above [`MAX_ZOOM_LEVEL`], as [`level_ref`](Self::level_ref).
 	#[must_use]
 	pub fn level_bbox(&self, level: u8) -> TileBBox {
 		self.level_ref(level).to_bbox()

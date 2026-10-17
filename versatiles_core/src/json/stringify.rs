@@ -6,10 +6,14 @@ use super::JsonValue;
 /// Serialize a `JsonValue` to a compact JSON string without extra whitespace.
 ///
 /// Supports all JSON types: string, number, boolean, null, array, and object.
+/// JSON has no NaN or infinity; such a number is written as `null`, as
+/// JavaScript's `JSON.stringify` does, rather than as `NaN` or `inf`, which no
+/// JSON parser reads.
 #[must_use]
 pub fn stringify(json: &JsonValue) -> String {
 	match json {
 		JsonValue::String(s) => format!("\"{}\"", escape_json_string(s)),
+		JsonValue::Number(n) if !n.is_finite() => String::from("null"),
 		JsonValue::Number(n) => n.to_string(),
 		JsonValue::Boolean(b) => b.to_string(),
 		JsonValue::Null => String::from("null"),
@@ -85,6 +89,19 @@ mod tests {
 	use anyhow::Result;
 
 	use super::{super::parse::parse_json_str, stringify};
+	use crate::json::JsonValue;
+
+	/// NaN and infinity are not JSON; they are written as `null`, as JavaScript
+	/// does, so the output always parses.
+	#[test]
+	fn a_non_finite_number_is_written_as_null() -> Result<()> {
+		for n in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+			let text = stringify(&JsonValue::Number(n));
+			assert_eq!(text, "null");
+			parse_json_str(&text)?;
+		}
+		Ok(())
+	}
 
 	#[test]
 	fn test_as_string_primitives() -> Result<()> {

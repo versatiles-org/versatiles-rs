@@ -67,10 +67,16 @@ impl TileQuadtree {
 	/// Total extra allocation: one `Vec<u64>` of T × 8 bytes.
 	///
 	/// # Errors
-	/// Returns an error if `level` exceeds `MAX_ZOOM_LEVEL`.
+	/// Returns an error if `level` exceeds `MAX_ZOOM_LEVEL`, or a coordinate is
+	/// outside the level — its Morton code would otherwise land on some other
+	/// tile, silently marking the far corner.
 	#[context("Failed to build TileQuadtree from tile iterator at level {level}")]
 	pub fn from_tile_coords(level: u8, tiles: &[(u32, u32)]) -> Result<Self> {
 		validate_zoom_level(level)?;
+		let size = 1u32 << level;
+		if let Some(&(x, y)) = tiles.iter().find(|&&(x, y)| x >= size || y >= size) {
+			anyhow::bail!("tile ({x}, {y}) is outside level {level}, which is {size} tiles wide");
+		}
 		let mut codes: Vec<u64> = tiles.iter().map(|&(x, y)| morton(u64::from(x), u64::from(y))).collect();
 		codes.sort_unstable();
 		codes.dedup();
@@ -239,6 +245,14 @@ mod tests {
 		assert_eq!(t.is_full(), full);
 		assert_eq!(t.count_tiles(), count);
 		Ok(())
+	}
+
+	/// A coordinate outside the level used to mark some other tile.
+	#[test]
+	fn from_tile_coords_refuses_a_coordinate_outside_the_level() {
+		assert!(TileQuadtree::from_tile_coords(3, &[(8, 0)]).is_err());
+		assert!(TileQuadtree::from_tile_coords(3, &[(0, 8)]).is_err());
+		assert!(TileQuadtree::from_tile_coords(3, &[(7, 7)]).is_ok());
 	}
 
 	#[test]

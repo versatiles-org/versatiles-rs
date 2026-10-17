@@ -5,7 +5,7 @@ use std::array::from_fn;
 use anyhow::Result;
 
 use super::TilePyramid;
-use crate::{GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover, TileQuadtree};
+use crate::{GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover, TileQuadtree, validate_zoom_level};
 
 impl TilePyramid {
 	/// Creates an empty pyramid (all levels empty).
@@ -46,6 +46,8 @@ impl TilePyramid {
 	/// # Errors
 	/// Returns an error if any zoom level or geographic coordinate is invalid.
 	pub fn from_geo_bbox(level_min: u8, level_max: u8, geo_bbox: &GeoBBox) -> Result<Self> {
+		// Before indexing: a level above the maximum used to panic here.
+		validate_zoom_level(level_max)?;
 		let mut pyramid = TilePyramid::new_empty();
 		for z in level_min..=level_max {
 			pyramid.levels[z as usize] = TileCover::from_geo_bbox(z, geo_bbox)?;
@@ -72,7 +74,8 @@ impl TilePyramid {
 		let mut pyramid = TilePyramid::new_empty();
 		for (z, tiles) in per_level.into_iter().enumerate() {
 			if !tiles.is_empty() {
-				let tree = TileQuadtree::from_tile_coords(z as u8, &tiles).expect("zoom level already validated");
+				let tree = TileQuadtree::from_tile_coords(z as u8, &tiles)
+					.expect("a TileCoord's level and position are validated on construction");
 				pyramid.levels[z] = TileCover::Tree(tree);
 			}
 		}

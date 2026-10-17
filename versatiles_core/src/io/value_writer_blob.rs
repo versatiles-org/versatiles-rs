@@ -127,6 +127,33 @@ mod tests {
 		Ok(())
 	}
 
+	/// Every `i64` survives a round trip. Values with |v| ≥ 2^62 zigzag to 2^63
+	/// or more and used to fail to read back.
+	#[test]
+	fn test_svarint_round_trip() -> Result<()> {
+		use crate::io::{ValueReader, ValueReaderSlice};
+
+		for value in [
+			0,
+			1,
+			-1,
+			75,
+			-75,
+			1 << 62,
+			-(1 << 62),
+			(1 << 62) - 1,
+			i64::MAX,
+			i64::MIN,
+		] {
+			let mut writer = ValueWriterBlob::<LittleEndian>::new();
+			writer.write_svarint(value)?;
+			let blob = writer.into_blob();
+			let mut reader = ValueReaderSlice::new_le(blob.as_slice());
+			assert_eq!(reader.read_svarint()?, value, "{value}");
+		}
+		Ok(())
+	}
+
 	#[test]
 	fn test_write_u8() -> Result<()> {
 		let mut writer = ValueWriterBlob::<LittleEndian>::new();

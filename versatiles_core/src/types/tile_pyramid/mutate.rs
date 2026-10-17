@@ -57,16 +57,18 @@ impl TilePyramid {
 		Ok(())
 	}
 
-	/// Clears all zoom levels below `level_min`.
+	/// Clears all zoom levels below `level_min`. A `level_min` above
+	/// [`MAX_ZOOM_LEVEL`] clears them all.
 	pub fn set_level_min(&mut self, level_min: u8) {
-		for l in 0..level_min {
+		for l in 0..level_min.min(MAX_ZOOM_LEVEL + 1) {
 			self.levels[l as usize] = TileCover::new_empty(l).expect("l within zoom bounds");
 		}
 	}
 
-	/// Clears all zoom levels above `level_max`.
+	/// Clears all zoom levels above `level_max`. Saturating: `level_max + 1`
+	/// overflowed for 255.
 	pub fn set_level_max(&mut self, level_max: u8) {
-		for l in (level_max + 1)..=MAX_ZOOM_LEVEL {
+		for l in level_max.saturating_add(1)..=MAX_ZOOM_LEVEL {
 			self.levels[l as usize] = TileCover::new_empty(l).expect("l within zoom bounds");
 		}
 	}
@@ -110,6 +112,25 @@ mod tests {
 	}
 	fn coord(z: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(z, x, y).unwrap()
+	}
+
+	/// Levels beyond the maximum clamp instead of panicking: `level_max + 1`
+	/// overflowed for 255, and a `level_min` above 31 indexed past the levels.
+	#[test]
+	fn level_limits_beyond_the_maximum_are_clamped() {
+		let mut pyramid = TilePyramid::new_full_up_to(4);
+		pyramid.set_level_max(255);
+		assert_eq!(pyramid.level_max(), Some(4));
+		pyramid.set_level_min(200);
+		assert!(pyramid.is_empty());
+	}
+
+	/// A zoom level above the maximum is an error from `from_geo_bbox`.
+	#[test]
+	fn from_geo_bbox_refuses_a_level_above_the_maximum() {
+		let bbox = GeoBBox::new(0.0, 0.0, 1.0, 1.0).unwrap();
+		assert!(TilePyramid::from_geo_bbox(0, 31, &bbox).is_err());
+		assert!(TilePyramid::from_geo_bbox(0, 30, &bbox).is_ok());
 	}
 
 	#[test]

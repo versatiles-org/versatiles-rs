@@ -128,10 +128,11 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderSlice<'a, E> {
 	/// * `position` — Absolute byte offset to seek to.
 	///
 	/// # Errors
-	/// Returns an error if `position` is outside the slice bounds.
+	/// Returns an error if `position` is beyond the end of the slice. The end
+	/// itself is allowed: it is where the cursor stands after the last byte.
 	fn set_position(&mut self, position: u64) -> Result<()> {
-		if position >= self.len {
-			bail!("set position outside length")
+		if position > self.len {
+			bail!("set position {position} beyond length {}", self.len)
 		}
 		self.cursor.set_position(position);
 		Ok(())
@@ -245,6 +246,18 @@ mod tests {
 		let mut reader = ValueReaderSlice::new_le(&blob);
 
 		assert_eq!(reader.read_u64()?, u64::MAX);
+		Ok(())
+	}
+
+	/// The end of the slice is a valid cursor — where it stands after the last
+	/// byte — and used to be refused. Beyond it is an error.
+	#[test]
+	fn set_position_accepts_the_end() -> Result<()> {
+		let blob = vec![0x01, 0x02];
+		let mut reader = ValueReaderSlice::new_le(&blob);
+		reader.set_position(2)?;
+		assert!(!reader.has_remaining()?);
+		assert!(reader.set_position(3).is_err());
 		Ok(())
 	}
 

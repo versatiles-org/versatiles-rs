@@ -93,17 +93,26 @@ impl GeoCrop {
 	/// The bounds to advertise for `cropped`, the pyramid this crop produced.
 	///
 	/// `existing` is whatever the source advertised, narrowed to the crop. When
-	/// a border is set the result is then widened to the box touching every tile
-	/// actually kept, so the ring is requested rather than merely stored.
+	/// the two do not overlap, nothing of the data lies in the crop and the
+	/// crop's own box is used. When a border is set the result is then widened
+	/// to the box touching every tile actually kept, so the ring is requested
+	/// rather than merely stored.
 	///
 	/// Callers should also clear any advertised centre: it may no longer lie
 	/// inside the result.
 	#[must_use]
 	pub fn bounds(&self, existing: Option<GeoBBox>, cropped: &TilePyramid) -> GeoBBox {
 		let mut bounds = match existing {
-			Some(mut existing) => {
-				existing.intersect(&self.bbox);
-				existing
+			Some(existing) => {
+				let narrowed = existing.intersected(&self.bbox);
+				// Disjoint boxes intersect into one whose minimum exceeds its
+				// maximum — bounds every reader then refuses, taking the whole
+				// TileJSON with them.
+				if narrowed.x_min <= narrowed.x_max && narrowed.y_min <= narrowed.y_max {
+					narrowed
+				} else {
+					self.bbox
+				}
 			}
 			None => self.bbox,
 		};
@@ -131,6 +140,14 @@ mod tests {
 		let mut pyramid = TilePyramid::new_full_up_to(12);
 		crop.apply_to_pyramid(&mut pyramid).unwrap();
 		(crop, pyramid)
+	}
+
+	/// Data that does not overlap the crop used to get inverted bounds.
+	#[test]
+	fn bounds_disjoint_from_the_crop_are_the_crop() {
+		let (crop, pyramid) = cropped(0);
+		let elsewhere = GeoBBox::new(-100.0, -50.0, -99.0, -49.0).unwrap();
+		assert_eq!(crop.bounds(Some(elsewhere), &pyramid), bbox());
 	}
 
 	#[test]

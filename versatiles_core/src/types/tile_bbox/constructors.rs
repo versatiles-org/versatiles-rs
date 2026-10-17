@@ -91,12 +91,15 @@ impl TileBBox {
 		ensure!(x_min < size, "x_min ({x_min}) must be < size ({size})");
 		ensure!(y_min < size, "y_min ({y_min}) must be < size ({size})");
 
+		// Subtracted, not added: `x_min < size` is checked, so `size - x_min`
+		// cannot underflow, while `width + x_min` overflows for a large width —
+		// a panic with overflow checks on, which `versatiles_core` has in release.
 		ensure!(
-			width + x_min <= size,
+			width <= size - x_min,
 			"width ({width}) + x_min ({x_min}) must be <= size ({size})"
 		);
 		ensure!(
-			height + y_min <= size,
+			height <= size - y_min,
 			"height ({height}) + y_min ({y_min}) must be <= size ({size})"
 		);
 
@@ -215,9 +218,15 @@ impl TileBBox {
 	pub fn from_geo_bbox(level: u8, bbox: &GeoBBox) -> Result<TileBBox> {
 		validate_zoom_level(level)?;
 
-		// Convert geographical coordinates to tile coordinates
-		let p_min = TileCoord::from_geo(bbox.x_min + 1e-10, bbox.y_max - 1e-10, level)?;
-		let p_max = TileCoord::from_geo(bbox.x_max - 1e-10, bbox.y_min + 1e-10, level)?;
+		// Convert geographical coordinates to tile coordinates. Each edge is
+		// nudged inward so a box aligned to tile edges does not grow by a row —
+		// but only along an axis with extent: nudging a point (or a line) on a
+		// tile edge moves its two sides past each other, which used to make the
+		// minimum exceed the maximum and the conversion fail.
+		let nudge = |min: f64, max: f64| if max - min > 2e-10 { 1e-10 } else { 0.0 };
+		let (nudge_x, nudge_y) = (nudge(bbox.x_min, bbox.x_max), nudge(bbox.y_min, bbox.y_max));
+		let p_min = TileCoord::from_geo(bbox.x_min + nudge_x, bbox.y_max - nudge_y, level)?;
+		let p_max = TileCoord::from_geo(bbox.x_max - nudge_x, bbox.y_min + nudge_y, level)?;
 
 		Self::from_min_and_max(level, p_min.x, p_min.y, p_max.x, p_max.y)
 	}
@@ -440,15 +449,14 @@ impl TileBBox {
 		let max = self.max_count();
 		ensure!(x_min < max, "x_min ({x_min}) must be < max ({max})");
 		ensure!(y_min < max, "y_min ({y_min}) must be < max ({max})");
+		// As in `from_min_and_size`: compared without adding, which overflows.
 		ensure!(
-			x_min + width <= max,
-			"x_min + width ({}) must be <= max ({max})",
-			x_min + width
+			width <= max - x_min,
+			"x_min ({x_min}) + width ({width}) must be <= max ({max})"
 		);
 		ensure!(
-			y_min + height <= max,
-			"y_min + height ({}) must be <= max ({max})",
-			y_min + height
+			height <= max - y_min,
+			"y_min ({y_min}) + height ({height}) must be <= max ({max})"
 		);
 		self.x_min = x_min;
 		self.y_min = y_min;
@@ -545,9 +553,33 @@ mod tests {
 	#[case((3, 0, 8, 1, 1))] // y_min > max
 	#[case((2, 2, 2, 3, 2))] // x_max > max
 	#[case((2, 0, 2, 2, 3))] // y_max > max
+	#[case((2, 1, 0, u32::MAX, 1))] // width + x_min overflows
+	#[case((2, 0, 1, 1, u32::MAX))] // height + y_min overflows
 	fn from_min_and_size_invalid(#[case] args: (u8, u32, u32, u32, u32)) {
 		let (lvl, x0, y0, w, h) = args;
 		assert!(TileBBox::from_min_and_size(lvl, x0, y0, w, h).is_err());
+	}
+
+	/// A point exactly on a tile edge is one tile, not an error.
+	#[rstest]
+	#[case(1, 0.0, 0.0)]
+	#[case(4, 0.0, 0.0)]
+	#[case(2, 90.0, 10.0)]
+	#[case(3, 13.4, 52.5)]
+	fn a_point_bbox_is_one_tile(#[case] level: u8, #[case] lon: f64, #[case] lat: f64) -> Result<()> {
+		let bbox = TileBBox::from_geo_bbox(level, &GeoBBox::new(lon, lat, lon, lat)?)?;
+		assert_eq!(bbox.count_tiles(), 1, "{bbox:?}");
+		Ok(())
+	}
+
+	/// A size that overflows when added to the minimum is an error, not a
+	/// panic: overflow checks are on in `versatiles_core`'s release builds.
+	#[test]
+	fn set_min_and_size_rejects_an_overflowing_size() -> Result<()> {
+		let mut bbox = TileBBox::new_full(4)?;
+		assert!(bbox.set_min_and_size(1, 0, u32::MAX, 1).is_err());
+		assert!(bbox.set_min_and_size(0, 1, 1, u32::MAX).is_err());
+		Ok(())
 	}
 
 	// ------------------------------

@@ -150,8 +150,11 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading the underlying varint fails.
 	fn read_svarint(&mut self) -> Result<i64> {
-		let sint_value = i64::try_from(self.read_varint()?)?;
-		Ok((sint_value >> 1) ^ -(sint_value & 1))
+		// Un-zigzagged on the `u64`: a zigzag value of 2^63 or more is a valid
+		// encoding of |v| ≥ 2^62, which `write_svarint` produces, and used to
+		// fail the conversion to `i64` that came first.
+		let value = self.read_varint()?;
+		Ok((value >> 1).cast_signed() ^ -(value & 1).cast_signed())
 	}
 
 	/// Reads a 32-bit floating point number from the data.
