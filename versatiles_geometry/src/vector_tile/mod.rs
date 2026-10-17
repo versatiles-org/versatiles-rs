@@ -1,7 +1,8 @@
 //! Vector Tile (MVT) support.
 //!
 //! This module implements low-level read/write utilities for the Mapbox Vector Tile
-//! (MVT) protobuf format.
+//! (MVT) protobuf format. With the `mlt` feature, [`VectorTile`] also reads and
+//! writes MapLibre Tiles (MLT).
 //!
 //! Together these pieces allow encoding/decoding full tiles, transforming properties,
 //! and converting between vector‑tile features and higher‑level `GeoFeature`s for
@@ -13,6 +14,8 @@
 mod feature;
 mod geometry_type;
 mod layer;
+#[cfg(feature = "mlt")]
+mod mlt;
 mod property_manager;
 mod repair;
 mod stats;

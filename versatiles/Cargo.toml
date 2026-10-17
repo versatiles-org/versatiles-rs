@@ -96,7 +96,7 @@ versatiles_container = { workspace = true, features = ["test"] }
 versatiles_core = { workspace = true, features = ["test"] }
 
 [features]
-default = ["cli", "server", "sftp"]
+default = ["cli", "mlt", "server", "sftp"]
 server = [
 	"dep:arc-swap",
 	"dep:axum",
@@ -124,6 +124,7 @@ cli = [
 ]
 codegen = ["versatiles_pipeline/codegen"]
 gdal = ["versatiles_pipeline/gdal"]
+mlt = ["versatiles_pipeline/mlt"]
 bindgen = ["versatiles_pipeline/bindgen"]
 sftp = ["versatiles_container/sftp"]
 

@@ -8,8 +8,11 @@ use versatiles_core::{GeoBBox, GeoCrop, TileCompression, TileFormat, TilePyramid
 use versatiles_derive::context;
 use versatiles_pipeline::{check_pipeline, vpl::parse_vpl};
 
-/// Parse a tile format string like "webp", "webp,80", or "avif,90,50"
+/// Parse a tile format string like "webp", "webp,80", "avif,90,50" or "mlt"
 /// into (TileFormat, Option<quality>, Option<effort>).
+///
+/// Raster formats take a quality and an effort; vector formats (mvt, mlt)
+/// have neither, so naming one there is refused rather than ignored.
 fn parse_tile_format(s: &str) -> Result<(TileFormat, Option<u8>, Option<u8>)> {
 	let parts: Vec<&str> = s.split(',').collect();
 	if parts.is_empty() || parts.len() > 3 {
@@ -17,11 +20,14 @@ fn parse_tile_format(s: &str) -> Result<(TileFormat, Option<u8>, Option<u8>)> {
 	}
 
 	let format = TileFormat::try_from_str(parts[0])?;
-	if !format.is_raster() {
+	if !format.is_raster() && !format.is_vector() {
 		bail!(
-			"Tile format conversion only supports raster formats (avif, jpg, png, webp), got '{}'",
+			"Tile format conversion supports raster formats (avif, jpg, png, webp) and vector formats (mvt, mlt), got '{}'",
 			parts[0]
 		);
+	}
+	if format.is_vector() && parts.len() > 1 {
+		bail!("Vector tile format '{}' has no quality or effort, got '{s}'", parts[0]);
 	}
 
 	let quality = if parts.len() >= 2 {
@@ -122,7 +128,10 @@ pub struct Subcommand {
 	#[arg(long, display_order = 3)]
 	flip_y: bool,
 
-	/// set the output tile format, e.g. "webp", "webp,80", "avif,90,50"
+	/// set the output tile format, e.g. "webp", "webp,80", "avif,90,50", "mlt"
+	///
+	/// Raster tiles can be re-encoded as avif, jpg, png or webp; vector tiles
+	/// as mvt or mlt. A format of the other kind is refused.
 	///
 	/// Elevation tiles (tile schema "dem/…") are converted without loss unless
 	/// a quality is given: their channels are heights. "avif" and "jpg" have
@@ -357,6 +366,9 @@ mod tests {
 	#[case("webp", TileFormat::WEBP, None, None)]
 	#[case("webp,80", TileFormat::WEBP, Some(80), None)]
 	#[case("avif,90,50", TileFormat::AVIF, Some(90), Some(50))]
+	#[case("mvt", TileFormat::MVT, None, None)]
+	#[case("pbf", TileFormat::MVT, None, None)]
+	#[case("mlt", TileFormat::MLT, None, None)]
 	fn test_parse_tile_format(
 		#[case] input: &str,
 		#[case] expected_format: TileFormat,
@@ -369,10 +381,15 @@ mod tests {
 		assert_eq!(e, expected_effort);
 	}
 
-	#[test]
-	fn test_parse_tile_format_rejects_non_raster() {
-		assert!(parse_tile_format("mvt").is_err());
-		assert!(parse_tile_format("json").is_err());
+	#[rstest]
+	#[case::not_a_tile_format("geojson", "supports raster formats")]
+	#[case::json("json", "supports raster formats")]
+	#[case::vector_with_quality("mlt,80", "has no quality or effort")]
+	#[case::vector_with_effort("mvt,80,50", "has no quality or effort")]
+	#[case::unknown("foo", "Unknown tile format")]
+	fn test_parse_tile_format_refusals(#[case] input: &str, #[case] expected: &str) {
+		let err = format!("{:#}", parse_tile_format(input).unwrap_err());
+		assert!(err.contains(expected), "got: {err}");
 	}
 
 	#[test]

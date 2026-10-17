@@ -24,6 +24,7 @@ napi-derive = "3.6.12"
 tokio.workspace = true
 versatiles = { workspace = true, default-features = false, features = [
 	"codegen",
+	"mlt",
 	"server",
 ] }
 # `sftp` brings in the SFTP reader and writer: without it an `sftp://` URL is

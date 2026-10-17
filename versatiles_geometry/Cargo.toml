@@ -24,6 +24,7 @@ futures.workspace = true
 geo.workspace = true
 geo-types.workspace = true
 log.workspace = true
+mlt-core = { workspace = true, optional = true }
 num_cpus.workspace = true
 regex.workspace = true
 rstar.workspace = true
@@ -41,4 +42,6 @@ tokio = { workspace = true, features = ["macros"] }
 versatiles_core = { workspace = true, features = ["test"] }
 
 [features]
+# MapLibre Tile decoding and encoding through `mlt-core`.
+mlt = ["dep:mlt-core"]
 test = []

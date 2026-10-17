@@ -303,7 +303,7 @@ versatiles convert input.mbtiles output.versatiles
 | `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max)                                   | `--bbox=13.0,52.3,13.8,52.7`             |
 | `--bbox-border`            | Add border tiles around bbox                                                       | `--bbox-border=3`                        |
 | `--compress`               | Set compression (uncompressed, gzip, brotli, zstd)                                 | `--compress=brotli`                      |
-| `--tile-format`            | Re-encode raster tiles (avif, jpg, png, webp), optionally with `,quality[,effort]` | `--tile-format=webp,80`                  |
+| `--tile-format`            | Re-encode raster tiles (avif, jpg, png, webp), optionally with `,quality[,effort]`, or vector tiles (mvt, mlt) | `--tile-format=webp,80`                  |
 | `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)                                               | `--swap-xy`                              |
 | `--flip-y`                 | Flip tiles vertically                                                              | `--flip-y`                               |
 | `--dry-run`                | Check the pipeline and exit, reading no tiles                                      | `--dry-run`                              |
@@ -972,7 +972,7 @@ VersaTiles is built with Rust and includes Node.js bindings (NAPI-RS).
 
 **Required:**
 
-- Rust 1.95+ ([installation](https://www.rust-lang.org/tools/install))
+- Rust 1.98+ ([installation](https://www.rust-lang.org/tools/install))
 - Node.js 22.12+ (for Node.js bindings)
 
 **Optional:**

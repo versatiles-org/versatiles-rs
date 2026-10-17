@@ -70,6 +70,7 @@ versatiles_image = { workspace = true, features = ["test"] }
 default = []
 codegen = []
 gdal = ["dep:gdal", "dep:gdal-sys", "dep:deadpool"]
+mlt = ["versatiles_container/mlt"]
 bindgen = ["gdal/bindgen"]
 
 [[bench]]

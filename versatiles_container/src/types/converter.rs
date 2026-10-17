@@ -75,7 +75,8 @@ pub struct TilesConverterParameters {
 	/// [`TileCompression`] (e.g., Gzip → Brotli). If `None`, the source compression is kept.
 	pub tile_compression: Option<TileCompression>,
 	/// Optional tile format override. When set, tiles are re-encoded to this format
-	/// (e.g., PNG → WEBP). Only raster formats (AVIF, JPG, PNG, WEBP) are supported.
+	/// (e.g., PNG → WEBP, or MVT → MLT). The target has to be of the same kind
+	/// (raster or vector) as the source.
 	pub tile_format: Option<TileFormat>,
 	/// Optional quality parameter (0–100) for format conversion.
 	pub format_quality: Option<u8>,

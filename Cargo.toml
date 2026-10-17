@@ -26,14 +26,15 @@ license = "MIT"
 readme = "README.md"
 repository = "https://github.com/versatiles-org/versatiles-rs"
 # The oldest toolchain the workspace compiles on, enforced by the "Linux: MSRV"
-# CI job and repeated in README.md. 1.95 is for `AtomicU64::try_update`, which
-# Rust 1.99 deprecated `fetch_update` in favour of. Below that sits a floor that
-# is not a free choice: `h3o` (a default dependency of versatiles_pipeline)
-# calls `f64::mul_add` inside a `const fn`, which is not stable before 1.94, and
-# declares no `rust-version` of its own — so without this line a 1.93 user gets
-# a compile error inside a dependency rather than cargo's "requires rustc"
-# message.
-rust-version = "1.95"
+# CI job and repeated in README.md. 1.98 is what `mlt-core` (a default
+# dependency, through versatiles_geometry's `mlt` feature) declares. Below that
+# sit two floors of our own: 1.95 for `AtomicU64::try_update`, which Rust 1.99
+# deprecated `fetch_update` in favour of; and 1.94, which is not a free choice:
+# `h3o` (a default dependency of versatiles_pipeline) calls `f64::mul_add`
+# inside a `const fn`, which is not stable before 1.94, and declares no
+# `rust-version` of its own — so without this line a 1.93 user gets a compile
+# error inside a dependency rather than cargo's "requires rustc" message.
+rust-version = "1.98"
 version = "5.3.0"
 exclude = [
 	".githooks/",
@@ -225,6 +226,7 @@ imageproc = { version = "0.27.0", default-features = false }
 # Geometry dependencies
 geo = { version = "0.33.1", default-features = false }
 geo-types = { version = "0.7.20" }
+mlt-core = { version = "0.20.4", default-features = false }
 rstar = { version = "0.13.0", default-features = false }
 
 # Utility dependencies
