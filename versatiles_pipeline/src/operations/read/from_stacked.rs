@@ -7,8 +7,10 @@
 //!
 //! * Sources are evaluated in the **order** provided in the VPL list.  
 //! * No blending occurs – it is a *winner‑takes‑first* strategy.  
-//! * All sources must expose an identical tile type and compression; only
-//!   their spatial coverage may differ.
+//! * All sources must expose the same tile format. Their compressions may
+//!   differ: each tile carries its own and is recompressed wherever the output
+//!   needs another, and the compression this operation reports is the first
+//!   source's.
 //!
 //! The file provides:
 //! 1. [`Args`] – CLI / VPL configuration,  

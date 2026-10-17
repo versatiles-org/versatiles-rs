@@ -346,6 +346,10 @@ impl TileSource for Operation {
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("from_tilejson::tile_stream {bbox:?}");
+		// Clipped as the coordinate stream is: every coordinate here is an HTTP
+		// request, and inside `from_stacked` the bbox asked for is the union of
+		// all sources — one request per tile this server never had.
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		let client = self.client.clone();
 		let template = self.tile_url_template.clone();
 		let tile_format = self.tile_format;
@@ -905,6 +909,53 @@ mod tests {
 			let b = tile.into_blob(&TileCompression::Uncompressed)?;
 			assert_eq!(b.as_slice(), b"tile_body");
 		}
+		Ok(())
+	}
+
+	/// The tile stream used not to clip to the pyramid: every coordinate asked
+	/// for became a request, also those outside the TileJSON's bounds.
+	#[tokio::test]
+	async fn tile_stream_requests_only_tiles_inside_the_bounds() -> Result<()> {
+		use std::sync::atomic::{AtomicUsize, Ordering};
+
+		use crate::PipelineFactory;
+
+		let requests = std::sync::Arc::new(AtomicUsize::new(0));
+		let counter = requests.clone();
+		let base_holder: std::sync::Arc<std::sync::OnceLock<String>> = std::sync::Arc::new(std::sync::OnceLock::new());
+		let holder = base_holder.clone();
+		let base = spawn_mock_server(move || {
+			let holder = holder.clone();
+			let counter = counter.clone();
+			axum::Router::new()
+				.route(
+					"/tiles.json",
+					axum::routing::get(move || {
+						let base = holder.get().cloned().unwrap_or_default();
+						async move {
+							format!(
+								r#"{{"tilejson":"3.0.0","tiles":["{base}/{{z}}/{{x}}/{{y}}.png"],"minzoom":0,"maxzoom":3,"bounds":[10,42,20,50]}}"#
+							)
+						}
+					}),
+				)
+				.fallback(axum::routing::get(move || {
+					counter.fetch_add(1, Ordering::SeqCst);
+					async { "tile_body".to_string() }
+				}))
+		})
+		.await;
+		base_holder.set(base.clone()).unwrap();
+
+		let vpl = crate::vpl::VPLNode::try_from_str(&format!(r#"from_tilejson url="{base}/tiles.json""#))?;
+		let source = Operation::build(vpl, &PipelineFactory::new_dummy()).await?;
+		let tiles = source.tile_stream(TileBBox::new_full(3)?).await?.to_vec().await;
+		assert_eq!(tiles.len(), 1);
+		assert_eq!(
+			requests.load(Ordering::SeqCst),
+			1,
+			"only the tile inside the bounds is requested"
+		);
 		Ok(())
 	}
 }

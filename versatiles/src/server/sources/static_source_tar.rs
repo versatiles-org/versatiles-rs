@@ -258,7 +258,8 @@ impl StaticSourceTrait for TarFile {
 	async fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
 		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
 
-		let file_entry = self.lookup.get(&url.str[1..])?;
+		// Decoded, so an entry named `a b.txt` is found for `a%20b.txt`.
+		let file_entry = self.lookup.get(&url.decoded_segments()?.join("/"))?;
 
 		if accept.contains(Brotli)
 			&& let Some(blob) = &file_entry.br
@@ -432,6 +433,24 @@ mod tests {
 		File(&'a str),
 		Hard(&'a str),
 		Sym(&'a str),
+	}
+
+	/// An entry whose name needs percent-encoding used to 404 from a tar.
+	#[tokio::test]
+	async fn percent_encoded_names_are_found() -> Result<()> {
+		use TestEntry::File;
+
+		let tar_file = make_link_tar(&[("a b.txt", File("space")), ("dir/ü.txt", File("umlaut"))]).await?;
+		let get = async |path: &str| {
+			tar_file
+				.get_data(&Url::from(path), &TargetCompression::from_none())
+				.await
+				.map(|r| r.blob.as_str().to_owned())
+		};
+		assert_eq!(get("a%20b.txt").await.as_deref(), Some("space"));
+		assert_eq!(get("dir/%C3%BC.txt").await.as_deref(), Some("umlaut"));
+		assert_eq!(get("dir%2F%C3%BC.txt").await, None);
+		Ok(())
 	}
 
 	#[tokio::test]

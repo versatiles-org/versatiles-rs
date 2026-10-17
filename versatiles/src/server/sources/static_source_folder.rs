@@ -76,7 +76,9 @@ impl StaticSourceTrait for Folder {
 	// Gets the data at the given path and responds with a compressed or uncompressed version
 	// based on the accept header
 	async fn get_data(&self, url: &Url, _accept: &TargetCompression) -> Option<SourceResponse> {
-		let mut local_path = url.to_pathbug(&self.folder);
+		// Decoded, so a file named `a b.txt` is found for `a%20b.txt`.
+		let decoded = Url::new(url.decoded_segments()?.join("/"));
+		let mut local_path = decoded.to_pathbug(&self.folder);
 
 		// If the path is a directory, append 'index.html'
 		if local_path.is_dir() {
@@ -166,6 +168,31 @@ impl Debug for Folder {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// A file whose name needs percent-encoding used to 404: the request's
+	/// encoded name was looked up as it was. Decoding cannot produce a dot
+	/// segment or a separator.
+	#[tokio::test]
+	async fn percent_encoded_names_are_found() -> Result<()> {
+		let dir = assert_fs::TempDir::new()?;
+		std::fs::write(dir.path().join("a b.txt"), "space")?;
+		std::fs::write(dir.path().join("ü.txt"), "umlaut")?;
+		let folder = Folder::from(dir.path(), false)?;
+		let get = async |path: &str| {
+			folder
+				.get_data(&Url::from(path), &TargetCompression::from_none())
+				.await
+				.map(|r| r.blob.as_str().to_owned())
+		};
+
+		assert_eq!(get("a%20b.txt").await.as_deref(), Some("space"));
+		assert_eq!(get("%C3%BC.txt").await.as_deref(), Some("umlaut"));
+		assert_eq!(get("a b.txt").await.as_deref(), Some("space"));
+		for hostile in ["%2e%2e/a%20b.txt", "x%2F..%2Fa%20b.txt", "%00", "a%5Cb"] {
+			assert_eq!(get(hostile).await, None, "{hostile}");
+		}
+		Ok(())
+	}
 
 	#[tokio::test]
 	async fn test() {

@@ -385,6 +385,29 @@ mod tests {
 		assert_stream_counts_agree(&op, TileBBox::new_full(3)?).await
 	}
 
+	/// A source whose tiles are not the size it declares used to panic the
+	/// blocking worker on an `assert_eq!`; it is an error now.
+	#[tokio::test]
+	async fn tiles_of_the_wrong_size_are_an_error() -> Result<()> {
+		let pyramid = TilePyramid::from_geo_bbox(6, 6, &paris())?;
+		let mut source = DummyImageSource::from_color(&[255, 0, 0], 8, TileFormat::PNG, Some(pyramid))?;
+		source.tilejson_mut().set_tile_size(256)?;
+		let op = Operation::build(
+			VPLNode::try_from_str("raster_overview level=6")?,
+			Box::new(source),
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+
+		let coord = min_tile_at(&op, 5)?;
+		let error = op.tile(&coord).await.expect_err("a size mismatch must be an error");
+		assert!(
+			format!("{error:#}").contains("but the source declares 256 px"),
+			"{error:#}"
+		);
+		Ok(())
+	}
+
 	/// Reading a tile must not consume it.
 	///
 	/// The cache is drained by `remove`, so the first read of an overview tile

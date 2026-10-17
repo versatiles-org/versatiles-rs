@@ -482,35 +482,47 @@ impl OverviewCore {
 
 		let results: Vec<_> = futures::future::join_all(container.into_iter().map(|(coord, image_opt)| {
 			let scale_fn = scale_fn.clone();
-			tokio::task::spawn_blocking(move || {
+			// Errors, not asserts: a panic here took down the blocking worker
+			// for a source whose tiles are not the size it declares.
+			tokio::task::spawn_blocking(move || -> Result<_> {
 				let cached = if scale {
-					image_opt.as_ref().map(|img| {
-						assert_eq!(img.width(), full_size);
-						assert_eq!(img.height(), full_size);
-						let scaled = scale_fn(img).expect("scale_fn succeeds on valid overview image");
-						versatiles_image::format::png::encode(&scaled, Some(0))
-							.expect("png encode succeeds on scaled overview image")
-					})
+					image_opt
+						.as_ref()
+						.map(|img| {
+							ensure!(
+								img.width() == full_size && img.height() == full_size,
+								"tile {coord:?} is {}x{} px, but the source declares {full_size} px",
+								img.width(),
+								img.height()
+							);
+							let scaled = scale_fn(img)?;
+							versatiles_image::format::png::encode(&scaled, Some(0))
+						})
+						.transpose()?
 				} else {
 					None
 				};
 				let tile = if emit.is_some_and(|bbox| bbox.includes_coord(&coord)) {
-					image_opt.map(|img| {
-						let mut tile = Tile::from_image(img, format).expect("source format is raster");
-						if lossless {
-							tile.set_format_quality(Some(100));
-						}
-						(coord, tile)
-					})
+					image_opt
+						.map(|img| {
+							let mut tile = Tile::from_image(img, format)?;
+							if lossless {
+								tile.set_format_quality(Some(100));
+							}
+							anyhow::Ok((coord, tile))
+						})
+						.transpose()?
 				} else {
 					None
 				};
-				((coord, cached), tile)
+				Ok(((coord, cached), tile))
 			})
 		}))
 		.await
 		.into_iter()
-		.collect::<Result<Vec<_>, _>>()?;
+		.collect::<Result<Vec<_>, _>>()?
+		.into_iter()
+		.collect::<Result<Vec<_>>>()?;
 
 		let (cache_entries, tiles): (Vec<_>, Vec<_>) = results.into_iter().unzip();
 

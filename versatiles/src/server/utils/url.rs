@@ -136,6 +136,28 @@ impl Url {
 			.collect()
 	}
 
+	/// The path's segments, percent-decoded, or `None` when one of them is not
+	/// a plain name once decoded.
+	///
+	/// A request arrives percent-encoded, and a file whose name needs encoding
+	/// — a space, an umlaut — is only found under its decoded name. Each segment
+	/// is decoded on its own and must still be one ordinary name afterwards: not
+	/// empty, not `.` or `..` (`%2e%2e`), and without a separator (`%2F`, `%5C`)
+	/// or a NUL, so decoding cannot smuggle path syntax past `Url::new`.
+	#[must_use]
+	pub fn decoded_segments(&self) -> Option<Vec<String>> {
+		self
+			.as_vec()
+			.iter()
+			.map(|segment| {
+				let decoded = percent_encoding::percent_decode_str(segment).decode_utf8().ok()?;
+				let plain =
+					!(decoded.is_empty() || decoded == "." || decoded == ".." || decoded.contains(['/', '\\', '\0']));
+				plain.then(|| decoded.into_owned())
+			})
+			.collect()
+	}
+
 	/// Converts the `Url` into a `PathBuf` relative to the given base path.
 	///
 	/// # Arguments
