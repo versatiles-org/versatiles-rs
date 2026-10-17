@@ -52,7 +52,7 @@ use super::TileType;
 /// - `GEOJSON` - `GeoJSON` vector data
 /// - `JPG` - JPEG image format (including `.jpeg`)
 /// - `JSON` - Generic JSON data
-/// - `MLT` - MapLibre Tile vector data (carried as opaque bytes; not decoded yet)
+/// - `MLT` - MapLibre Tile vector data (decoded and encoded with the `mlt` feature)
 /// - `MVT` - Mapbox Vector Tile schema (encoded as PBF on disk)
 /// - `PNG` - PNG image format
 /// - `SVG` - SVG image format
@@ -72,8 +72,9 @@ pub enum TileFormat {
 	JPG,
 	/// Generic JSON data.
 	JSON,
-	/// MapLibre Tile vector data. Carried through containers and servers as
-	/// opaque bytes; decoding and encoding are not implemented yet (#111).
+	/// MapLibre Tile vector data. Decoded and encoded through `mlt-core` when
+	/// the `mlt` feature is on (the default of the `versatiles` crate); without
+	/// it, carried through containers and servers as opaque bytes.
 	MLT,
 	/// Mapbox Vector Tile in Protocol Buffer format.
 	MVT,
