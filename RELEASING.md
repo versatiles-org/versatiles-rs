@@ -42,7 +42,8 @@ You can either provide the release type as an argument, or run the script withou
 # 6) beta    - Feature complete, testing phase (x.y.z-beta.N)
 # 7) rc      - Release candidate, final testing (x.y.z-rc.N)
 # 8) retry   - Re-release the current version unchanged (e.g. after a failed CI run)
-# 9) Cancel
+# 9) resume  - Finish a release that stopped after its green release commit was pushed
+# 10) Cancel
 #
 # Enter selection number:
 ```
@@ -135,6 +136,30 @@ fast-forward `main`, tag). If that version's tag already exists (the release was
 tagged but its workflow failed), `retry` **moves** the tag to the new release
 commit and re-pushes it, which retriggers the release workflow. It aborts only
 if the release actually finished — detected via a finalized GitHub release.
+
+##### Resuming an Interrupted Release
+
+The script waits for CI before it touches `main` or creates the tag, which can
+take twenty minutes. If it stops during or after that wait — the terminal was
+closed, the machine slept, the network dropped — the release commit is on
+`origin/dev` but `main` and the tag were never updated. The script prints a
+note saying so when it stops. Finish the release with:
+
+```bash
+./scripts/release-package.sh resume
+```
+
+`resume` finds the `release: vX.Y.Z` commit for the version in `Cargo.toml`,
+checks that `CI Success` passed on it, fast-forwards `main` to it and tags it.
+It does not run the checks or push `dev`, and commits that landed on `dev`
+after the release commit stay out of the release. If CI on the release commit
+is red, fix forward and use `retry` instead; if the tag is already on origin,
+the release workflow has started and `resume` refuses.
+
+While it waits for CI, the script keeps macOS from idle-sleeping
+(`caffeinate`); closing the lid still sleeps the machine. If `gh run watch`
+drops out, the script asks GitHub for the run's actual result and keeps
+watching; only a red run counts as a CI failure.
 
 This script will:
 

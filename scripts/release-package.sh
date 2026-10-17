@@ -10,7 +10,13 @@ BLU="\033[1;34m"
 END="\033[0m"
 
 # Valid release type keywords
-VALID_KEYWORDS="patch minor major release alpha beta rc retry"
+VALID_KEYWORDS="patch minor major release alpha beta rc retry resume"
+
+REPO="versatiles-org/versatiles-rs"
+
+# How far the release got, for the hint printed if the script stops early.
+# "pushed": the release commit is on origin/dev; "main": main points at it too.
+RELEASE_STAGE=""
 
 # Helper function for logging steps
 log_step() {
@@ -23,6 +29,31 @@ log_success() {
 
 log_error() {
 	echo -e "${RED}❗️ $1${END}"
+}
+
+# If the script stops after the release commit reached origin, say so and how to
+# finish: otherwise a half-done release looks like nothing happened.
+on_exit() {
+	local status=$?
+	[ "$status" -eq 0 ] && return
+	local where="origin/dev"
+	[ "$RELEASE_STAGE" = "main" ] && where="origin/dev and main"
+	case "$RELEASE_STAGE" in
+		pushed | main)
+			echo ""
+			log_error "Stopped before the release was tagged (the release commit is on $where)."
+			echo "  Once its CI is green, finish it with: ./scripts/release-package.sh resume"
+			;;
+	esac
+}
+trap on_exit EXIT
+
+# On macOS, keep the machine from idle-sleeping while the script waits for CI.
+# Closing the lid still sleeps it.
+keep_awake() {
+	if command -v caffeinate >/dev/null 2>&1; then
+		caffeinate -i -w $$ &
+	fi
 }
 
 # Get current version from Cargo.toml
@@ -138,10 +169,11 @@ create_release_commit() {
 # Create release tag
 create_release_tag() {
 	local new_version="$1"
+	local commit="${2:-HEAD}"
 
 	log_step "Creating release tag..."
 
-	git tag -s "v$new_version" -m "Release v$new_version"
+	git tag -s "v$new_version" -m "Release v$new_version" "$commit"
 
 	log_success "Tag created: v$new_version"
 }
@@ -175,7 +207,7 @@ check_retry_tag() {
 	fi
 
 	local is_draft
-	is_draft=$(gh release view "v$v" --repo versatiles-org/versatiles-rs \
+	is_draft=$(gh release view "v$v" --repo "$REPO" \
 		--json isDraft --jq '.isDraft' 2>/dev/null || echo "missing")
 	if [ "$is_draft" = "false" ]; then
 		log_error "v$v is already published (its GitHub release is finalized) — nothing to retry"
@@ -254,12 +286,13 @@ push_dev_and_wait_for_ci() {
 
 	log_step "Pushing 'dev' to origin..."
 	git push origin dev
+	RELEASE_STAGE="pushed"
 
 	log_step "Locating CI run for $short_sha..."
 	local run_id=""
 	for _ in 1 2 3 4 5 6; do
 		run_id=$(gh run list \
-			--repo versatiles-org/versatiles-rs \
+			--repo "$REPO" \
 			--branch dev \
 			--commit "$sha" \
 			--workflow CI \
@@ -275,11 +308,125 @@ push_dev_and_wait_for_ci() {
 	fi
 
 	log_step "Watching CI run $run_id (this can take several minutes)..."
-	if ! gh run watch --compact --repo versatiles-org/versatiles-rs --exit-status "$run_id"; then
-		log_error "CI failed on $short_sha — fix forward on dev and re-run the release script"
+	if ! wait_for_run "$run_id"; then
+		RELEASE_STAGE=""
+		log_error "CI failed on $short_sha — fix forward on dev, then: ./scripts/release-package.sh retry"
 		exit 1
 	fi
 	log_success "CI passed on $short_sha"
+}
+
+# Wait until a workflow run completes; succeed only if it succeeded.
+#
+# `gh run watch` exits non-zero for its own trouble too (a network drop, an API
+# error), and reading that as a red CI run stopped a release whose CI was green.
+# So the run's conclusion is asked for separately, and an interrupted watch is
+# resumed. Gives up after ten consecutive gh errors.
+wait_for_run() {
+	local run_id="$1"
+	local errors=0
+	local state
+
+	while true; do
+		if gh run watch --compact --repo "$REPO" "$run_id"; then
+			errors=0
+		else
+			errors=$((errors + 1))
+		fi
+
+		if ! state=$(gh run view "$run_id" --repo "$REPO" \
+			--json status,conclusion --jq '"\(.status) \(.conclusion)"' 2>/dev/null); then
+			errors=$((errors + 1))
+			state="unknown"
+		fi
+
+		case "$state" in
+			"completed success") return 0 ;;
+			completed\ *)
+				log_error "CI run $run_id finished: ${state#completed }"
+				return 1
+				;;
+		esac
+
+		if [ "$errors" -ge 10 ]; then
+			log_error "Could not follow CI run $run_id (gh kept failing): https://github.com/$REPO/actions/runs/$run_id"
+			exit 1
+		fi
+		log_step "Watching CI run $run_id was interrupted (run is $state) — watching again..."
+		sleep 15
+	done
+}
+
+# Whether the "CI Success" check passed on a commit.
+ci_succeeded() {
+	local conclusion
+	conclusion=$(gh api "repos/$REPO/commits/$1/check-runs?check_name=CI%20Success" \
+		--jq '.check_runs[0].conclusion // "missing"')
+	[ "$conclusion" = "success" ]
+}
+
+# Finish a release that stopped after its release commit reached origin/dev:
+# fast-forward main to that commit and tag it. Nothing is rebuilt or pushed to
+# dev, and later dev commits stay out of the release, because the commit that
+# gets tagged is the one CI checked.
+resume_release() {
+	local v
+	v=$(get_current_version)
+
+	local sha
+	sha=$(git log origin/dev --format='%H%x09%s' |
+		awk -F'\t' -v s="release: v$v" '$2 == s { print $1; exit }')
+	if [ -z "$sha" ]; then
+		log_error "No 'release: v$v' commit on origin/dev — nothing to resume"
+		exit 1
+	fi
+	local short_sha
+	short_sha=$(git rev-parse --short "$sha")
+	log_step "Resuming v$v at release commit $short_sha"
+
+	if git ls-remote --exit-code --tags origin "v$v" >/dev/null 2>&1; then
+		log_error "Tag v$v is already on origin — the release workflow has been started"
+		echo "  If it failed, fix forward on dev and run: ./scripts/release-package.sh retry"
+		exit 1
+	fi
+	if git rev-parse -q --verify "refs/tags/v$v" >/dev/null 2>&1 &&
+		[ "$(git rev-parse "v$v^{commit}")" != "$sha" ]; then
+		log_error "Local tag v$v points elsewhere than $short_sha — delete it first: git tag -d v$v"
+		exit 1
+	fi
+
+	if ! ci_succeeded "$sha"; then
+		log_error "'CI Success' has not passed on $short_sha"
+		echo "  Wait for its CI run, or fix forward on dev and run: ./scripts/release-package.sh retry"
+		exit 1
+	fi
+	log_success "CI passed on $short_sha"
+	RELEASE_STAGE="pushed"
+
+	if git merge-base --is-ancestor "$sha" origin/main; then
+		log_success "main already contains $short_sha"
+	elif git merge-base --is-ancestor origin/main "$sha"; then
+		log_step "Fast-forwarding 'main' to $short_sha..."
+		git push origin "$sha:refs/heads/main"
+		log_success "main updated"
+	else
+		log_error "'origin/main' has commits $short_sha does not — cannot fast-forward"
+		exit 1
+	fi
+	RELEASE_STAGE="main"
+
+	echo ""
+	if ! git rev-parse -q --verify "refs/tags/v$v" >/dev/null 2>&1; then
+		create_release_tag "$v" "$sha"
+	fi
+	log_step "Pushing tag v$v..."
+	git push origin "v$v"
+	RELEASE_STAGE=""
+
+	echo ""
+	echo -e "${GRE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${END}"
+	echo -e "${GRE}✓ Release v$v completed successfully!${END}"
+	echo -e "${GRE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${END}"
 }
 
 # Fast-forward 'main' to dev's tip. Branch protection (linear-history + green
@@ -287,6 +434,7 @@ push_dev_and_wait_for_ci() {
 fast_forward_main() {
 	log_step "Fast-forwarding 'main' to dev's tip..."
 	git push origin dev:main
+	RELEASE_STAGE="main"
 	log_success "main updated"
 }
 
@@ -317,6 +465,7 @@ main() {
 			"beta    - Feature complete, testing phase (x.y.z-beta.N)"
 			"rc      - Release candidate, final testing (x.y.z-rc.N)"
 			"retry   - Re-release the current version unchanged (e.g. after a failed CI run)"
+			"resume  - Finish a release that stopped after its green release commit was pushed"
 			"Cancel"
 		)
 
@@ -330,7 +479,8 @@ main() {
 				6) release_type="beta"; break;;
 				7) release_type="rc"; break;;
 				8) release_type="retry"; break;;
-				9) echo -e "${YEL}Cancelled${END}"; exit 0;;
+				9) release_type="resume"; break;;
+				10) echo -e "${YEL}Cancelled${END}"; exit 0;;
 				*) echo -e "${RED}Invalid selection${END}";;
 			esac
 		done
@@ -364,9 +514,16 @@ main() {
 		is_retry=true
 	fi
 
+	keep_awake
+
 	# Pre-flight: must be on dev, clean, gh available, dev up-to-date with origin,
 	# and main an ancestor of dev (so the FF later is a no-rewrite operation).
 	preflight_checks
+
+	if [ "$release_type" = "resume" ]; then
+		resume_release
+		return
+	fi
 
 	# Regenerate auto-built READMEs. If anything changed, land it as its own
 	# commit before the release commit so the version-bump diff stays minimal.
@@ -450,6 +607,7 @@ main() {
 	create_release_tag "$new_version"
 	log_step "Pushing tag v$new_version..."
 	git push origin "v$new_version"
+	RELEASE_STAGE=""
 
 	echo ""
 	echo -e "${GRE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${END}"
