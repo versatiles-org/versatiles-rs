@@ -78,7 +78,11 @@ impl<'de> Deserialize<'de> for TileSourceConfig {
 			pub src: String,
 		}
 
-		let helper = TileSourceConfigHelper::deserialize(deserializer)?;
+		let helper = super::pair::pair_or_mapping(
+			deserializer,
+			|name, src| TileSourceConfigHelper { name: Some(name), src },
+			"a [name, src] pair, or a mapping with `src` and an optional `name`",
+		)?;
 		Ok(TileSourceConfig {
 			name: helper.name,
 			src: DataSource::parse(&helper.src).map_err(|e| serde::de::Error::custom(e.to_string()))?,

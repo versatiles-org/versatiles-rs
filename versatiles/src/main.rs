@@ -57,8 +57,11 @@ struct Cli {
 		short = 'q',
 		action = clap::ArgAction::Count,
 		global = true,
-		help = "Decrease logging verbosity",
-		long_help = "Decrease the logging verbosity level.",
+		help = "Decrease logging verbosity\n(informational logs are shown by default; '-q' warnings only, '-qq' errors only, '-qqq' nothing).",
+		long_help = "Decrease the logging verbosity level. Informational logs are shown by default; each 'q' lowers the level by one step:\n\
+			- `-q` shows warnings and errors only\n\
+			- `-qq` shows errors only\n\
+			- `-qqq` turns logging off.",
 		conflicts_with = "verbose",
 		display_order = 100,
 	)]
@@ -69,12 +72,10 @@ struct Cli {
 		short = 'v',
 		action = clap::ArgAction::Count,
 		global = true,
-		help = "Increase logging verbosity\n(add more 'v' for greater detail, e.g., '-vvvv' for trace-level logs).",
-		long_help = "Increase the logging verbosity level. Each 'v' increases the log level by one step:\n\
-			- `-v` enables warnings\n\
-			- `-vv` enables informational logs\n\
-			- `-vvv` enables debugging logs\n\
-			- `-vvvv` enables trace logs, which give the most detailed information about the tool's execution.",
+		help = "Increase logging verbosity\n(informational logs are shown by default; '-v' adds debugging logs, '-vv' trace logs).",
+		long_help = "Increase the logging verbosity level. Informational logs are shown by default; each 'v' raises the level by one step:\n\
+			- `-v` enables debugging logs\n\
+			- `-vv` enables trace logs, which give the most detailed information about the tool's execution.",
 		display_order = 100,
 	)]
 	verbose: u8,
@@ -303,11 +304,7 @@ mod tests {
 		let runtime = create_test_runtime();
 		// run() dispatches Commands::Help → tools::help::run (which needs no
 		// runtime). A successful exit proves the dispatch branch is covered.
-		let result = run(&cli, &runtime);
-		assert!(
-			result.is_ok() || result.is_err(),
-			"either is acceptable — we just need dispatch"
-		);
+		run(&cli, &runtime)?;
 		Ok(())
 	}
 

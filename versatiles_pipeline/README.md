@@ -422,7 +422,7 @@ The TileJSON document is fetched once when the pipeline is built, and each tile 
 
 - **`url`: URL (required)** - URL of the TileJSON endpoint.
 - _`max_retries`: u16 (optional)_ - How often to retry a failed tile request. Defaults to `3`.
-- _`max_concurrent_requests`: u16 (optional)_ - How many tile requests may be in flight, at least 1. Defaults to the I/O concurrency limit.
+- _`max_concurrent_requests`: u16 (optional)_ - How many tile requests may be in flight, at least 1. Defaults to `4`.
 
 ---
 
@@ -545,7 +545,7 @@ The settings apply to every tile that has to be encoded anyway: one in another f
 
 Set `force_reencode=true` to re-encode those tiles as well, e.g. to shrink an existing tileset with a lower `quality`.
 
-`quality` and `quality_translucent` take a zoom-dependent list as well as a single number. In `quality="70,14:50,15:20"` the first value is the default and each `zoom:value` pair applies from that zoom level upwards — so zoom 0 to 13 use 70, zoom 14 uses 50, and zoom 15 and above use 20. `quality` is ignored for PNG, which is always lossless.
+`quality` and `quality_translucent` take a zoom-dependent list as well as a single number. In `quality="70,14:50,15:20"` the first value is the default and each `zoom:value` pair applies from that zoom level upwards — so zoom 0 to 13 use 70, zoom 14 uses 50, and zoom 15 and above use 20. A value without a zoom applies to the zoom after the previous one: `"70,50"` is 70 at zoom 0 and 50 from zoom 1 upwards. `quality` is ignored for PNG, which is always lossless.
 
 For elevation tiles (tile schema `dem/…`), `quality` defaults to `100`: their channels are heights, and a lossy encoder would change them. `avif` and `jpg` have no lossless encoding, so converting elevation tiles into one of them needs a `quality` for every zoom level.
 

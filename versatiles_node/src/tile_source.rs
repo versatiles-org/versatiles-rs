@@ -317,7 +317,7 @@ impl TileSource {
 	///
 	/// # Arguments
 	///
-	/// * `z` - Zoom level (0-32)
+	/// * `z` - Zoom level (0-30)
 	/// * `x` - Tile column (0 to 2^z - 1)
 	/// * `y` - Tile row (0 to 2^z - 1)
 	///
@@ -356,20 +356,19 @@ impl TileSource {
 			.to_napi()
 	}
 
-	/// Get TileJSON metadata as a JSON string
+	/// Get TileJSON metadata
 	///
 	/// Returns the container's metadata in TileJSON format, which includes
 	/// information about tile bounds, zoom levels, attribution, and more.
 	///
 	/// # Returns
 	///
-	/// A JSON string containing TileJSON metadata
+	/// A `TileJSON` object, not a JSON string
 	///
 	/// # Examples
 	///
 	/// ```javascript
-	/// const tileJson = await reader.tileJson();
-	/// const metadata = JSON.parse(tileJson);
+	/// const metadata = reader.tileJson();
 	/// console.log(`Zoom range: ${metadata.minzoom} - ${metadata.maxzoom}`);
 	/// ```
 	#[must_use]
@@ -723,7 +722,7 @@ mod tests {
 
 		let metadata = reader.metadata();
 
-		// Zoom levels should be valid (0-32)
+		// Zoom levels should be valid (0-30)
 		assert!(metadata.min_zoom <= 32);
 		assert!(metadata.max_zoom <= 32);
 		assert!(metadata.min_zoom <= metadata.max_zoom);

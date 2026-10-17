@@ -43,9 +43,9 @@ pub use tile_render::{clip_geometry, render_tile};
 ///
 /// Returns either:
 /// - one feature, with mercator coords (the common case: point, single
-///   linestring, single polygon, or a point cloud — `MultiPoint` is treated
-///   as a single feature whose interior is N points), or
-/// - N features, when the input is `MultiLineString` or `MultiPolygon`.
+///   linestring, single polygon), or
+/// - N features, one per part, when the input is `MultiPoint`,
+///   `MultiLineString` or `MultiPolygon`.
 ///
 /// Properties and the `id` are cloned per output piece. For the no-split
 /// case there's no clone — `feature.geometry` is replaced in place.
@@ -315,13 +315,16 @@ impl FeatureImport {
 		render_tile(candidate_features, &self.config.layer_name, tile_bbox, TILE_EXTENT)
 	}
 
-	/// The mercator bbox of all input features, or `None` if the input was empty.
+	/// The mercator bbox of all input features, as `[x_min, y_min, x_max, y_max]`.
 	#[must_use]
 	pub fn bounds_mercator(&self) -> [f64; 4] {
 		self.bounds_mercator
 	}
 
-	/// The data bbox in WGS84 (lon/lat degrees), or `None` if the input was empty.
+	/// The data bbox in WGS84 (lon/lat degrees).
+	///
+	/// Always `Some`: an import is never built from no features — construction
+	/// fails on computing the bounds first.
 	pub fn bounds_geo(&self) -> Result<Option<GeoBBox>> {
 		let [xmin, ymin, xmax, ymax] = self.bounds_mercator;
 		let min = coord_from_mercator(Coord { x: xmin, y: ymin });

@@ -179,6 +179,37 @@ mod tests {
 
 	use super::*;
 
+	/// The pair form shown in the documentation, which used to be refused for
+	/// both lists.
+	#[test]
+	fn the_pair_shorthand_parses() -> Result<()> {
+		let config = Config::from_string(
+			"static:\n  - [\"/\", \"./frontend.tar\"]\n  - src: ./public\n    prefix: /assets\n\
+			 tiles:\n  - [\"osm\", \"osm.versatiles\"]\n  - src: berlin.mbtiles\n",
+		)?;
+		assert_eq!(
+			config.static_sources,
+			[
+				StaticSourceConfig::from(("/", "./frontend.tar")),
+				StaticSourceConfig::from(("/assets", "./public"))
+			]
+		);
+		assert_eq!(
+			config.tile_sources[0],
+			TileSourceConfig::from(("osm", "osm.versatiles"))
+		);
+		assert_eq!(config.tile_sources[1].name, None);
+
+		for bad in [
+			"static:\n  - [\"/\"]\n",
+			"static:\n  - [\"/\", \"a\", \"b\"]\n",
+			"tiles:\n  - src: a\n    nmae: b\n",
+		] {
+			assert!(Config::from_string(bad).is_err(), "{bad}");
+		}
+		Ok(())
+	}
+
 	#[test]
 	fn parse_example_config() {
 		// Adjust the path to wherever your test YAML lives (matches your workspace layout).

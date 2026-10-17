@@ -37,7 +37,8 @@ struct Args {
 	/// How often to retry a failed tile request. Defaults to `3`.
 	#[vpl(default = "3")]
 	max_retries: Option<u16>,
-	/// How many tile requests may be in flight, at least 1. Defaults to the I/O concurrency limit.
+	/// How many tile requests may be in flight, at least 1. Defaults to `4`.
+	#[vpl(default = "4")]
 	max_concurrent_requests: Option<u16>,
 }
 

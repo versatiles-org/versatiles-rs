@@ -29,8 +29,10 @@ use crate::{
 /// `quality` and `quality_translucent` take a zoom-dependent list as well as a
 /// single number. In `quality="70,14:50,15:20"` the first value is the default
 /// and each `zoom:value` pair applies from that zoom level upwards — so zoom 0
-/// to 13 use 70, zoom 14 uses 50, and zoom 15 and above use 20. `quality` is
-/// ignored for PNG, which is always lossless.
+/// to 13 use 70, zoom 14 uses 50, and zoom 15 and above use 20. A value
+/// without a zoom applies to the zoom after the previous one: `"70,50"` is 70
+/// at zoom 0 and 50 from zoom 1 upwards. `quality` is ignored for PNG, which is
+/// always lossless.
 ///
 /// For elevation tiles (tile schema `dem/…`), `quality` defaults to `100`:
 /// their channels are heights, and a lossy encoder would change them. `avif`

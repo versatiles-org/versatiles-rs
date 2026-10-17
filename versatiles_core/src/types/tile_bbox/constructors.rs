@@ -328,8 +328,12 @@ impl TileBBox {
 		Ok(())
 	}
 
-	/// Resizes the bbox, keeping its origin. Errors if it is empty or the new
-	/// size would leave the level's bounds.
+	/// Resizes the bbox, keeping its origin. A size that would leave the
+	/// level's bounds is clamped to them, as [`set_width`](Self::set_width) and
+	/// [`set_height`](Self::set_height) do.
+	///
+	/// # Errors
+	/// If the bbox is empty: it has no origin to keep.
 	pub fn set_size(&mut self, width: u32, height: u32) -> Result<()> {
 		ensure!(!self.is_empty(), "cannot set size of an empty TileBBox");
 		self.set_width(width)?;
@@ -435,15 +439,11 @@ impl TileBBox {
 		self.height = max;
 	}
 
-	/// Sets the bounding box to a full state, covering the entire tile range at its zoom level.
+	/// Sets the bbox's origin and size, keeping its zoom level.
 	///
-	/// # Panics
+	/// # Errors
 	///
-	/// Panics if the zoom level is invalid.
-	///
-	/// # Note
-	///
-	/// This method is primarily used for testing purposes.
+	/// If the origin is outside the level, or the size would reach past its edge.
 	#[context("Failed to set TileBBox to {x_min}, {y_min}, {width}, {height}")]
 	pub fn set_min_and_size(&mut self, x_min: u32, y_min: u32, width: u32, height: u32) -> Result<()> {
 		let max = self.max_count();

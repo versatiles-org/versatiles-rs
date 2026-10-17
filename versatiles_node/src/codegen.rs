@@ -398,10 +398,13 @@ fn generate_read_method(out: &mut String, op: &OperationMeta) {
 
 	// Method signature
 	match (has_src, has_opts) {
+		// With sources the options are optional only when every field is: a
+		// required parameter on a sources operation used to be typed optional.
 		(true, true) => {
+			let optional = if all_optional { "?" } else { "" };
 			writeln!(
 				out,
-				"\tstatic {method_name}(sources: VPL[], options?: Omit<{interface_name}, 'sources'>): VPL {{"
+				"\tstatic {method_name}(sources: VPL[], options{optional}: Omit<{interface_name}, 'sources'>): VPL {{"
 			)
 			.expect("writing to string never fails");
 		}
@@ -424,7 +427,7 @@ fn generate_read_method(out: &mut String, op: &OperationMeta) {
 	// Method body
 	if has_opts {
 		out.push_str("\t\tconst params: Record<string, unknown> = {};\n");
-		let use_optional_chaining = has_src || all_optional;
+		let use_optional_chaining = all_optional;
 		for field in &fields {
 			let camel = to_camel_case(&field.name);
 			let snake = &field.name;
@@ -841,6 +844,46 @@ mod tests {
 			ts.contains(r#"format?: "avif" | "jpg" | "png" | "webp";"#),
 			"expected literal union for format field, got:\n{ts}"
 		);
+	}
+
+	/// A required parameter on an operation with sources makes the options
+	/// required too, and is read without optional chaining.
+	#[test]
+	fn test_generate_typescript_sources_op_with_a_required_field() {
+		let mut required = plain_field("String");
+		required.name = "layer".to_string();
+		required.is_required = true;
+		let ops = vec![OperationMeta {
+			tag_name: "from_example".to_string(),
+			kind: "read",
+			doc: String::new(),
+			summary: String::new(),
+			details: String::new(),
+			fields: vec![
+				VPLFieldMeta {
+					name: "sources".to_string(),
+					rust_type: "Vec<VPLPipeline>".to_string(),
+					is_required: true,
+					is_sources: true,
+					doc: String::new(),
+					enum_variants: Vec::new(),
+					validate: None,
+					bounds: None,
+					refers_to: None,
+					accepts: None,
+					default: None,
+					min_sources: 1,
+				},
+				required,
+			],
+		}];
+
+		let ts = generate_typescript(&ops);
+		assert!(
+			ts.contains("static fromExample(sources: VPL[], options: Omit<FromExampleOptions, 'sources'>): VPL"),
+			"{ts}"
+		);
+		assert!(ts.contains("params['layer'] = options.layer;"), "{ts}");
 	}
 
 	#[test]

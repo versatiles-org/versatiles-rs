@@ -13,11 +13,12 @@
 
 mod cors;
 mod main;
+mod pair;
 mod server;
 mod static_source;
 mod tile_source;
 
-pub use cors::CorsConfig;
+pub use cors::{CorsConfig, DEFAULT_CORS_MAX_AGE_SECONDS};
 pub use main::Config;
 pub use server::ServerConfig;
 pub use static_source::StaticSourceConfig;

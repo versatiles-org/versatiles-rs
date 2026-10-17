@@ -80,7 +80,14 @@ impl<'de> Deserialize<'de> for StaticSourceConfig {
 			pub prefix: Option<String>,
 		}
 
-		let helper = StaticSourceConfigHelper::deserialize(deserializer)?;
+		let helper = super::pair::pair_or_mapping(
+			deserializer,
+			|prefix, src| StaticSourceConfigHelper {
+				src,
+				prefix: Some(prefix),
+			},
+			"a [prefix, src] pair, or a mapping with `src` and an optional `prefix`",
+		)?;
 		Ok(StaticSourceConfig {
 			src: DataLocation::try_from(helper.src).map_err(serde::de::Error::custom)?,
 			prefix: helper.prefix,

@@ -133,7 +133,7 @@ from_tile.filename: TileFileLocation | required | accepts=only[avif,bin,geojson,
 from_tilejson [read]
 from_tilejson.url: HttpUrl | required
 from_tilejson.max_retries: Option<u16> | optional | default=3 | bounds=[0,65535] int
-from_tilejson.max_concurrent_requests: Option<u16> | optional | bounds=[0,65535] int
+from_tilejson.max_concurrent_requests: Option<u16> | optional | default=4 | bounds=[0,65535] int
 
 meta_update [transform]
 meta_update.attribution: Option<String> | optional

@@ -97,7 +97,8 @@ pub struct TileServer {
 	/// `Cache-Control` sent with every served tile and static file. Validated
 	/// when the server is built, so a malformed value fails at startup.
 	cache_control: Arc<str>,
-	/// Expose small helper endpoints like `/tiles/index.json` and `/status`.
+	/// Whether `/tiles/index.json`, the list of tile sources, is left out.
+	/// `/status` is served either way.
 	disable_api: bool,
 	/// Whether a symlink in a served folder may resolve outside it.
 	follow_symlinks: bool,
@@ -135,7 +136,7 @@ impl TileServer {
 			follow_symlinks: false,
 			runtime,
 			cors_allowed_origins: crate::config::CorsConfig::default().allowed_origins,
-			cors_max_age_seconds: 3600,
+			cors_max_age_seconds: crate::config::DEFAULT_CORS_MAX_AGE_SECONDS,
 			extra_response_headers: Vec::new(),
 			current_tile_configs: Arc::new(Mutex::new(Vec::new())),
 			mounted_static: Arc::new(Mutex::new(Vec::new())),
@@ -180,7 +181,10 @@ impl TileServer {
 			follow_symlinks: config.server.follow_symlinks.unwrap_or(false),
 			runtime,
 			cors_allowed_origins: config.cors.allowed_origins.clone(),
-			cors_max_age_seconds: config.cors.max_age_seconds.unwrap_or(3600),
+			cors_max_age_seconds: config
+				.cors
+				.max_age_seconds
+				.unwrap_or(crate::config::DEFAULT_CORS_MAX_AGE_SECONDS),
 			extra_response_headers: parsed_headers,
 			current_tile_configs: Arc::new(Mutex::new(Vec::new())),
 			mounted_static: Arc::new(Mutex::new(Vec::new())),
@@ -587,6 +591,16 @@ mod tests {
 	use super::*;
 
 	const IP: &str = "127.0.0.1";
+
+	/// The documented default for the preflight cache is a day; the server
+	/// used to fall back to an hour on its own.
+	#[tokio::test]
+	async fn the_cors_max_age_defaults_to_a_day() -> Result<()> {
+		let server = TileServer::from_config(Config::default(), TilesRuntime::default()).await?;
+		assert_eq!(server.cors_max_age_seconds, 86_400);
+		assert_eq!(TileServer::new_test(IP, 0, true, false).cors_max_age_seconds, 86_400);
+		Ok(())
+	}
 
 	#[tokio::test]
 	async fn server() -> Result<()> {

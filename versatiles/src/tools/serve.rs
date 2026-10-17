@@ -59,7 +59,7 @@ pub struct Subcommand {
 	#[arg(long, num_args = 0..=1, default_missing_value = "true", display_order = 2)]
 	pub minimal_recompression: Option<bool>,
 
-	/// disable API
+	/// do not serve /tiles/index.json, the list of tile sources
 	#[arg(long, num_args = 0..=1, default_missing_value = "true", display_order = 4)]
 	pub disable_api: Option<bool>,
 

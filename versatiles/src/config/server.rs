@@ -53,8 +53,8 @@ pub struct ServerConfig {
 	#[config_demo("false")]
 	pub minimal_recompression: Option<bool>,
 
-	/// Optional flag to disable the `/api` endpoints
-	/// Defaults to false (enabling the API)
+	/// Optional flag to disable `/tiles/index.json`, the list of tile sources
+	/// Defaults to false (serving the list); `/status` is always served
 	#[serde()]
 	#[config_demo("false")]
 	pub disable_api: Option<bool>,

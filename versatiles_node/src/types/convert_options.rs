@@ -9,7 +9,7 @@ use napi_derive::napi;
 #[napi(object)]
 #[derive(Clone)]
 pub struct ConvertOptions {
-	/// Minimum zoom level to include (0-32)
+	/// Minimum zoom level to include (0-30)
 	///
 	/// Tiles with zoom levels below this value will be excluded from the output.
 	/// Must be less than or equal to `max_zoom` if both are specified.
@@ -17,7 +17,7 @@ pub struct ConvertOptions {
 	/// **Default:** No minimum filter (all zoom levels included)
 	pub min_zoom: Option<u8>,
 
-	/// Maximum zoom level to include (0-32)
+	/// Maximum zoom level to include (0-30)
 	///
 	/// Tiles with zoom levels above this value will be excluded from the output.
 	/// Must be greater than or equal to `min_zoom` if both are specified.

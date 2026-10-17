@@ -35,7 +35,7 @@ impl TraversalSize {
 		})
 	}
 
-	/// Return a default `TraversalSize` covering the full range of valid sizes (1 to 2^31).
+	/// Return a default `TraversalSize` covering the full range of valid sizes (1 to 2^30).
 	#[must_use]
 	pub const fn new_default() -> Self {
 		TraversalSize {

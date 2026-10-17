@@ -541,8 +541,10 @@ served anyway. Pass `--follow-symlinks` to serve a tree of links deliberately.
 Tiles and static files are sent with an `ETag`, so a client or cache whose copy
 has expired can revalidate it with `If-None-Match` and get an empty
 `304 Not Modified` while the data is unchanged. The tag is weak: it is derived
-from the stored bytes, so it is the same for every content encoding and changes
-whenever the data does.
+from the stored bytes, so it changes whenever the data does. Recompressing on
+the fly keeps it, so one tile or file has one tag for every content encoding —
+except for static files stored precompressed (`file.br` beside `file`, in a
+folder or a tar): each stored variant is its own bytes, with its own tag.
 
 **Custom tile IDs:**
 
@@ -750,7 +752,7 @@ server:
   ip: 0.0.0.0
   port: 8080
   minimal_recompression: false # true = faster, larger responses
-  disable_api: false # true = disable /api endpoints
+  disable_api: false # true = no /tiles/index.json listing of the tile sources
 
 tiles:
   - name: osm
@@ -889,12 +891,12 @@ versatiles help config
 
 These accept the same values on every subcommand:
 
-| Option           | Description                                                 | Environment variable      |
-| ---------------- | ----------------------------------------------------------- | ------------------------- |
-| `-v, --verbose`  | Increase logging verbosity; repeat for more (`-vv`, `-vvv`) | -                         |
-| `-q, --quiet`    | Decrease logging verbosity                                  | -                         |
-| `--cache-dir`    | Directory for temporary cache files                         | `VERSATILES_CACHE_DIR`    |
-| `--ssh-identity` | SSH identity file for SFTP authentication                   | `VERSATILES_SSH_IDENTITY` |
+| Option           | Description                                            | Environment variable      |
+| ---------------- | ------------------------------------------------------ | ------------------------- |
+| `-v, --verbose`  | More logging: `-v` debug, `-vv` trace (default: info)  | -                         |
+| `-q, --quiet`    | Less logging: `-q` warnings, `-qq` errors, `-qqq` none | -                         |
+| `--cache-dir`    | Directory for temporary cache files                    | `VERSATILES_CACHE_DIR`    |
+| `--ssh-identity` | SSH identity file for SFTP authentication              | `VERSATILES_SSH_IDENTITY` |
 
 The flag wins where both are set.
 

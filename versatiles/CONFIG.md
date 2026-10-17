@@ -45,8 +45,8 @@ server:
   # Defaults to false (smaller compression)
   minimal_recompression: false
 
-  # Optional flag to disable the `/api` endpoints
-  # Defaults to false (enabling the API)
+  # Optional flag to disable `/tiles/index.json`, the list of tile sources
+  # Defaults to false (serving the list); `/status` is always served
   disable_api: false
 
   # Optional flag to serve files that symlinks point to outside the served folder

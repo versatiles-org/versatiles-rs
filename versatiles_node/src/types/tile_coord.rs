@@ -8,7 +8,7 @@ use crate::{napi_result, types::z_to_u8};
 ///
 /// Represents a specific tile in the standard Web Mercator (EPSG:3857) tiling scheme.
 /// Uses XYZ coordinate convention where:
-/// - **z** (zoom): Zoom level (0-32), where 0 is the world in one tile
+/// - **z** (zoom): Zoom level (0-30), where 0 is the world in one tile
 /// - **x** (column): Tile column, from 0 (west) to 2^z - 1 (east)
 /// - **y** (row): Tile row, from 0 (north) to 2^z - 1 (south)
 ///
@@ -32,7 +32,7 @@ impl TileCoord {
 	///
 	/// # Arguments
 	///
-	/// * `z` - Zoom level (0-32)
+	/// * `z` - Zoom level (0-30)
 	/// * `x` - Tile column (0 to 2^z - 1)
 	/// * `y` - Tile row (0 to 2^z - 1)
 	///
@@ -66,7 +66,7 @@ impl TileCoord {
 	///
 	/// * `lon` - Longitude in decimal degrees (-180 to 180)
 	/// * `lat` - Latitude in decimal degrees (-85.0511 to 85.0511)
-	/// * `z` - Zoom level (0-32)
+	/// * `z` - Zoom level (0-30)
 	///
 	/// # Returns
 	///
@@ -140,7 +140,7 @@ impl TileCoord {
 		self.inner.to_geo_bbox().as_array().to_vec()
 	}
 
-	/// Get the zoom level (0-32)
+	/// Get the zoom level (0-30)
 	///
 	/// Returns the tile's zoom level. At zoom 0, the entire world is one tile.
 	/// Each zoom level doubles the number of tiles in each dimension.

@@ -65,6 +65,10 @@ pub struct CorsConfig {
 	pub max_age_seconds: Option<u64>,
 }
 
+/// What `max_age_seconds` means when it is not set: one day, as documented.
+/// The server used to fall back to 3600 on its own.
+pub const DEFAULT_CORS_MAX_AGE_SECONDS: u64 = 86_400;
+
 fn default_allowed_origins() -> Vec<String> {
 	vec!["*".to_string()]
 }

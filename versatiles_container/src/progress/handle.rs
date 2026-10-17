@@ -261,7 +261,7 @@ impl ProgressHandle {
 
 		// Emit if:
 		// 1. Progress is finished (always emit final state)
-		// 2. Enough time has passed (100ms = 10 updates per second)
+		// 2. Enough time has passed (10 ms, at most 100 updates per second)
 		if state.finished || now >= state.next_emit {
 			// Update next emit time
 			if !state.finished {

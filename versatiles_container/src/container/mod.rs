@@ -2,17 +2,17 @@
 //!
 //! ## Supported tile container formats
 //!
-//! | Format         | Read | Write | Feature   |
-//! |----------------|:----:|:-----:|-----------|
-//! | `*.versatiles` | ✅   | ✅     | `default` |
-//! | `*.mbtiles`    | ✅   | ✅     | `full`    |
-//! | `*.pmtiles`    | ✅   | ✅     | `full`    |
-//! | `*.tar`        | ✅   | ✅     | `full`    |
-//! | directory      | ✅   | ✅     | `default` |
-//! | pipeline       | ✅   | ❌     | `full`    |
+//! | Format         | Read | Write |
+//! |----------------|:----:|:-----:|
+//! | `*.versatiles` | ✅   | ✅     |
+//! | `*.mbtiles`    | ✅   | ✅     |
+//! | `*.pmtiles`    | ✅   | ✅     |
+//! | `*.tar`        | ✅   | ✅     |
+//! | directory      | ✅   | ✅     |
 //!
 //! This module provides a unified interface for reading and writing various tile container formats.
-//! Depending on the enabled features, it supports different formats with corresponding read and write capabilities.
+//! Every format is always built; the `sftp` feature adds `sftp://` locations. Pipelines
+//! (`.vpl`) are read by `versatiles_pipeline`, not here.
 
 mod mbtiles;
 pub use mbtiles::{MBTilesReader, MBTilesTileSink, MBTilesWriter};

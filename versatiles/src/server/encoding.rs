@@ -3,8 +3,10 @@
 //! ### Design goals
 //! - **Conservative & predictable.** We only decide whether an encoding is *allowed*,
 //!   not which is “best”. That choice is made later by the compression optimizer.
-//! - **Identity is safe.** The uncompressed representation (`identity`) remains allowed
-//!   unless explicitly disabled with `q=0` (RFC 9110 §12.5.3).
+//! - **Identity is always allowed.** The uncompressed representation (`identity`) is
+//!   the fallback every response can use, so `identity;q=0` does not remove it:
+//!   [`TargetCompression`] always contains it. RFC 9110 §12.5.3 lets a server send
+//!   identity rather than answer 406.
 //! - **Narrow scope.** We recognize `gzip` and `br` (Brotli). Unknown tokens are ignored.
 //!   A wildcard `*` enables a conservative set (gzip + br) when `q>0`.
 //!
@@ -31,7 +33,7 @@
 //! let set = get_encoding(&h);
 //! assert_eq!(set, TargetCompression::from_set(enum_set!(TC::Uncompressed | TC::Gzip)));
 //!
-//! // Explicitly disable identity.
+//! // `identity;q=0` is not honoured: identity stays the fallback.
 //! let mut h = HeaderMap::new();
 //! h.insert(header::ACCEPT_ENCODING, "identity;q=0, br".parse().unwrap());
 //! let set = get_encoding(&h);
@@ -50,7 +52,7 @@ use versatiles_core::{TileCompression, compression::TargetCompression};
 /// Behavior:
 /// - Returns a `TargetCompression` bitset where each bit (gzip, br, identity)
 ///   indicates it is permitted by the client.
-/// - `identity` is included unless explicitly disabled with `q=0`.
+/// - `identity` is always included, `identity;q=0` notwithstanding; see the module docs.
 /// - Unknown tokens are ignored; a wildcard `*` includes gzip and br if `q>0`.
 ///
 /// Robustness:
@@ -96,12 +98,8 @@ pub fn get_encoding(headers: &HeaderMap) -> TargetCompression {
 		tokens.push((name, q));
 	}
 
-	// Identity is allowed unless explicitly disabled.
-	// This mirrors common server behavior and ensures a safe default for intermediaries.
-	let identity_disabled = tokens.iter().any(|(n, q)| *n == "identity" && *q == 0.0);
-	if !identity_disabled {
-		set.insert(Uncompressed);
-	}
+	// Identity is always allowed: it is the fallback every response can use.
+	set.insert(Uncompressed);
 
 	for (name, q) in tokens {
 		if q <= 0.0 {
@@ -175,8 +173,9 @@ mod tests {
 		assert_eq!(got, to_target(enum_set!(TC::Uncompressed | TC::Gzip | TC::Brotli)));
 	}
 
+	/// `identity;q=0` is not honoured; identity stays the fallback.
 	#[test]
-	fn identity_disabled() {
+	fn identity_cannot_be_disabled() {
 		let headers = mk_headers("identity;q=0, gzip");
 		let got = get_encoding(&headers);
 		assert_eq!(got, to_target(enum_set!(TC::Uncompressed | TC::Gzip)));

@@ -25,7 +25,7 @@
 //! ## Example Usage
 //!
 //! ```javascript
-//! const { TileSource, TileServer, convert } = require('versatiles');
+//! import { TileSource, TileServer, convert } from '@versatiles/versatiles-rs';
 //!
 //! // Read tiles from a container
 //! const reader = await TileSource.fromPath('tiles.versatiles');
@@ -42,7 +42,7 @@
 //!
 //! // Start a tile server
 //! const server = new TileServer({ port: 8080 });
-//! await server.addTileSource('osm', 'tiles.versatiles');
+//! await server.addTileSourceFromPath('osm', 'tiles.versatiles');
 //! await server.start();
 //! ```
 
