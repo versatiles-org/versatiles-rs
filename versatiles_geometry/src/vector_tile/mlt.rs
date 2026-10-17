@@ -11,7 +11,11 @@
 //! their type where MVT has one; the integer width is inferred per column.
 
 use anyhow::{Context, Result};
-use mlt_core::{Decoder, MltError, Parser, encoder::EncoderConfig, mvt};
+use mlt_core::{
+	Decoder, MltError, Parser,
+	encoder::{EncoderConfig, Network, Profile, Tessellation},
+	mvt,
+};
 use versatiles_core::Blob;
 use versatiles_derive::context;
 
@@ -71,11 +75,17 @@ impl VectorTile {
 			Err(e) => return Err(e).context("converting MVT to MLT layers"),
 		};
 
+		// What mlt-core 0.20 encoded by default: every codec, no sorting and no
+		// triangles. 0.21 asks for a consumer profile instead; the native one
+		// with tessellation off is the same set.
+		let config =
+			EncoderConfig::from_profile(Profile::Native(Network::default())).with_tessellation(Tessellation::Off);
+
 		let mut bytes = Vec::new();
 		for layer in &layers {
 			bytes.extend(
 				layer
-					.encode(EncoderConfig::default())
+					.encode(config)
 					.with_context(|| format!("encoding MLT layer '{}'", layer.name()))?,
 			);
 		}
