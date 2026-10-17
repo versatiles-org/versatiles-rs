@@ -33,7 +33,8 @@ impl PMTilesType {
 		use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MLT, MVT, PNG, SVG, TOPOJSON, WEBP};
 		Ok(match value {
 			AVIF => PMTilesType::AVIF,
-			BIN => bail!("PMTiles does not support BIN"),
+			// PMTiles' "unknown" type: an opaque payload, read back as BIN.
+			BIN => PMTilesType::UNKNOWN,
 			GEOJSON => bail!("PMTiles does not support GEOJSON"),
 			JPG => PMTilesType::JPEG,
 			JSON => bail!("PMTiles does not support JSON"),
@@ -87,7 +88,7 @@ mod tests {
 		assert_eq!(PMTilesType::from_value(WEBP).unwrap(), PMTilesType::WEBP);
 
 		// Test unsupported TileFormats
-		assert!(PMTilesType::from_value(BIN).is_err());
+		assert_eq!(PMTilesType::from_value(BIN).unwrap(), PMTilesType::UNKNOWN);
 		assert!(PMTilesType::from_value(GEOJSON).is_err());
 		assert!(PMTilesType::from_value(JSON).is_err());
 		assert!(PMTilesType::from_value(SVG).is_err());

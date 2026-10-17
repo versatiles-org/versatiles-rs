@@ -37,7 +37,7 @@ impl HeaderV3 {
 		parameters: &TileSourceMetadata,
 		tile_pyramid: &TilePyramid,
 		tilejson: &TileJSON,
-	) -> HeaderV3 {
+	) -> Result<HeaderV3> {
 		use PMTilesCompression as PC;
 		use PMTilesType as PT;
 
@@ -47,7 +47,7 @@ impl HeaderV3 {
 			.expect("bounds available from tilejson or pyramid");
 		let center = tilejson.center.or_else(|| tile_pyramid.geo_center());
 
-		Self {
+		Ok(Self {
 			root_dir: ByteRange::new(0, 0),
 			metadata: ByteRange::new(0, 0),
 			leaf_dirs: ByteRange::new(0, 0),
@@ -57,8 +57,8 @@ impl HeaderV3 {
 			tile_contents_count: 0,
 			clustered: false,
 			internal_compression: PC::Gzip,
-			tile_compression: PC::from_value(*parameters.tile_compression()).unwrap_or(PC::Unknown),
-			tile_type: PT::from_value(*parameters.tile_format()).unwrap_or(PT::UNKNOWN),
+			tile_compression: PC::from_value(*parameters.tile_compression())?,
+			tile_type: PT::from_value(*parameters.tile_format())?,
 			min_zoom: tilejson.zoom_min().or(tile_pyramid.level_min()).unwrap_or(0),
 			max_zoom: tilejson.zoom_max().or(tile_pyramid.level_max()).unwrap_or(14),
 			min_lon_e7: float_to_int(bbox.x_min * 1e7).expect("lon*1e7 fits in i32"),
@@ -74,7 +74,7 @@ impl HeaderV3 {
 				|| float_to_int((bbox.y_min + bbox.y_max) * 5e6).expect("lat midpoint fits in i32"),
 				|c| float_to_int(c.1 * 1e7).expect("lat*1e7 fits in i32"),
 			),
-		}
+		})
 	}
 
 	pub fn serialize(&self) -> Result<Blob> {

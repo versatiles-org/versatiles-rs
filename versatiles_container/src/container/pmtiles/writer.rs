@@ -41,7 +41,6 @@
 
 use std::{
 	collections::HashMap,
-	hash::{DefaultHasher, Hash, Hasher},
 	path::{Path, PathBuf},
 	sync::Arc,
 };
@@ -57,7 +56,7 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
+use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, PMTilesType};
 use crate::{
 	TileSource, TileSourceMetadata, TileSourceTraverseExt, TilesRuntime, TilesWriter,
 	traversal::{Traversal, TraversalOrder},
@@ -139,6 +138,11 @@ impl PMTilesWriter {
 
 		let parameters = reader.metadata().clone();
 
+		// The header has no tile type for GeoJSON, JSON, SVG or TopoJSON. Refused
+		// here, before the first byte: written as "unknown", they would read back
+		// as BIN and lose their format.
+		PMTilesType::from_value(*parameters.tile_format())?;
+
 		let plan = OrderPlan::negotiate(&parameters, &runtime)?;
 		let (traversal, reorder, clustered) = (plan.traversal, plan.reorder, plan.clustered);
 
@@ -148,7 +152,7 @@ impl PMTilesWriter {
 
 		let tilejson = reader.tilejson();
 		let tile_pyramid = reader.tile_pyramid().await?;
-		let mut header = HeaderV3::from_parameters(&parameters, tile_pyramid.as_ref(), tilejson);
+		let mut header = HeaderV3::from_parameters(&parameters, tile_pyramid.as_ref(), tilejson)?;
 
 		let mut metadata: Blob = tilejson.into();
 		metadata = compress(metadata, &INTERNAL_COMPRESSION)?;
@@ -180,7 +184,7 @@ impl PMTilesWriter {
 
 		let writer_mutex = Arc::new(Mutex::new(tile_data_writer));
 		let entries_mutex = Arc::new(Mutex::new(entries));
-		let dedup_map: Arc<Mutex<HashMap<u64, ByteRange>>> = Arc::new(Mutex::new(HashMap::new()));
+		let dedup_map = Arc::new(Mutex::new(DedupCache::new(DEDUP_CACHE_BYTES)));
 		let tile_compression = *reader.metadata().tile_compression();
 
 		reader
@@ -214,15 +218,11 @@ impl PMTilesWriter {
 							let id = coord.get_hilbert_index()?;
 							let blob = tile.as_blob(&tile_compression)?;
 
-							let mut hasher = DefaultHasher::new();
-							blob.as_slice().hash(&mut hasher);
-							let hash = hasher.finish();
-
-							let range = if let Some(&existing) = dedup.get(&hash) {
+							let range = if let Some(existing) = dedup.get(blob.as_slice()) {
 								existing
 							} else {
 								let range = writer.append(blob).await?.shifted_backward(pass1_origin)?;
-								dedup.insert(hash, range);
+								dedup.insert(blob.as_slice(), range);
 								range
 							};
 
@@ -236,7 +236,7 @@ impl PMTilesWriter {
 			.await?;
 
 		let mut entries = entries_mutex.lock().await;
-		let tile_contents_count = dedup_map.lock().await.len() as u64;
+		let tile_contents_count = dedup_map.lock().await.stored_count();
 		drop(writer_mutex.lock().await);
 		// Pass 2 reads this temporary back, so its buffer has to reach the disk
 		// first — and failing to get it there has to be an error, not a silently
@@ -273,6 +273,79 @@ impl PMTilesWriter {
 		writer.write_start(&header.serialize()?).await?;
 
 		Ok(())
+	}
+}
+
+/// Memory the [`DedupCache`] may hold, keys and bookkeeping together.
+const DEDUP_CACHE_BYTES: usize = 10 * 1024 * 1024;
+
+/// Approximate bookkeeping per [`DedupCache`] entry besides the key bytes:
+/// the `Vec` header, the range, and the hash-table slot.
+const DEDUP_ENTRY_OVERHEAD: usize = 48;
+
+/// Remembers where recently written tile blobs landed, so a repeated blob — an
+/// ocean or empty tile — is stored once and shared by every entry pointing at it.
+///
+/// Keyed on the full bytes: a hash alone lets two different tiles collide and
+/// one of them silently show the other's data. Bounded instead of keeping every
+/// blob of the archive: two generations, each holding up to half the budget.
+/// When the current one fills up, the previous one is dropped whole and the
+/// current one takes its place; a hit in the previous generation moves the
+/// entry forward. A blob that keeps repeating therefore stays, while one-off
+/// blobs age out. A dropped blob seen again is simply stored again.
+///
+/// Deterministic, so the same input gives the same archive.
+struct DedupCache {
+	current: HashMap<Vec<u8>, ByteRange>,
+	previous: HashMap<Vec<u8>, ByteRange>,
+	current_bytes: usize,
+	generation_bytes: usize,
+	/// Blobs written to the archive, for the header's `tile_contents_count`.
+	stored: u64,
+}
+
+impl DedupCache {
+	fn new(budget_bytes: usize) -> Self {
+		Self {
+			current: HashMap::new(),
+			previous: HashMap::new(),
+			current_bytes: 0,
+			generation_bytes: budget_bytes / 2,
+			stored: 0,
+		}
+	}
+
+	/// The range an identical blob was written to, if it is still remembered.
+	fn get(&mut self, blob: &[u8]) -> Option<ByteRange> {
+		if let Some(range) = self.current.get(blob) {
+			return Some(*range);
+		}
+		let (key, range) = self.previous.remove_entry(blob)?;
+		self.remember(key, range);
+		Some(range)
+	}
+
+	/// Records that `blob` was just written to `range`.
+	fn insert(&mut self, blob: &[u8], range: ByteRange) {
+		self.stored += 1;
+		if blob.len() + DEDUP_ENTRY_OVERHEAD <= self.generation_bytes {
+			self.remember(blob.to_vec(), range);
+		}
+	}
+
+	fn remember(&mut self, key: Vec<u8>, range: ByteRange) {
+		let size = key.len() + DEDUP_ENTRY_OVERHEAD;
+		if self.current_bytes + size > self.generation_bytes {
+			self.previous = std::mem::take(&mut self.current);
+			self.current_bytes = 0;
+		}
+		self.current_bytes += size;
+		self.current.insert(key, range);
+	}
+
+	/// Number of distinct blobs written, counting a re-stored one again.
+	fn stored_count(&self) -> u64 {
+		self.stored
 	}
 }
 
@@ -761,6 +834,95 @@ mod tests {
 
 		// Total addressed tiles should match the original tile count
 		assert_eq!(entries.tile_count(), 2621); // 50×50 at z15 + 11×11 at z14
+		Ok(())
+	}
+
+	/// Two different blobs never share a range, whatever their hashes — the
+	/// cache compares bytes — while an identical blob is found again.
+	#[test]
+	fn dedup_cache_matches_on_bytes() {
+		let mut cache = DedupCache::new(DEDUP_CACHE_BYTES);
+		let a = ByteRange::new(0, 3);
+		cache.insert(b"abc", a);
+		assert_eq!(cache.get(b"abc"), Some(a));
+		assert_eq!(cache.get(b"abd"), None);
+		assert_eq!(cache.get(b"ab"), None);
+		assert_eq!(cache.stored_count(), 1);
+	}
+
+	/// The cache stays within its budget by dropping old blobs, keeps a blob
+	/// that keeps repeating, and counts every stored blob for the header.
+	#[test]
+	fn dedup_cache_is_bounded_and_keeps_repeating_blobs() {
+		let entry = 8 + DEDUP_ENTRY_OVERHEAD;
+		let mut cache = DedupCache::new(entry * 2 * 10); // ten entries per generation
+		let ocean = ByteRange::new(0, 8);
+		cache.insert(b"ocean---", ocean);
+
+		for i in 0..1000u64 {
+			let blob = format!("{i:08}");
+			assert_eq!(cache.get(blob.as_bytes()), None);
+			cache.insert(blob.as_bytes(), ByteRange::new(8 + i * 8, 8));
+			// The repeated blob is asked for between the unique ones.
+			assert_eq!(cache.get(b"ocean---"), Some(ocean), "lost after {i} unique blobs");
+			assert!(cache.current.len() + cache.previous.len() <= 20);
+		}
+		// An early unique blob has aged out; seeing it again stores it again.
+		assert_eq!(cache.get(b"00000000"), None);
+		assert_eq!(cache.stored_count(), 1001);
+	}
+
+	/// A blob larger than a generation is written but never remembered.
+	#[test]
+	fn dedup_cache_skips_blobs_larger_than_a_generation() {
+		let mut cache = DedupCache::new(200);
+		let big = vec![7u8; 200];
+		cache.insert(&big, ByteRange::new(0, 200));
+		assert_eq!(cache.get(&big), None);
+		assert_eq!(cache.stored_count(), 1);
+	}
+
+	/// PMTiles has no tile type for these formats. Written as "unknown" they
+	/// would read back as BIN, so the writer refuses them, naming the format.
+	#[tokio::test]
+	async fn formats_without_a_pmtiles_type_are_refused() -> Result<()> {
+		for format in [
+			TileFormat::GEOJSON,
+			TileFormat::JSON,
+			TileFormat::SVG,
+			TileFormat::TOPOJSON,
+		] {
+			let source = MockReader::new_mock(
+				TilePyramid::new_full_up_to(1),
+				TileSourceMetadata::new(format, TileCompression::Uncompressed, Traversal::ANY, None),
+			)?;
+			let mut data_writer = DataWriterBlob::new()?;
+			let error = PMTilesWriter::write_to_writer(&source, &mut data_writer, TilesRuntime::default())
+				.await
+				.unwrap_err();
+			assert!(
+				format!("{error:?}")
+					.to_lowercase()
+					.contains(&format!("does not support {}", format.as_str().to_lowercase())),
+				"{format}: {error:?}"
+			);
+			assert_eq!(data_writer.to_reader().len(), 0, "{format}: nothing may be written");
+		}
+		Ok(())
+	}
+
+	/// BIN is PMTiles' "unknown" type, and reads back as BIN.
+	#[tokio::test]
+	async fn bin_round_trips_as_the_unknown_type() -> Result<()> {
+		let source = MockReader::new_mock(
+			TilePyramid::new_full_up_to(1),
+			TileSourceMetadata::new(TileFormat::BIN, TileCompression::Uncompressed, Traversal::ANY, None),
+		)?;
+		let runtime = TilesRuntime::default();
+		let mut data_writer = DataWriterBlob::new()?;
+		PMTilesWriter::write_to_writer(&source, &mut data_writer, runtime.clone()).await?;
+		let reader = PMTilesReader::open_data(Box::new(DataReaderBlob::from(data_writer)), runtime).await?;
+		assert_eq!(*reader.metadata().tile_format(), TileFormat::BIN);
 		Ok(())
 	}
 }

@@ -10,4 +10,4 @@ pub use entries_v3::EntriesV3;
 pub use entry_v3::EntryV3;
 pub use header_v3::HeaderV3;
 pub use tile_compression::PMTilesCompression;
-use tile_type::PMTilesType;
+pub use tile_type::PMTilesType;
