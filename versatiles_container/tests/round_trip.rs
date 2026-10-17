@@ -848,3 +848,71 @@ async fn a_clean_run_replaces_the_previous_output(#[case] name: &str) -> Result<
 	);
 	Ok(())
 }
+
+/// Converts `source` to a `.versatiles` under `abort_on_error`, as `convert`
+/// does, and returns the error, which must name what could not be read.
+async fn convert_strictly(source: &std::path::Path, dir: &std::path::Path) -> String {
+	let runtime = TilesRuntime::builder()
+		.silent_progress(true)
+		.abort_on_error(true)
+		.build();
+	let source = runtime.reader_from_str(source.to_str().unwrap()).await.unwrap();
+	let result = convert_tiles_container(
+		source,
+		TilesConverterParameters::default(),
+		&dir.join("out.versatiles"),
+		runtime.clone(),
+	)
+	.await;
+	assert!(runtime.error_count() >= 1);
+	format!(
+		"{:#}",
+		result.expect_err("a tile that cannot be read must fail the conversion")
+	)
+}
+
+/// A row whose `tile_data` is NULL is a tile that exists and cannot be read.
+/// MBTiles used to report it as absent — `tile()` as `Ok(None)` and the bulk
+/// stream by dropping the row — so the conversion ended with exit code 0.
+#[tokio::test]
+async fn an_mbtiles_row_without_tile_data_is_an_error() -> Result<()> {
+	use r2d2_sqlite::rusqlite::Connection;
+
+	let dir = TempDir::new()?;
+	let path = dir.path().join("broken.mbtiles");
+	std::fs::copy("../testdata/berlin.mbtiles", &path)?;
+	// z1/x1/y0 in XYZ is tile_row 1 in TMS.
+	Connection::open(&path)?.execute(
+		"UPDATE tiles SET tile_data = NULL WHERE zoom_level = 1 AND tile_column = 1 AND tile_row = 1",
+		[],
+	)?;
+
+	let reader = MBTilesReader::open(&path, TilesRuntime::new_silent())?;
+	assert!(reader.tile(&TileCoord::new(1, 1, 0)?).await.is_err());
+
+	let message = convert_strictly(&path, dir.path()).await;
+	assert!(message.contains("read error"), "{message}");
+	Ok(())
+}
+
+/// A tile file that cannot be read — here a directory standing where it
+/// belongs — was dropped from the directory reader's stream unseen.
+#[tokio::test]
+async fn an_unreadable_directory_tile_is_an_error() -> Result<()> {
+	let dir = TempDir::new()?;
+	let tiles = dir.path().join("tiles");
+	std::fs::create_dir_all(tiles.join("0/0"))?;
+	std::fs::write(tiles.join("0/0/0.png"), b"not really a png")?;
+	std::fs::create_dir_all(tiles.join("1/0/0.png"))?;
+
+	let runtime = TilesRuntime::new_silent();
+	let reader = DirectoryReader::open(&tiles, runtime.clone())?;
+	let count = reader.tile_stream(TileBBox::new_full(1)?).await?.to_vec().await.len();
+	assert_eq!(count, 0);
+	assert_eq!(runtime.error_count(), 1);
+
+	// Read twice, as the raster tile size is measured first.
+	let message = convert_strictly(&tiles, dir.path()).await;
+	assert!(message.contains("read error"), "{message}");
+	Ok(())
+}

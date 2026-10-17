@@ -213,7 +213,7 @@ mod tests {
 			let temp_dir = assert_fs::TempDir::new()?;
 			DirectoryWriter::write_to_path(&mock_reader, temp_dir.path(), TilesRuntime::default()).await?;
 
-			let reader = DirectoryReader::open(temp_dir.path())?;
+			let reader = DirectoryReader::open(temp_dir.path(), TilesRuntime::default())?;
 			assert_eq!(reader.metadata().tile_compression(), &tile_compression);
 			// Not compared to the source's `TileJSON`: the reader fills in the
 			// bounds it found while scanning. `type` comes from the file alone.

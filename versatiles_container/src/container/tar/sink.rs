@@ -156,7 +156,7 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		Box::new(sink).finish(&tilejson, &TilesRuntime::default()).await?;
 
-		let reader = TarTilesReader::open(&temp).await?;
+		let reader = TarTilesReader::open(&temp, TilesRuntime::default()).await?;
 		assert_eq!(reader.metadata().tile_format(), &TileFormat::PNG);
 		assert_eq!(reader.metadata().tile_compression(), &TileCompression::Uncompressed);
 		assert_eq!(reader.tile_pyramid().await?.count_tiles(), 1);
@@ -183,7 +183,7 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		Box::new(sink).finish(&tilejson, &TilesRuntime::default()).await?;
 
-		let reader = TarTilesReader::open(&temp).await?;
+		let reader = TarTilesReader::open(&temp, TilesRuntime::default()).await?;
 		assert_eq!(reader.metadata().tile_format(), &TileFormat::WEBP);
 		assert_eq!(reader.metadata().tile_compression(), &TileCompression::Brotli);
 		assert_eq!(reader.tile_pyramid().await?.count_tiles(), 16);

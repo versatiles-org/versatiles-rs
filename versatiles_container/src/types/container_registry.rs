@@ -265,7 +265,7 @@ impl ContainerRegistry {
 				}
 
 				if path.is_dir() {
-					return Ok(DirectoryReader::open(&path)
+					return Ok(DirectoryReader::open(&path, runtime)
 						.with_context(|| format!("Failed opening {path:?} as directory"))?
 						.into_shared());
 				}

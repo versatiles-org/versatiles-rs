@@ -18,7 +18,7 @@
 //! use std::path::Path;
 //! # async fn demo() -> anyhow::Result<()> {
 //! let path = Path::new("/absolute/path/to/tiles.tar");
-//! let mut reader = TarTilesReader::open(path).await?;
+//! let mut reader = TarTilesReader::open(path, TilesRuntime::default()).await?;
 //!
 //! // Read one tile
 //! if let Some(mut tile) = reader.tile(&TileCoord::new(3, 6, 2)?).await? {
@@ -63,6 +63,9 @@ pub struct TarTilesReader {
 	reader: Arc<DataReaderFile>,
 	tile_map: Arc<HashMap<TileCoord, ByteRange>>,
 	metadata: TileSourceMetadata,
+	/// Where tiles the stream cannot read are reported; a stream cannot carry
+	/// the error.
+	runtime: TilesRuntime,
 }
 
 /// Result of parsing a tile path.
@@ -115,8 +118,8 @@ impl TarTilesReader {
 	/// Returns an error if the file cannot be opened, if **no tiles** are found, or if mixed
 	/// formats/compressions are encountered.
 	#[context("opening tar from path '{}'", path.display())]
-	pub async fn open(path: &Path) -> Result<TarTilesReader> {
-		Self::open_with_progress(path, None).await
+	pub async fn open(path: &Path, runtime: TilesRuntime) -> Result<TarTilesReader> {
+		Self::open_with_progress(path, runtime, None).await
 	}
 
 	/// Open a tar archive and build an index of tiles and metadata, with optional progress reporting.
@@ -127,7 +130,11 @@ impl TarTilesReader {
 		clippy::too_many_lines,
 		reason = "one linear scan over the tar entries; splitting it would separate parsing from the fields it fills"
 	)]
-	async fn open_with_progress(path: &Path, progress: Option<&ProgressHandle>) -> Result<TarTilesReader> {
+	async fn open_with_progress(
+		path: &Path,
+		runtime: TilesRuntime,
+		progress: Option<&ProgressHandle>,
+	) -> Result<TarTilesReader> {
 		let reader = DataReaderFile::open(path)?;
 
 		// Set progress total to file size if available
@@ -287,6 +294,7 @@ impl TarTilesReader {
 			metadata,
 			reader: Arc::new(*reader),
 			tile_map: Arc::new(tile_map),
+			runtime,
 		})
 	}
 
@@ -315,7 +323,9 @@ impl TilesReader for TarTilesReader {
 
 	async fn open_path(path: &Path, runtime: TilesRuntime) -> Result<SharedTileSource> {
 		let progress = runtime.create_progress("scanning tar", 0);
-		Ok(Self::open_with_progress(path, Some(&progress)).await?.into_shared())
+		Ok(Self::open_with_progress(path, runtime.clone(), Some(&progress))
+			.await?
+			.into_shared())
 	}
 }
 
@@ -368,15 +378,20 @@ impl TileSource for TarTilesReader {
 		let tile_map = Arc::clone(&self.tile_map);
 		let tile_compression = *self.metadata.tile_compression();
 		let tile_format = *self.metadata.tile_format();
+		let runtime = self.runtime.clone();
 
 		Ok(TileStream::from_bbox_async_parallel(bbox, move |coord| {
 			let reader = Arc::clone(&reader);
 			let tile_map = Arc::clone(&tile_map);
+			let runtime = runtime.clone();
 			async move {
-				let tile = TarTilesReader::lookup_tile(&coord, &tile_map, &reader, tile_compression, tile_format)
-					.await
-					.ok()??;
-				Some((coord, tile))
+				match TarTilesReader::lookup_tile(&coord, &tile_map, &reader, tile_compression, tile_format).await {
+					Ok(tile) => Some((coord, tile?)),
+					Err(e) => {
+						runtime.record_error(&format!("tar tile {}", coord.to_json()), &e);
+						None
+					}
+				}
 			}
 		}))
 	}
@@ -454,7 +469,7 @@ pub mod tests {
 		drop(builder);
 
 		// The archive opens, and the readable tile is still there.
-		let reader = TarTilesReader::open(&path).await?;
+		let reader = TarTilesReader::open(&path, TilesRuntime::default()).await?;
 		let coord = TileCoord::new(5, 3, 4)?;
 		assert!(reader.tile_map.contains_key(&coord), "the valid tile was lost");
 		assert_eq!(reader.tile_map.len(), 1, "a skipped entry was counted");
@@ -467,7 +482,7 @@ pub mod tests {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 3, "tar").await?;
 
 		// get tar reader
-		let reader = TarTilesReader::open(&temp_file).await?;
+		let reader = TarTilesReader::open(&temp_file, TilesRuntime::default()).await?;
 
 		assert_eq!(
 			format!("{reader:?}"),
@@ -501,7 +516,7 @@ pub mod tests {
 			let temp_file = make_test_file(TileFormat::MVT, compression, 2, "tar").await?;
 
 			// get tar reader
-			let reader = TarTilesReader::open(&temp_file).await?;
+			let reader = TarTilesReader::open(&temp_file, TilesRuntime::default()).await?;
 
 			MockWriter::write(&reader).await?;
 			Ok(())
@@ -519,7 +534,7 @@ pub mod tests {
 	async fn probe() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "tar").await?;
 
-		let reader = TarTilesReader::open(&temp_file).await?;
+		let reader = TarTilesReader::open(&temp_file, TilesRuntime::default()).await?;
 		let runtime = TilesRuntime::default();
 
 		let mut printer = PrettyPrint::new();
@@ -542,7 +557,7 @@ pub mod tests {
 		a.finish().await?;
 
 		assert_eq!(
-			TarTilesReader::open(&filename)
+			TarTilesReader::open(&filename, TilesRuntime::default())
 				.await
 				.unwrap_err()
 				.chain()
@@ -566,7 +581,7 @@ pub mod tests {
 			.await?;
 		a.finish().await?;
 
-		let reader = TarTilesReader::open(&filename).await?;
+		let reader = TarTilesReader::open(&filename, TilesRuntime::default()).await?;
 		assert_eq!(reader.metadata().tile_format(), &TileFormat::BIN);
 		assert_eq!(reader.metadata().tile_compression(), &TileCompression::Uncompressed);
 		assert_eq!(reader.tile_pyramid().await?.count_tiles(), 1);
@@ -585,7 +600,7 @@ pub mod tests {
 	#[tokio::test]
 	async fn tile_stream_matches_individual_reads() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 2, "tar").await?;
-		let reader = TarTilesReader::open(&temp_file).await?;
+		let reader = TarTilesReader::open(&temp_file, TilesRuntime::default()).await?;
 
 		// Use level 2 bbox (4x4 = 16 tiles)
 		let bbox = TileBBox::new_full(2)?;
@@ -652,7 +667,7 @@ mod metadata_limit_tests {
 		let path = dir.path().join("huge-meta.tar");
 		std::fs::write(&path, tar_header("meta.json", 4 * 1024 * 1024 * 1024)).unwrap();
 
-		let error = TarTilesReader::open(&path)
+		let error = TarTilesReader::open(&path, TilesRuntime::default())
 			.await
 			.expect_err("an oversized metadata entry must be refused");
 

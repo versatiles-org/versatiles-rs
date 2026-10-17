@@ -59,7 +59,10 @@ use std::{path::Path, sync::Arc};
 use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
-use r2d2_sqlite::{SqliteConnectionManager, rusqlite::OpenFlags};
+use r2d2_sqlite::{
+	SqliteConnectionManager,
+	rusqlite::{self, OpenFlags, OptionalExtension},
+};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
@@ -86,7 +89,8 @@ pub struct MBTilesReader {
 	pool: Pool<SqliteConnectionManager>,
 	tilejson: TileJSON,
 	metadata: TileSourceMetadata,
-	#[expect(dead_code, reason = "stored to mirror the other readers; nothing reads it back")]
+	/// Where rows the bulk streams cannot read are reported; a stream cannot
+	/// carry the error.
 	runtime: TilesRuntime,
 }
 
@@ -397,17 +401,20 @@ impl TileSource for MBTilesReader {
 			conn.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")?;
 
 		let max_index = 2u32.pow(u32::from(coord.level)) - 1;
-		if let Ok(vec) = stmt.query_row([coord.x, max_index - coord.y, u32::from(coord.level)], |row| {
-			row.get::<_, Vec<u8>>(0)
-		}) {
-			Ok(Some(Tile::from_blob(
+		// Only "no such row" is an absent tile. Anything else — a NULL or
+		// non-blob `tile_data`, a locked or corrupt database — is an error.
+		let vec = stmt
+			.query_row([coord.x, max_index - coord.y, u32::from(coord.level)], |row| {
+				row.get::<_, Vec<u8>>(0)
+			})
+			.optional()?;
+		Ok(vec.map(|vec| {
+			Tile::from_blob(
 				Blob::from(vec),
 				*self.metadata.tile_compression(),
 				*self.metadata.tile_format(),
-			)))
-		} else {
-			Ok(None)
-		}
+			)
+		}))
 	}
 
 	#[context("streaming tile coords for bbox {:?}", bbox)]
@@ -460,27 +467,24 @@ impl TileSource for MBTilesReader {
 			"SELECT tile_column, tile_row, zoom_level, LENGTH(tile_data) FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?",
 		)?;
 
-		let vec: Vec<(TileCoord, u32)> = stmt
-			.query_map(
-				[
-					bbox.x_min()?,
-					bbox.x_max()?,
-					bbox.y_min()?,
-					bbox.y_max()?,
-					u32::from(bbox.level()),
-				],
-				move |row| {
-					let x = row.get::<_, u32>(0)?;
-					let y = row.get::<_, u32>(1)?;
-					let level = row.get::<_, u8>(2)?;
-					let mut coord = TileCoord::new(level, x, y).expect("valid tile coord from db row");
-					coord.flip_y();
-					let size = row.get::<_, u32>(3)?;
-					Ok((coord, size))
-				},
-			)?
-			.filter_map(std::result::Result::ok)
-			.collect();
+		let vec = stmt.query_map(
+			[
+				bbox.x_min()?,
+				bbox.x_max()?,
+				bbox.y_min()?,
+				bbox.y_max()?,
+				u32::from(bbox.level()),
+			],
+			move |row| {
+				let x = row.get::<_, u32>(0)?;
+				let y = row.get::<_, u32>(1)?;
+				let level = row.get::<_, u8>(2)?;
+				let mut coord = TileCoord::new(level, x, y).expect("valid tile coord from db row");
+				coord.flip_y();
+				Ok((coord, row.get::<_, u32>(3)))
+			},
+		)?;
+		let vec = report_unreadable_rows(vec, &self.runtime, &self.name);
 
 		Ok(TileStream::from_vec(vec))
 	}
@@ -509,27 +513,33 @@ impl TileSource for MBTilesReader {
 			"SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?",
 		)?;
 
-		let vec: Vec<(TileCoord, Tile)> = stmt
-			.query_map(
-				[
-					bbox.x_min()?,
-					bbox.x_max()?,
-					bbox.y_min()?,
-					bbox.y_max()?,
-					u32::from(bbox.level()),
-				],
-				move |row| {
-					let x = row.get::<_, u32>(0)?;
-					let y = row.get::<_, u32>(1)?;
-					let level = row.get::<_, u8>(2)?;
-					let mut coord = TileCoord::new(level, x, y).expect("valid tile coord from db row");
-					coord.flip_y();
-					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);
-					let tile = Tile::from_blob(blob, *self.metadata.tile_compression(), *self.metadata.tile_format());
-					Ok((coord, tile))
-				},
-			)?
-			.filter_map(std::result::Result::ok)
+		let rows = stmt.query_map(
+			[
+				bbox.x_min()?,
+				bbox.x_max()?,
+				bbox.y_min()?,
+				bbox.y_max()?,
+				u32::from(bbox.level()),
+			],
+			move |row| {
+				let x = row.get::<_, u32>(0)?;
+				let y = row.get::<_, u32>(1)?;
+				let level = row.get::<_, u8>(2)?;
+				let mut coord = TileCoord::new(level, x, y).expect("valid tile coord from db row");
+				coord.flip_y();
+				Ok((coord, row.get::<_, Vec<u8>>(3)))
+			},
+		)?;
+		let vec: Vec<(TileCoord, Tile)> = report_unreadable_rows(rows, &self.runtime, &self.name)
+			.into_iter()
+			.map(|(coord, data)| {
+				let tile = Tile::from_blob(
+					Blob::from(data),
+					*self.metadata.tile_compression(),
+					*self.metadata.tile_format(),
+				);
+				(coord, tile)
+			})
 			.collect();
 
 		log::trace!("got {} tiles", vec.len());
@@ -544,6 +554,30 @@ impl std::fmt::Debug for MBTilesReader {
 			.field("parameters", &self.metadata())
 			.finish()
 	}
+}
+
+/// Collects the rows of a bulk query, reporting each one that cannot be read
+/// to the runtime instead of dropping it unseen: a NULL `tile_data` is a tile
+/// that exists and cannot be delivered, not a gap. A row whose coordinate was
+/// read names its tile.
+fn report_unreadable_rows<T>(
+	rows: impl Iterator<Item = rusqlite::Result<(TileCoord, rusqlite::Result<T>)>>,
+	runtime: &TilesRuntime,
+	name: &str,
+) -> Vec<(TileCoord, T)> {
+	rows
+		.filter_map(|row| match row {
+			Ok((coord, Ok(value))) => Some((coord, value)),
+			Ok((coord, Err(e))) => {
+				runtime.record_error(&format!("mbtiles '{name}' tile {}", coord.to_json()), &e.into());
+				None
+			}
+			Err(e) => {
+				runtime.record_error(&format!("mbtiles '{name}' row"), &e.into());
+				None
+			}
+		})
+		.collect()
 }
 
 /// A struct representing a metadata record in the `MBTiles` database.

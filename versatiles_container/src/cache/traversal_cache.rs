@@ -33,7 +33,10 @@ use futures::{Stream, StreamExt, stream::BoxStream};
 use uuid::Uuid;
 use versatiles_derive::context;
 
-use crate::cache::{cache_type::CacheType, traits::CacheValue};
+use crate::{
+	TilesRuntime,
+	cache::{cache_type::CacheType, traits::CacheValue},
+};
 
 /// A thin [`Read`] wrapper that tracks the number of bytes consumed.
 struct CountingReader<R> {
@@ -169,7 +172,7 @@ impl<V: CacheValue> TraversalCache<V> {
 	///
 	/// Panics if called outside a Tokio runtime (Disk mode only).
 	#[context("Failed to take stream from traversal cache at index {}", index)]
-	pub fn take_stream(&self, index: usize) -> Result<BoxStream<'static, V>>
+	pub fn take_stream(&self, index: usize, runtime: &TilesRuntime) -> Result<BoxStream<'static, V>>
 	where
 		V: Send + 'static,
 	{
@@ -186,8 +189,9 @@ impl<V: CacheValue> TraversalCache<V> {
 				let (tx, rx) = tokio::sync::mpsc::channel::<V>(64);
 				for file_path in files {
 					let tx = tx.clone();
+					let runtime = runtime.clone();
 					tokio::task::spawn_blocking(move || {
-						Self::drain_file_into(&file_path, &tx);
+						Self::drain_file_into(&file_path, &tx, &runtime);
 						// `drain_file_into` has returned, so the iterator — and with it the
 						// file handle — is dropped; the file can be deleted.
 						let _ = remove_file(&file_path);
@@ -231,24 +235,28 @@ impl<V: CacheValue> TraversalCache<V> {
 
 	/// Send every value in one cache file to `tx`, in file order.
 	///
-	/// Runs on a blocking thread, one per file. Three things end it early and
-	/// none of them is fatal to the traversal, so all three are swallowed
-	/// rather than propagated:
+	/// Runs on a blocking thread, one per file, so it cannot return an error to
+	/// the traversal. Three things end it early:
 	///
-	/// - the file cannot be opened — logged, nothing sent;
-	/// - a value fails to deserialize — logged, and the rest of *this* file is
-	///   skipped, since the read position is no longer trustworthy;
-	/// - the receiver is gone — routine, not logged: the consumer dropped the
+	/// - the file cannot be opened — reported to `runtime`, nothing sent;
+	/// - a value fails to deserialize — reported to `runtime`, and the rest of
+	///   *this* file is skipped, since the read position is no longer
+	///   trustworthy;
+	/// - the receiver is gone — routine, not reported: the consumer dropped the
 	///   stream before draining it, which [`take_stream`](Self::take_stream)
 	///   explicitly allows.
 	///
+	/// Either failure loses tiles that were read once already, so it is an
+	/// error on the run, which `abort_on_error` and the output's `.incomplete`
+	/// name act on — not a warning in the log.
+	///
 	/// The caller deletes the file afterwards, once the iterator this holds
 	/// has been dropped.
-	fn drain_file_into(file_path: &Path, tx: &tokio::sync::mpsc::Sender<V>) {
+	fn drain_file_into(file_path: &Path, tx: &tokio::sync::mpsc::Sender<V>, runtime: &TilesRuntime) {
 		let values = match Self::iter_values_from_file(file_path) {
 			Ok(values) => values,
 			Err(e) => {
-				log::warn!("failed to open cache file {}: {e}", file_path.display());
+				runtime.record_error(&format!("traversal cache file {}", file_path.display()), &e);
 				return;
 			}
 		};
@@ -261,9 +269,9 @@ impl<V: CacheValue> TraversalCache<V> {
 					}
 				}
 				Err(e) => {
-					log::warn!(
-						"failed to deserialize value from cache file {}: {e}",
-						file_path.display()
+					runtime.record_error(
+						&format!("traversal cache file {}", file_path.display()),
+						&e.context("failed to deserialize a cached tile; the rest of the file is skipped"),
 					);
 					return;
 				}
@@ -341,9 +349,9 @@ mod tests {
 		let cache = TraversalCache::<String>::new(&cache_type)?;
 
 		// Initially empty — returns empty stream
-		let empty: Vec<String> = cache.take_stream(0)?.collect().await;
+		let empty: Vec<String> = cache.take_stream(0, &TilesRuntime::default())?.collect().await;
 		assert_eq!(empty, Vec::<String>::new());
-		let empty: Vec<String> = cache.take_stream(1)?.collect().await;
+		let empty: Vec<String> = cache.take_stream(1, &TilesRuntime::default())?.collect().await;
 		assert_eq!(empty, Vec::<String>::new());
 
 		// Append via stream to index 0
@@ -362,20 +370,20 @@ mod tests {
 			.await?;
 
 		// take_stream and collect (order across files is non-deterministic in Disk mode)
-		let mut collected: Vec<String> = cache.take_stream(0)?.collect().await;
+		let mut collected: Vec<String> = cache.take_stream(0, &TilesRuntime::default())?.collect().await;
 		collected.sort();
 		assert_eq!(collected, vec!["a".to_string(), "b".to_string(), "c".to_string()]);
 
 		// After take_stream, index is empty
-		let empty: Vec<String> = cache.take_stream(0)?.collect().await;
+		let empty: Vec<String> = cache.take_stream(0, &TilesRuntime::default())?.collect().await;
 		assert_eq!(empty, Vec::<String>::new());
 
 		// Other index still has data
-		let collected1: Vec<String> = cache.take_stream(1)?.collect().await;
+		let collected1: Vec<String> = cache.take_stream(1, &TilesRuntime::default())?.collect().await;
 		assert_eq!(collected1, vec!["x".to_string()]);
 
 		// Non-existent index returns empty stream
-		let empty: Vec<String> = cache.take_stream(99)?.collect().await;
+		let empty: Vec<String> = cache.take_stream(99, &TilesRuntime::default())?.collect().await;
 		assert_eq!(empty, Vec::<String>::new());
 
 		Ok(())
@@ -401,7 +409,7 @@ mod tests {
 			.await?;
 		cache.append_stream(0, futures::stream::iter(vec![vec![128]])).await?;
 
-		let mut collected: Vec<Vec<u8>> = cache.take_stream(0)?.collect().await;
+		let mut collected: Vec<Vec<u8>> = cache.take_stream(0, &TilesRuntime::default())?.collect().await;
 		collected.sort();
 		assert_eq!(collected, vec![vec![0, 1, 2], vec![128], vec![255, 254]]);
 

@@ -30,7 +30,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let mut reader = DirectoryReader::open(Path::new("/absolute/path/to/tiles")).unwrap();
+//!     let mut reader = DirectoryReader::open(Path::new("/absolute/path/to/tiles"), TilesRuntime::default()).unwrap();
 //!     let tile_data = reader.tile(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
 //! }
 //! ```
@@ -56,9 +56,7 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-#[cfg(feature = "cli")]
-use crate::TilesRuntime;
-use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 
 /// A reader for tiles stored in a directory structure.
 ///
@@ -75,6 +73,9 @@ pub struct DirectoryReader {
 	dir: PathBuf,
 	tile_map: Arc<HashMap<TileCoord, PathBuf>>,
 	metadata: TileSourceMetadata,
+	/// Where tiles the streams cannot read are reported; a stream cannot carry
+	/// the error.
+	runtime: TilesRuntime,
 }
 
 /// The entries of `dir` that this reader can do anything with, paired with their
@@ -107,12 +108,13 @@ impl DirectoryReader {
 	/// # Arguments
 	///
 	/// * `dir` - An absolute path to the directory containing the tiles.
+	/// * `runtime` - Where tiles that exist but cannot be read are reported.
 	///
 	/// # Errors
 	///
 	/// Returns an error if the directory does not exist, is not a directory, contains no tiles, or contains inconsistent tile formats or compressions.
 	#[context("opening tiles directory {:?}", dir)]
-	pub fn open(dir: &Path) -> Result<DirectoryReader>
+	pub fn open(dir: &Path, runtime: TilesRuntime) -> Result<DirectoryReader>
 	where
 		Self: Sized,
 	{
@@ -206,6 +208,7 @@ impl DirectoryReader {
 			dir: dir.to_path_buf(),
 			tile_map: Arc::new(tile_map),
 			metadata: TileSourceMetadata::new(tile_format, tile_compression, Traversal::ANY, Some(tile_pyramid)),
+			runtime,
 		})
 	}
 
@@ -271,10 +274,18 @@ impl TileSource for DirectoryReader {
 		let tile_map = Arc::clone(&self.tile_map);
 		let tile_compression = *self.metadata.tile_compression();
 		let tile_format = *self.metadata.tile_format();
+		let runtime = self.runtime.clone();
 
-		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
-			DirectoryReader::lookup_tile(&coord, &tile_map, tile_compression, tile_format).ok()?
-		}))
+		Ok(TileStream::from_bbox_parallel(
+			bbox,
+			move |coord| match DirectoryReader::lookup_tile(&coord, &tile_map, tile_compression, tile_format) {
+				Ok(tile) => tile,
+				Err(e) => {
+					runtime.record_error(&format!("directory tile {}", coord.to_json()), &e);
+					None
+				}
+			},
+		))
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
@@ -286,10 +297,16 @@ impl TileSource for DirectoryReader {
 
 	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
 		let tile_map = Arc::clone(&self.tile_map);
+		let runtime = self.runtime.clone();
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			let path = tile_map.get(&coord)?;
-			let size = std::fs::metadata(path).ok()?.len();
-			u32::try_from(size).ok()
+			match std::fs::metadata(path) {
+				Ok(metadata) => u32::try_from(metadata.len()).ok(),
+				Err(e) => {
+					runtime.record_error(&format!("directory tile {}", coord.to_json()), &e.into());
+					None
+				}
+			}
 		}))
 	}
 
@@ -329,7 +346,7 @@ mod tests {
 		dir.child("3/2/1.png").write_str("test tile data")?;
 		dir.child("meta.json").write_str(r#"{"type":"dummy"}"#)?;
 
-		let reader = DirectoryReader::open(&dir)?;
+		let reader = DirectoryReader::open(&dir, TilesRuntime::default())?;
 
 		assert_eq!(
 			reader.tilejson().stringify(),
@@ -370,7 +387,7 @@ mod tests {
 			eprintln!("note: this filesystem rejects non-UTF-8 names; the interesting half of the test is skipped");
 		}
 
-		let reader = DirectoryReader::open(&dir)?;
+		let reader = DirectoryReader::open(&dir, TilesRuntime::default())?;
 		let mut tile = reader.tile(&TileCoord::new(3, 2, 1)?).await?.unwrap();
 		assert_eq!(
 			tile.as_blob(reader.metadata().tile_compression())?,
@@ -384,7 +401,7 @@ mod tests {
 	async fn open_path_with_nonexistent_directory() -> Result<()> {
 		let dir = TempDir::new()?;
 
-		let msg = DirectoryReader::open(&dir.join("dont_exist"))
+		let msg = DirectoryReader::open(&dir.join("dont_exist"), TilesRuntime::default())
 			.unwrap_err()
 			.chain()
 			.last()
@@ -401,7 +418,7 @@ mod tests {
 		dir.child("3/2/1.unknown").write_str("unsupported format")?;
 
 		assert_eq!(
-			DirectoryReader::open(dir.path())
+			DirectoryReader::open(dir.path(), TilesRuntime::default())
 				.unwrap_err()
 				.chain()
 				.last()
@@ -426,7 +443,7 @@ mod tests {
 		fs::create_dir_all(dir.path().join("2/1")).unwrap();
 		fs::write(dir.path().join("2/1/0.png"), "tile at 2/1/0").unwrap();
 
-		let reader = DirectoryReader::open(&dir).unwrap();
+		let reader = DirectoryReader::open(&dir, TilesRuntime::default()).unwrap();
 		assert_eq!(
 			reader.tilejson().stringify(),
 			"{\"bounds\":[-90,66.51326,0,85.051129],\"maxzoom\":2,\"minzoom\":2,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}"
@@ -442,7 +459,7 @@ mod tests {
 		fs::write(dir.path().join("3/2/1.png"), "tile at 3/2/1").unwrap();
 		fs::write(dir.path().join("meta.json"), r#"{"type":"dummy data"}"#).unwrap();
 
-		let reader = DirectoryReader::open(&dir).unwrap();
+		let reader = DirectoryReader::open(&dir, TilesRuntime::default()).unwrap();
 		let coord = TileCoord::new(3, 2, 1).unwrap();
 		let blob = reader
 			.tile(&coord)
@@ -463,7 +480,7 @@ mod tests {
 		fs::write(dir.path().join("3/2/1.txt"), "wrong format").unwrap();
 
 		assert_eq!(
-			&DirectoryReader::open(&dir)
+			&DirectoryReader::open(&dir, TilesRuntime::default())
 				.unwrap_err()
 				.chain()
 				.last()
@@ -483,7 +500,7 @@ mod tests {
 		dir.child("4/2/1.jpg").write_str("test tile data")?;
 
 		assert_eq!(
-			DirectoryReader::open(&dir)
+			DirectoryReader::open(&dir, TilesRuntime::default())
 				.unwrap_err()
 				.chain()
 				.last()
@@ -502,7 +519,7 @@ mod tests {
 		dir.child("4/2/1.pbf.br").write_str("test tile data")?;
 
 		assert_eq!(
-			DirectoryReader::open(&dir)
+			DirectoryReader::open(&dir, TilesRuntime::default())
 				.unwrap_err()
 				.chain()
 				.last()
@@ -520,7 +537,7 @@ mod tests {
 		dir.child("meta.json").write_str("{\"key\": \"value\"}")?;
 		dir.child("3/2/1.png.br").write_str("tile data")?;
 
-		let reader = DirectoryReader::open(dir.path())?;
+		let reader = DirectoryReader::open(dir.path(), TilesRuntime::default())?;
 
 		assert_eq!(
 			reader.source_type().to_string(),
@@ -547,7 +564,7 @@ mod tests {
 		dir.child("2/0/1.png").write_str("a longer tile")?;
 		dir.child("2/1/0.png").write_str("medium tile")?;
 
-		let reader = DirectoryReader::open(&dir)?;
+		let reader = DirectoryReader::open(&dir, TilesRuntime::default())?;
 		let bbox = TileBBox::from_min_and_max(2, 0, 0, 1, 1)?;
 
 		let mut sizes: Vec<(TileCoord, u32)> = reader.tile_size_stream(bbox).await?.to_vec().await;
@@ -570,7 +587,7 @@ mod tests {
 		dir.child("2/0/0.png").write_str("tile data")?;
 		dir.child("2/1/0.png").write_str("tile data")?;
 
-		let reader = DirectoryReader::open(&dir)?;
+		let reader = DirectoryReader::open(&dir, TilesRuntime::default())?;
 		let runtime = crate::TilesRuntime::default();
 
 		let mut printer = PrettyPrint::new();
@@ -593,7 +610,7 @@ mod tests {
 		dir.child("2/1/0.png").write_str("tile_1_0")?;
 		dir.child("2/1/1.png").write_str("tile_1_1")?;
 
-		let reader = DirectoryReader::open(&dir)?;
+		let reader = DirectoryReader::open(&dir, TilesRuntime::default())?;
 		let bbox = TileBBox::from_min_and_max(2, 0, 0, 1, 1)?;
 
 		// Get all tiles via stream
