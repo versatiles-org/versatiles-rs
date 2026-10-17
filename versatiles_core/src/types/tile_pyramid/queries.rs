@@ -103,6 +103,22 @@ impl TilePyramid {
 		self.levels.iter_mut()
 	}
 
+	/// The name [`geo_extent`](Self::geo_extent) has on [`PyramidInfo`](crate::PyramidInfo).
+	///
+	/// Up to 5.3 this returned the box of the highest level only, while the
+	/// trait method of the same name returned the extent; a call on a
+	/// `TilePyramid` picked this one without a warning. Both now return the
+	/// extent. The highest level's box is
+	/// [`geo_bbox_of_level_max`](Self::geo_bbox_of_level_max).
+	#[deprecated(
+		since = "5.4.0",
+		note = "use `geo_extent`, or `geo_bbox_of_level_max` for the highest level alone"
+	)]
+	#[must_use]
+	pub fn geo_bbox(&self) -> Option<GeoBBox> {
+		self.geo_extent()
+	}
+
 	/// Returns the geographic bounding box of the highest non-empty level.
 	///
 	/// Lower levels are not looked at, so this is too small for a pyramid
@@ -111,7 +127,7 @@ impl TilePyramid {
 	///
 	/// Returns `None` if all levels are empty.
 	#[must_use]
-	pub fn geo_bbox(&self) -> Option<GeoBBox> {
+	pub fn geo_bbox_of_level_max(&self) -> Option<GeoBBox> {
 		let max_level = self.level_max()?;
 		self.levels[max_level as usize].to_geo_bbox()
 	}
@@ -120,7 +136,7 @@ impl TilePyramid {
 	/// every level into account.
 	///
 	/// This is what bounds are derived from when a tileset declares none. It
-	/// starts from [`geo_bbox`](Self::geo_bbox), the envelope of the highest
+	/// starts from [`geo_bbox_of_level_max`](Self::geo_bbox_of_level_max), the envelope of the highest
 	/// level, which is the tightest one: a tile there is small. Then it looks
 	/// at each lower level and asks whether that envelope accounts for it:
 	///
@@ -166,7 +182,7 @@ impl TilePyramid {
 	/// selects tiles by bbox *overlap* (e.g. MapLibre) requests every tile at
 	/// every zoom level — including any border ring added by [`buffer`](Self::buffer).
 	///
-	/// Unlike [`geo_bbox`](Self::geo_bbox), which returns the outer envelope of a
+	/// Unlike [`geo_bbox_of_level_max`](Self::geo_bbox_of_level_max), which returns the outer envelope of a
 	/// single (max) level, this walks every level and keeps only each extremal
 	/// tile's *inner* edge (see [`TileCover::extend_touch_edges`]). Because a
 	/// coarse, world-spanning tile is requested for essentially any bounds, its
@@ -179,7 +195,7 @@ impl TilePyramid {
 	/// worst, advertises one empty boundary column.
 	///
 	/// Returns `None` if the pyramid is empty. Falls back to
-	/// [`geo_bbox`](Self::geo_bbox) if the touch box is degenerate (a crop smaller
+	/// [`geo_bbox_of_level_max`](Self::geo_bbox_of_level_max) if the touch box is degenerate (a crop smaller
 	/// than a single max-zoom tile is a single tile at every level).
 	#[must_use]
 	pub fn geo_bbox_touching_all_tiles(&self) -> Option<GeoBBox> {
@@ -201,7 +217,7 @@ impl TilePyramid {
 		if west >= east || north >= south {
 			// Degenerate: crop is a single tile at every level. The tight
 			// max-level envelope is small here, so use it.
-			return self.geo_bbox();
+			return self.geo_bbox_of_level_max();
 		}
 
 		// Normalized mercator -> geo via level 0 (where fractional tile coords in
@@ -211,13 +227,13 @@ impl TilePyramid {
 		GeoBBox::new(west_lon, south_lat, east_lon, north_lat).ok()
 	}
 
-	/// Calculates a geographic center based on the bounding box at a middle
-	/// zoom level.
+	/// Calculates a geographic center from the bounding box of the highest
+	/// level, at a middle zoom level.
 	///
 	/// Returns `None` if the pyramid is empty.
 	#[must_use]
 	pub fn geo_center(&self) -> Option<GeoCenter> {
-		let bbox = self.geo_bbox()?;
+		let bbox = self.geo_bbox_of_level_max()?;
 		let level = (self.level_min()? + 2).min(self.level_max()?);
 		let center_lon = f64::midpoint(bbox.x_min, bbox.x_max);
 		let center_lat = f64::midpoint(bbox.y_min, bbox.y_max);
@@ -260,7 +276,7 @@ mod tests {
 	use rstest::rstest;
 
 	use super::*;
-	use crate::{TileCover, TileQuadtree};
+	use crate::{PyramidInfo, TileCover, TileQuadtree};
 
 	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
@@ -303,12 +319,12 @@ mod tests {
 		assert_eq!(p.count_nodes(), expected_nodes);
 	}
 
-	/// Empty pyramid → geo_bbox/geo_center None; populated → Some.
+	/// Empty pyramid → geo_bbox_of_level_max/geo_center None; populated → Some.
 	#[rstest]
 	#[case::empty(TilePyramid::new_empty(), false)]
 	#[case::populated(pyramid_from_bboxes(&[bbox(5, 10, 10, 20, 20)]), true)]
 	fn geo_bbox_and_center_are_some_when_populated(#[case] p: TilePyramid, #[case] expect_some: bool) {
-		assert_eq!(p.geo_bbox().is_some(), expect_some);
+		assert_eq!(p.geo_bbox_of_level_max().is_some(), expect_some);
 		assert_eq!(p.geo_center().is_some(), expect_some);
 	}
 
@@ -337,13 +353,13 @@ mod tests {
 		let liechtenstein = GeoBBox::new(9.47, 47.05, 9.64, 47.27).unwrap();
 		let p = TilePyramid::from_geo_bbox(0, 14, &liechtenstein).unwrap();
 		assert_eq!(p.level_ref(0).count_tiles(), 1);
-		assert_eq!(p.geo_extent(), p.geo_bbox());
+		assert_eq!(p.geo_extent(), p.geo_bbox_of_level_max());
 	}
 
 	#[test]
 	fn extent_of_a_full_pyramid_is_the_world() {
 		let p = TilePyramid::new_full_up_to(6);
-		assert_eq!(p.geo_extent(), p.geo_bbox());
+		assert_eq!(p.geo_extent(), p.geo_bbox_of_level_max());
 		assert_eq!(p.geo_extent().unwrap().x_min, -180.0);
 	}
 
@@ -358,7 +374,7 @@ mod tests {
 			bbox(5, 16, 10, 17, 11),
 			region,
 		]);
-		assert_eq!(p.geo_bbox(), Some(envelope(region)));
+		assert_eq!(p.geo_bbox_of_level_max(), Some(envelope(region)));
 		assert_eq!(p.geo_extent(), Some(envelope(TileBBox::new_full(3).unwrap())));
 	}
 
@@ -389,6 +405,26 @@ mod tests {
 		assert_eq!(p.geo_extent(), Some(expected));
 	}
 
+	/// The case reported from VersaTiles Studio: `satellite.versatiles` is
+	/// worldwide up to zoom 8 and covers only Guadeloupe at zoom 19, and the
+	/// old `geo_bbox` framed the file on the island.
+	#[test]
+	#[expect(deprecated, reason = "the alias is what is being tested")]
+	fn geo_bbox_is_the_extent_not_the_highest_level() {
+		let guadeloupe = GeoBBox::new(-61.69, 15.83, -61.01, 16.5).unwrap();
+		let mut p = TilePyramid::new_full_up_to(8);
+		p.insert_bbox(&TileBBox::from_geo_bbox(19, &guadeloupe).unwrap())
+			.unwrap();
+
+		let island = p.geo_bbox_of_level_max().unwrap();
+		assert!(island.x_min > -62.0 && island.x_max < -61.0, "{island:?}");
+
+		let world = p.geo_bbox().unwrap();
+		assert_eq!(Some(world), p.geo_extent());
+		assert_eq!((world.x_min, world.x_max), (-180.0, 180.0));
+		assert_eq!(Some(world), PyramidInfo::geo_extent(&p), "agrees with the trait");
+	}
+
 	#[test]
 	fn touch_bbox_none_when_empty() {
 		assert!(TilePyramid::new_empty().geo_bbox_touching_all_tiles().is_none());
@@ -414,7 +450,7 @@ mod tests {
 	#[test]
 	fn touch_bbox_falls_back_when_degenerate() {
 		let p = pyramid_from_bboxes(&[bbox(5, 10, 10, 10, 10)]);
-		assert_eq!(p.geo_bbox_touching_all_tiles(), p.geo_bbox());
+		assert_eq!(p.geo_bbox_touching_all_tiles(), p.geo_bbox_of_level_max());
 	}
 
 	/// A border ring (`buffer`) widens the advertised bounds, because at each
@@ -453,7 +489,7 @@ mod tests {
 		match (p.weighted_bbox(), expect) {
 			(Ok(wb), Some(())) => {
 				// With only one populated level, the weighted average must match it.
-				let gb = p.geo_bbox().unwrap();
+				let gb = p.geo_bbox_of_level_max().unwrap();
 				assert!((wb.x_min - gb.x_min).abs() < 1e-9);
 				assert!((wb.x_max - gb.x_max).abs() < 1e-9);
 				assert!((wb.y_min - gb.y_min).abs() < 1e-9);

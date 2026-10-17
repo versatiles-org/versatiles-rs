@@ -381,7 +381,7 @@ mod tests {
 	#[tokio::test]
 	async fn the_pyramid_spans_the_world() -> Result<()> {
 		let pyramid = build("from_h3 resolution=4").await?.tile_pyramid().await?;
-		let bbox = pyramid.geo_bbox().expect("bounds");
+		let bbox = pyramid.geo_extent().expect("bounds");
 		assert!(bbox.x_min <= -179.9 && bbox.x_max >= 179.9, "{bbox:?}");
 		assert!(bbox.y_min <= -85.0 && bbox.y_max >= 85.0, "{bbox:?}");
 		Ok(())

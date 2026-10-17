@@ -674,7 +674,7 @@ mod tests {
 			op.metadata()
 				.tile_pyramid()
 				.expect("pyramid")
-				.geo_bbox()
+				.geo_extent()
 				.expect("bounds")
 				.as_tuple()
 		};

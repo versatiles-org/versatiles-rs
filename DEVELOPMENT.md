@@ -462,8 +462,8 @@ pyramid.intersect_geo_bbox(&geo_bbox)?;
 
 let min_zoom = pyramid.level_min(); // Option<u8>
 let max_zoom = pyramid.level_max(); // Option<u8>
-let top      = pyramid.geo_bbox();   // Option<GeoBBox>: the highest level only
-let geo      = pyramid.geo_extent(); // Option<GeoBBox>: every level taken into account
+let top      = pyramid.geo_bbox_of_level_max(); // Option<GeoBBox>: the highest level only
+let geo      = pyramid.geo_extent();            // Option<GeoBBox>: every level taken into account
 ```
 
 ### `PyramidInfo` Trait

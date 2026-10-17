@@ -733,7 +733,7 @@ mod tests {
 			.await?
 			.tile_pyramid()
 			.await?;
-		let bbox = pyramid.geo_bbox().expect("bounds");
+		let bbox = pyramid.geo_extent().expect("bounds");
 		assert!(bbox.x_min > -10.0 && bbox.x_max < 30.0, "{bbox:?}");
 		assert!(bbox.y_min > 40.0 && bbox.y_max < 60.0, "{bbox:?}");
 		Ok(())
