@@ -50,6 +50,9 @@ impl TileContent {
 	pub fn to_blob(&self, format: TileFormat, quality: Option<u8>, effort: Option<u8>) -> Result<Blob> {
 		match self {
 			TileContent::Raster(image) => image.to_blob(format, quality, effort),
+			TileContent::Vector(_) if format == TileFormat::MLT => {
+				bail!("encoding MLT tiles is not supported yet (issue #111)")
+			}
 			TileContent::Vector(vector) => vector.to_blob(),
 		}
 	}
@@ -64,6 +67,9 @@ impl TileContent {
 			TileType::Raster => {
 				let image = DynamicImage::from_blob(blob, format)?;
 				TileContent::Raster(image)
+			}
+			TileType::Vector if format == TileFormat::MLT => {
+				bail!("decoding MLT tiles is not supported yet (issue #111)")
 			}
 			TileType::Vector => {
 				let vector = VectorTile::from_blob(blob)?;

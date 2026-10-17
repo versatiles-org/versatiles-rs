@@ -86,7 +86,7 @@ impl FileHeader {
 	#[context("Failed to create FileHeader from blob")]
 	pub fn to_blob(&self) -> Result<Blob> {
 		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
-		use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MVT, PNG, SVG, TOPOJSON, WEBP};
+		use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MLT, MVT, PNG, SVG, TOPOJSON, WEBP};
 
 		let mut writer = ValueWriterBlob::new_be();
 		writer.write_slice(b"versatiles_v02")?;
@@ -105,6 +105,11 @@ impl FileHeader {
 			GEOJSON => 0x21,
 			TOPOJSON => 0x22,
 			JSON => 0x23,
+
+			// The container spec has no code for MLT yet (versatiles-spec#11).
+			MLT => {
+				bail!("the VersaTiles container cannot store MLT tiles yet: the format has no tile-type code in the spec")
+			}
 		})?;
 
 		// compression
@@ -347,6 +352,10 @@ mod tests {
 			assert_eq!(header2.tile_format, tile_format);
 			assert_eq!(header2.compression, compression);
 		}
+
+		let header = FileHeader::new(MLT, compression, zoom_range, &bbox).unwrap();
+		let err = format!("{:#}", header.to_blob().unwrap_err());
+		assert!(err.contains("MLT"), "got: {err}");
 	}
 
 	#[test]

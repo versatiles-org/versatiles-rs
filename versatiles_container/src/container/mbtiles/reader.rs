@@ -211,6 +211,11 @@ impl MBTilesReader {
 						tile_format = Ok(WEBP);
 						compression = Ok(Uncompressed);
 					}
+					// Written by the MLT tools; some gzip each tile by its own
+					// size, so the compression is not knowable here (#111).
+					"mlt" | "application/vnd.maplibre-tile" => {
+						bail!("MLT tiles in mbtiles are not supported yet ('{}')", self.name)
+					}
 					_ => bail!("unknown tile format '{value}' in mbtiles metadata of '{}'", self.name),
 				},
 				// https://github.com/mapbox/mbtiles-spec/blob/master/1.3/spec.md#content

@@ -13,6 +13,7 @@ pub enum PMTilesType {
 	JPEG = 0x3,
 	WEBP = 0x4,
 	AVIF = 0x5,
+	MLT = 0x6,
 }
 
 impl PMTilesType {
@@ -24,17 +25,19 @@ impl PMTilesType {
 			3 => Ok(PMTilesType::JPEG),
 			4 => Ok(PMTilesType::WEBP),
 			5 => Ok(PMTilesType::AVIF),
+			6 => Ok(PMTilesType::MLT),
 			_ => bail!("Unknown value {value} for PMTiles type"),
 		}
 	}
 	pub fn from_value(value: TileFormat) -> Result<Self> {
-		use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MVT, PNG, SVG, TOPOJSON, WEBP};
+		use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MLT, MVT, PNG, SVG, TOPOJSON, WEBP};
 		Ok(match value {
 			AVIF => PMTilesType::AVIF,
 			BIN => bail!("PMTiles does not support BIN"),
 			GEOJSON => bail!("PMTiles does not support GEOJSON"),
 			JPG => PMTilesType::JPEG,
 			JSON => bail!("PMTiles does not support JSON"),
+			MLT => PMTilesType::MLT,
 			MVT => PMTilesType::MVT,
 			PNG => PMTilesType::PNG,
 			SVG => bail!("PMTiles does not support SVG"),
@@ -43,7 +46,7 @@ impl PMTilesType {
 		})
 	}
 	pub fn as_value(&self) -> Result<TileFormat> {
-		use TileFormat::{AVIF, BIN, JPG, MVT, PNG, WEBP};
+		use TileFormat::{AVIF, BIN, JPG, MLT, MVT, PNG, WEBP};
 		Ok(match self {
 			PMTilesType::UNKNOWN => BIN,
 			PMTilesType::MVT => MVT,
@@ -51,6 +54,7 @@ impl PMTilesType {
 			PMTilesType::JPEG => JPG,
 			PMTilesType::WEBP => WEBP,
 			PMTilesType::AVIF => AVIF,
+			PMTilesType::MLT => MLT,
 		})
 	}
 }
@@ -69,7 +73,8 @@ mod tests {
 		assert_eq!(PMTilesType::from_u8(3).unwrap(), PMTilesType::JPEG);
 		assert_eq!(PMTilesType::from_u8(4).unwrap(), PMTilesType::WEBP);
 		assert_eq!(PMTilesType::from_u8(5).unwrap(), PMTilesType::AVIF);
-		assert!(PMTilesType::from_u8(6).is_err());
+		assert_eq!(PMTilesType::from_u8(6).unwrap(), PMTilesType::MLT);
+		assert!(PMTilesType::from_u8(7).is_err());
 	}
 
 	#[test]
@@ -77,6 +82,7 @@ mod tests {
 		assert_eq!(PMTilesType::from_value(AVIF).unwrap(), PMTilesType::AVIF);
 		assert_eq!(PMTilesType::from_value(JPG).unwrap(), PMTilesType::JPEG);
 		assert_eq!(PMTilesType::from_value(MVT).unwrap(), PMTilesType::MVT);
+		assert_eq!(PMTilesType::from_value(MLT).unwrap(), PMTilesType::MLT);
 		assert_eq!(PMTilesType::from_value(PNG).unwrap(), PMTilesType::PNG);
 		assert_eq!(PMTilesType::from_value(WEBP).unwrap(), PMTilesType::WEBP);
 
@@ -96,5 +102,6 @@ mod tests {
 		assert_eq!(PMTilesType::JPEG.as_value().unwrap(), JPG);
 		assert_eq!(PMTilesType::WEBP.as_value().unwrap(), WEBP);
 		assert_eq!(PMTilesType::AVIF.as_value().unwrap(), AVIF);
+		assert_eq!(PMTilesType::MLT.as_value().unwrap(), MLT);
 	}
 }

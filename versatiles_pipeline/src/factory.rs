@@ -112,7 +112,14 @@ impl Compatibility {
 #[must_use]
 pub fn require_tile_type(source: &dyn TileSource, required: TileType, tag: &str) -> Compatibility {
 	let format = *source.metadata().tile_format();
-	if format.to_type() == required {
+	if format == TileFormat::MLT && required == TileType::Vector {
+		// MLT is a vector format, but one nothing here can decode yet (#111);
+		// an operation that has to read the features must say so now, not
+		// on the first tile.
+		Compatibility::Wrong(format!(
+			"`{tag}` needs vector tiles it can decode; this source is mlt, which cannot be decoded yet"
+		))
+	} else if format.to_type() == required {
 		Compatibility::Fits
 	} else {
 		Compatibility::Wrong(format!(

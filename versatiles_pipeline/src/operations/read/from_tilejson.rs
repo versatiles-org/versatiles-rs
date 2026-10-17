@@ -399,6 +399,7 @@ mod tests {
 	#[case(".json", TileFormat::JSON)]
 	#[case(".svg", TileFormat::SVG)]
 	#[case(".topojson", TileFormat::TOPOJSON)]
+	#[case(".mlt", TileFormat::MLT)]
 	#[case(".PNG", TileFormat::PNG)]
 	#[test]
 	fn detect_format_from_url_extension(#[case] ext: &str, #[case] expected: TileFormat) {

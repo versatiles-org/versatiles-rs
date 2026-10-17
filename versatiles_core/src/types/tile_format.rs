@@ -31,7 +31,7 @@ use std::{
 	path::Path,
 };
 
-use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MVT, PNG, SVG, TOPOJSON, WEBP};
+use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MLT, MVT, PNG, SVG, TOPOJSON, WEBP};
 use anyhow::{Result, bail};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
@@ -52,6 +52,7 @@ use super::TileType;
 /// - `GEOJSON` - `GeoJSON` vector data
 /// - `JPG` - JPEG image format (including `.jpeg`)
 /// - `JSON` - Generic JSON data
+/// - `MLT` - MapLibre Tile vector data (carried as opaque bytes; not decoded yet)
 /// - `MVT` - Mapbox Vector Tile schema (encoded as PBF on disk)
 /// - `PNG` - PNG image format
 /// - `SVG` - SVG image format
@@ -71,6 +72,9 @@ pub enum TileFormat {
 	JPG,
 	/// Generic JSON data.
 	JSON,
+	/// MapLibre Tile vector data. Carried through containers and servers as
+	/// opaque bytes; decoding and encoding are not implemented yet (#111).
+	MLT,
 	/// Mapbox Vector Tile in Protocol Buffer format.
 	MVT,
 	/// PNG image format.
@@ -100,6 +104,7 @@ impl TileFormat {
 			GEOJSON => "geojson",
 			JPG => "jpg",
 			JSON => "json",
+			MLT => "mlt",
 			MVT => "mvt",
 			PNG => "png",
 			SVG => "svg",
@@ -124,7 +129,7 @@ impl TileFormat {
 	#[must_use]
 	pub fn variants() -> &'static [&'static str] {
 		&[
-			"avif", "bin", "geojson", "jpg", "json", "mvt", "png", "svg", "topojson", "webp",
+			"avif", "bin", "geojson", "jpg", "json", "mlt", "mvt", "png", "svg", "topojson", "webp",
 		]
 	}
 
@@ -140,6 +145,7 @@ impl TileFormat {
 			"geojson" => GEOJSON,
 			"jpeg" | "jpg" => JPG,
 			"json" => JSON,
+			"mlt" => MLT,
 			"pbf" | "mvt" => MVT,
 			"png" => PNG,
 			"svg" => SVG,
@@ -170,7 +176,7 @@ impl TileFormat {
 		match self {
 			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::SVG | TileFormat::WEBP => "image",
 			TileFormat::BIN | TileFormat::JSON => "unknown",
-			TileFormat::GEOJSON | TileFormat::MVT | TileFormat::TOPOJSON => "vector",
+			TileFormat::GEOJSON | TileFormat::MLT | TileFormat::MVT | TileFormat::TOPOJSON => "vector",
 		}
 	}
 
@@ -194,6 +200,7 @@ impl TileFormat {
 			AVIF => "image/avif",
 			SVG => "image/svg+xml",
 			MVT => "application/vnd.mapbox-vector-tile",
+			MLT => "application/vnd.maplibre-tile",
 			GEOJSON => "application/geo+json",
 			TOPOJSON => "application/topo+json",
 			JSON => "application/json",
@@ -215,6 +222,7 @@ impl TileFormat {
 			"image/avif" => AVIF,
 			"image/svg+xml" => SVG,
 			"application/vnd.mapbox-vector-tile" | "vnd.mapbox-vector-tile" => MVT,
+			"application/vnd.maplibre-tile" => MLT,
 			"application/geo+json" => GEOJSON,
 			"application/topo+json" => TOPOJSON,
 			"application/json" => JSON,
@@ -238,6 +246,7 @@ impl TileFormat {
 			GEOJSON => ".geojson",
 			JPG => ".jpg",
 			JSON => ".json",
+			MLT => ".mlt",
 			MVT => ".pbf",
 			PNG => ".png",
 			SVG => ".svg",
@@ -280,6 +289,7 @@ impl TileFormat {
 				".geojson" => GEOJSON,
 				".jpg" | ".jpeg" => JPG,
 				".json" => JSON,
+				".mlt" => MLT,
 				".pbf" => MVT,
 				".png" => PNG,
 				".svg" => SVG,
@@ -298,7 +308,7 @@ impl TileFormat {
 	///
 	/// Maps the format to one of three categories:
 	/// - **Raster**: `AVIF`, `PNG`, `JPG`, `WEBP`
-	/// - **Vector**: `MVT`
+	/// - **Vector**: `MLT`, `MVT`
 	/// - **Unknown**: `BIN`, `GEOJSON`, `JSON`, `SVG`, `TOPOJSON`
 	///
 	/// # Examples
@@ -315,7 +325,7 @@ impl TileFormat {
 		use TileType::{Raster, Unknown, Vector};
 		match self {
 			AVIF | PNG | JPG | WEBP => Raster,
-			MVT => Vector,
+			MLT | MVT => Vector,
 			BIN | GEOJSON | JSON | SVG | TOPOJSON => Unknown,
 		}
 	}
@@ -355,9 +365,9 @@ impl TileFormat {
 		matches!(self, PNG | WEBP)
 	}
 
-	/// Check if this format represents vector data (MVT tiles).
+	/// Check if this format represents vector data.
 	///
-	/// Returns `true` only for `MVT` (Mapbox Vector Tiles).
+	/// Returns `true` for `MVT` (Mapbox Vector Tiles) and `MLT` (MapLibre Tiles).
 	///
 	/// # Examples
 	///
@@ -388,6 +398,7 @@ impl TryFrom<u8> for TileFormat {
 			7 => SVG,
 			8 => TOPOJSON,
 			9 => WEBP,
+			10 => MLT,
 			_ => bail!("Unknown tile format value: {value}"),
 		})
 	}
@@ -406,6 +417,7 @@ impl From<TileFormat> for u8 {
 			SVG => 7,
 			TOPOJSON => 8,
 			WEBP => 9,
+			MLT => 10,
 		}
 	}
 }
@@ -459,6 +471,7 @@ mod tests {
 	#[case(SVG, ".svg")]
 	#[case(TOPOJSON, ".topojson")]
 	#[case(WEBP, ".webp")]
+	#[case(MLT, ".mlt")]
 	fn should_return_correct_extension_for_format(#[case] format: TileFormat, #[case] expected: &str) {
 		assert_eq!(format.as_extension(), expected);
 	}
@@ -479,6 +492,7 @@ mod tests {
 	#[case("vector.SVG", Some(SVG), "vector")]
 	#[case("topography.topojson", Some(TOPOJSON), "topography")]
 	#[case("photo.webp", Some(WEBP), "photo")]
+	#[case("tile.mlt", Some(MLT), "tile")]
 	fn should_extract_correct_format_and_truncate_filename_when_extension_found(
 		#[case] filename: &str,
 		#[case] expected_format: Option<TileFormat>,
@@ -501,6 +515,7 @@ mod tests {
 	#[case("png", Some(PNG))]
 	#[case(".topojson", Some(TOPOJSON))]
 	#[case(".webp", Some(WEBP))]
+	#[case("mlt", Some(MLT))]
 	#[case("unknown", None)]
 	fn should_parse_str_into_tileformat(#[case] input: &str, #[case] expected: Option<TileFormat>) {
 		let result = TileFormat::try_from_str(input);
@@ -532,6 +547,7 @@ mod tests {
 	#[case(SVG, "svg")]
 	#[case(TOPOJSON, "topojson")]
 	#[case(WEBP, "webp")]
+	#[case(MLT, "mlt")]
 	fn should_return_lowercase_string_for_as_str(#[case] format: TileFormat, #[case] expected: &str) {
 		assert_eq!(format.as_str(), expected);
 	}
@@ -547,6 +563,7 @@ mod tests {
 	#[case(SVG, "image")]
 	#[case(TOPOJSON, "vector")]
 	#[case(WEBP, "image")]
+	#[case(MLT, "vector")]
 	fn should_return_correct_type_str(#[case] format: TileFormat, #[case] expected: &str) {
 		assert_eq!(format.as_type_str(), expected);
 	}
@@ -562,6 +579,7 @@ mod tests {
 	#[case(SVG, "image/svg+xml")]
 	#[case(TOPOJSON, "application/topo+json")]
 	#[case(WEBP, "image/webp")]
+	#[case(MLT, "application/vnd.maplibre-tile")]
 	fn should_return_correct_mime_str(#[case] format: TileFormat, #[case] expected: &str) {
 		assert_eq!(format.as_mime_str(), expected);
 	}
@@ -614,6 +632,7 @@ mod tests {
 	#[case(SVG, TileType::Unknown)]
 	#[case(TOPOJSON, TileType::Unknown)]
 	#[case(WEBP, TileType::Raster)]
+	#[case(MLT, TileType::Vector)]
 	fn should_get_type_return_expected(#[case] format: TileFormat, #[case] expected: TileType) {
 		assert_eq!(format.to_type(), expected);
 	}
@@ -629,6 +648,7 @@ mod tests {
 	#[case(SVG, false, false)]
 	#[case(TOPOJSON, false, false)]
 	#[case(WEBP, true, false)]
+	#[case(MLT, false, true)]
 	fn is_raster_and_is_vector_classify_correctly(
 		#[case] format: TileFormat,
 		#[case] expect_raster: bool,
