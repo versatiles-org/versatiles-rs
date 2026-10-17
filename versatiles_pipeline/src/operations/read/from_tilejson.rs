@@ -30,7 +30,7 @@ use crate::{PipelineFactory, helpers::location::HttpUrl, vpl::VPLNode};
 ///
 /// The TileJSON document is fetched once when the pipeline is built, and each
 /// tile is then requested individually through the URL template in its `tiles`
-/// array.
+/// array. A relative template is resolved against the TileJSON's own URL.
 struct Args {
 	/// URL of the TileJSON endpoint.
 	url: HttpUrl,
@@ -90,8 +90,8 @@ impl Operation {
 		let body = response.text().await?;
 		let tilejson = TileJSON::try_from(body.as_str())?;
 
-		// Extract tile URL template
-		let tile_url_template = extract_tile_url(&tilejson)?;
+		// Extract tile URL template, resolved against the TileJSON's own URL
+		let tile_url_template = resolve_tile_url(args.url.as_str(), &extract_tile_url(&tilejson)?)?;
 
 		// Detect tile format
 		let tile_format = detect_tile_format(&tilejson, &tile_url_template)?;
@@ -140,6 +140,38 @@ fn extract_tile_url(tilejson: &TileJSON) -> Result<String> {
 		.next()
 		.ok_or_else(|| anyhow!("TileJSON 'tiles' array is empty"))?;
 	Ok(first)
+}
+
+/// Resolves a `tiles` template against the URL of the TileJSON document, as
+/// the VersaTiles extension of TileJSON allows relative templates.
+///
+/// Joining percent-encodes the braces, so `%7B`/`%7D` are turned back into
+/// `{`/`}` afterwards. An absolute template is returned as written: it needs
+/// no resolving, and a placeholder in its host would not survive parsing.
+fn resolve_tile_url(tilejson_url: &str, template: &str) -> Result<String> {
+	if has_scheme(template) {
+		return Ok(template.to_string());
+	}
+	let base = reqwest::Url::parse(tilejson_url)
+		.map_err(|e| anyhow!("TileJSON URL '{tilejson_url}' is not a valid base URL: {e}"))?;
+	let resolved = base
+		.join(template)
+		.map_err(|e| anyhow!("cannot resolve tile URL '{template}' against '{tilejson_url}': {e}"))?;
+	Ok(resolved
+		.as_str()
+		.replace("%7B", "{")
+		.replace("%7b", "{")
+		.replace("%7D", "}")
+		.replace("%7d", "}"))
+}
+
+/// Whether `text` starts with a URL scheme (`https:`, `http:`, …).
+fn has_scheme(text: &str) -> bool {
+	text.split_once(':').is_some_and(|(scheme, _)| {
+		let mut chars = scheme.chars();
+		chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+			&& chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+	})
 }
 
 fn detect_tile_format(tilejson: &TileJSON, tile_url_template: &str) -> Result<TileFormat> {
@@ -441,6 +473,59 @@ mod tests {
 		Ok(())
 	}
 
+	// ── resolve_tile_url ────────────────────────────────────────────────
+
+	#[rstest]
+	#[case::spec_example(
+		"https://example.org/tiles/osm/tiles.json",
+		"{z}/{x}/{y}",
+		"https://example.org/tiles/osm/{z}/{x}/{y}"
+	)]
+	#[case::with_extension(
+		"https://example.org/tiles/osm/tiles.json",
+		"{z}/{x}/{y}.pbf",
+		"https://example.org/tiles/osm/{z}/{x}/{y}.pbf"
+	)]
+	#[case::root_relative(
+		"https://example.org/tiles/osm/tiles.json",
+		"/other/{z}/{x}/{y}.png",
+		"https://example.org/other/{z}/{x}/{y}.png"
+	)]
+	#[case::parent(
+		"https://example.org/tiles/osm/tiles.json",
+		"../{z}/{x}/{y}.png",
+		"https://example.org/tiles/{z}/{x}/{y}.png"
+	)]
+	#[case::protocol_relative(
+		"https://example.org/tiles.json",
+		"//cdn.example.org/{z}/{x}/{y}.png",
+		"https://cdn.example.org/{z}/{x}/{y}.png"
+	)]
+	#[case::query(
+		"https://example.org/tiles/tiles.json?key=abc",
+		"{z}/{x}/{y}.png?zoom={z}",
+		"https://example.org/tiles/{z}/{x}/{y}.png?zoom={z}"
+	)]
+	#[case::already_encoded_lowercase(
+		"https://example.org/tiles/tiles.json",
+		"%7bz%7d/%7bx%7d/%7by%7d.png",
+		"https://example.org/tiles/{z}/{x}/{y}.png"
+	)]
+	#[case::absolute(
+		"https://example.org/tiles.json",
+		"https://tiles.example.com/{z}/{x}/{y}.pbf",
+		"https://tiles.example.com/{z}/{x}/{y}.pbf"
+	)]
+	#[case::absolute_placeholder_in_host(
+		"https://example.org/tiles.json",
+		"https://{z}.tiles.example.com/{x}/{y}.png",
+		"https://{z}.tiles.example.com/{x}/{y}.png"
+	)]
+	#[test]
+	fn resolve_url(#[case] base: &str, #[case] template: &str, #[case] expected: &str) {
+		assert_eq!(resolve_tile_url(base, template).unwrap(), expected);
+	}
+
 	// ── build_tile_url ──────────────────────────────────────────────────
 
 	#[rstest]
@@ -692,6 +777,37 @@ mod tests {
 		let source = Operation::build(vpl, &factory).await?;
 		assert_eq!(*source.metadata().tile_format(), TileFormat::PNG);
 		assert!(source.tilejson().zoom_max().is_some());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn operation_build_resolves_relative_tile_url() -> Result<()> {
+		use crate::PipelineFactory;
+
+		// The template is relative to the TileJSON, so tiles live under /data/.
+		let base = spawn_mock_server(|| {
+			axum::Router::new()
+				.route(
+					"/data/tiles.json",
+					axum::routing::get(|| async {
+						r#"{"tilejson":"3.0.0","tiles":["{z}/{x}/{y}.png"],"minzoom":0,"maxzoom":2}"#
+					}),
+				)
+				.route("/data/1/0/1.png", axum::routing::get(|| async { "relative_tile" }))
+				.fallback(|| async { axum::http::StatusCode::NOT_FOUND })
+		})
+		.await;
+
+		let factory = PipelineFactory::new_dummy();
+		let vpl = crate::vpl::VPLNode::try_from_str(&format!(r#"from_tilejson url="{base}/data/tiles.json""#))?;
+		let source = Operation::build(vpl, &factory).await?;
+		assert_eq!(*source.metadata().tile_format(), TileFormat::PNG);
+
+		let tile = source
+			.tile(&TileCoord::new(1, 0, 1).unwrap())
+			.await?
+			.expect("tile should be present");
+		assert_eq!(tile.into_blob(&TileCompression::Uncompressed)?.as_slice(), b"relative_tile");
 		Ok(())
 	}
 
