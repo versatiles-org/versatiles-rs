@@ -297,18 +297,18 @@ versatiles convert input.mbtiles output.versatiles
 
 **Advanced options:**
 
-| Option                     | Description                                                                        | Example                                  |
-| -------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------- |
-| `--min-zoom`, `--max-zoom` | Filter zoom levels                                                                 | `--min-zoom=5 --max-zoom=12`             |
-| `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max)                                   | `--bbox=13.0,52.3,13.8,52.7`             |
-| `--bbox-border`            | Add border tiles around bbox                                                       | `--bbox-border=3`                        |
-| `--compress`               | Set compression (uncompressed, gzip, brotli, zstd)                                 | `--compress=brotli`                      |
+| Option                     | Description                                                                                                    | Example                                  |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `--min-zoom`, `--max-zoom` | Filter zoom levels                                                                                             | `--min-zoom=5 --max-zoom=12`             |
+| `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max)                                                               | `--bbox=13.0,52.3,13.8,52.7`             |
+| `--bbox-border`            | Add border tiles around bbox                                                                                   | `--bbox-border=3`                        |
+| `--compress`               | Set compression (uncompressed, gzip, brotli, zstd)                                                             | `--compress=brotli`                      |
 | `--tile-format`            | Re-encode raster tiles (avif, jpg, png, webp), optionally with `,quality[,effort]`, or vector tiles (mvt, mlt) | `--tile-format=webp,80`                  |
-| `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)                                               | `--swap-xy`                              |
-| `--flip-y`                 | Flip tiles vertically                                                              | `--flip-y`                               |
-| `--dry-run`                | Check the pipeline and exit, reading no tiles                                      | `--dry-run`                              |
-| `--writer-option`          | Format-specific output option (repeatable)                                         | `--writer-option=allow_unclustered=true` |
-| `--force`                  | Replace a destination directory that is not empty                                  | `--force`                                |
+| `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)                                                                           | `--swap-xy`                              |
+| `--flip-y`                 | Flip tiles vertically                                                                                          | `--flip-y`                               |
+| `--dry-run`                | Check the pipeline and exit, reading no tiles                                                                  | `--dry-run`                              |
+| `--writer-option`          | Format-specific output option (repeatable)                                                                     | `--writer-option=allow_unclustered=true` |
+| `--force`                  | Replace a destination directory that is not empty                                                              | `--force`                                |
 
 **Elevation tiles.** Tiles whose tile schema says they hold heights (`dem/mapbox`, `dem/terrarium`, `dem/versatiles`) are re-encoded without loss when `--tile-format` names a format and no quality: a lossy encoder changes the color bytes a little, and each byte is part of a height. `webp` and `png` can do that; `avif` and `jpg` cannot, so `--tile-format=avif` on such tiles is refused unless you name a quality yourself (`--tile-format=avif,90`) and accept the loss. Other tiles get the encoder's default quality, as before.
 
