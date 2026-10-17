@@ -17,7 +17,8 @@ use crate::{
 /// Discarding low bits that carry no usable signal makes the tiles compress much
 /// better. The step is derived per tile from two physical criteria —
 /// `elevation_error` relative to the pixel's ground size, and `slope_error` —
-/// and the stricter of the two wins.
+/// and the stricter of the two wins. The slope criterion applies to the slope
+/// as MapLibre shades it, which exaggerates slopes below zoom 15 (64× at zoom 0).
 ///
 /// Values are rounded to the nearest multiple of the step rather than
 /// truncated, which halves the worst-case elevation error and removes the
@@ -26,7 +27,7 @@ struct Args {
 	/// Allowed elevation error as a fraction of the pixel's ground size. Defaults to `0.1`.
 	#[vpl(default = "0.1")]
 	elevation_error: Option<f64>,
-	/// Largest slope change in degrees that quantization may introduce. Defaults to `1.0`.
+	/// Largest slope change in degrees, as MapLibre shades it, quantization may add. Defaults to `1.0`.
 	#[vpl(default = "1.0")]
 	slope_error: Option<f64>,
 	/// DEM encoding of the source. Defaults to the encoding its tile schema implies.
@@ -38,6 +39,26 @@ struct Operation {
 	elevation_error: f64,
 	slope_error: f64,
 	encoding: DemEncoding,
+}
+
+/// How much MapLibre multiplies slopes when it hillshades a tile of zoom `level`.
+///
+/// Mirrors `hillshade_prepare.fragment.glsl`: below zoom 15 the derivative is
+/// scaled by `2^((15 - z) * f)`, with `f` 0.4 below zoom 2, 0.35 below zoom 4.5
+/// and 0.3 above, so relief stays visible at low zoom. That is 64× at zoom 0,
+/// which turns a step that is invisible in the true slope into a terrace.
+/// MapLibre passes the overscaled zoom, so a tile shown overzoomed is
+/// exaggerated less; its native zoom is the worst case.
+fn maplibre_slope_exaggeration(level: u8) -> f64 {
+	let z = f64::from(level);
+	let factor = if z < 2.0 {
+		0.4
+	} else if z < 4.5 {
+		0.35
+	} else {
+		0.3
+	};
+	if z < 15.0 { ((15.0 - z) * factor).exp2() } else { 1.0 }
 }
 
 /// Compute the round-to-nearest quantizer for a tile from its coordinates, its
@@ -64,8 +85,8 @@ fn compute_quantizer(
 	// Criterion 1: elevation error
 	let max_step_resolution = elevation_error * pixel_meters;
 
-	// Criterion 2: slope error
-	let max_step_gradient = pixel_meters * f64::tan(slope_error.to_radians());
+	// Criterion 2: slope error, as MapLibre exaggerates it
+	let max_step_gradient = pixel_meters * f64::tan(slope_error.to_radians()) / maplibre_slope_exaggeration(coord.level);
 
 	// Pick the stricter constraint
 	let max_step_meters = max_step_resolution.min(max_step_gradient);
@@ -221,14 +242,49 @@ mod tests {
 	fn test_masks_zoom0_equator_mapbox() {
 		// Zoom 0 equatorial tile: ground ≈ 40M m, pixel ≈ 156K m
 		// With ratio=0.5: step ≈ 78K m → raw ≈ 780K → zero_bits ≈ 19
-		// With gradient=1°: step ≈ 2.7K m → raw ≈ 27K → zero_bits ≈ 14
-		// Gradient is stricter → zero_bits ≈ 14
-		// 14 zero bits: B fully zeroed (bits 0-7), G partially (bits 8-13), R preserved (bits 16-23)
+		// With gradient=1°, exaggerated 64×: step ≈ 43 m → raw ≈ 427 → zero_bits = 8
+		// Gradient is stricter → zero_bits = 8: B fully zeroed, R and G preserved
 		let coord = TileCoord::new(0, 0, 0).unwrap();
 		let (mr, mg, mb) = masks(&coord, 0.5, 1.0, DemEncoding::Mapbox);
-		assert_eq!(mr, 0xFF, "R should be preserved at zoom 0 (only 14 bits zeroed)");
-		assert_ne!(mg, 0xFF, "G should be partially masked at zoom 0");
-		assert_eq!(mb, 0x00, "B should be fully zeroed at zoom 0");
+		assert_eq!((mr, mg, mb), (0xFF, 0xFF, 0x00));
+	}
+
+	#[test]
+	fn exaggeration_matches_maplibre() {
+		let cases = [
+			(0, 64.0),
+			(1, 48.50),
+			(2, 23.43),
+			(4, 14.42),
+			(5, 8.0),
+			(14, 1.231),
+			(15, 1.0),
+			(20, 1.0),
+		];
+		for (level, expected) in cases {
+			let got = maplibre_slope_exaggeration(level);
+			assert!((got - expected).abs() < 0.01, "zoom {level}: {got} != {expected}");
+		}
+	}
+
+	/// One quantization step between neighbouring pixels, shaded as MapLibre
+	/// shades it, stays within the slope budget at every zoom. `zero_bits` is
+	/// `floor(log2(max_step_raw + 1))`, so the step may pass the budget by up to
+	/// one raw unit, which is left out of the check.
+	#[test]
+	fn shaded_step_stays_within_slope_budget() {
+		for level in 0..=18 {
+			let coord = TileCoord::new(level, 0, (1 << level) / 2).unwrap();
+			let (mask_24, _) = compute_quantizer(&coord, 256, 0.1, 1.0, DemEncoding::Mapbox);
+			let step_meters = f64::from((!mask_24 & 0x00FF_FFFF) + 1) * raw_unit_meters(DemEncoding::Mapbox);
+			let step_meters = if mask_24 == 0x00FF_FFFF { 0.0 } else { step_meters };
+			let step_meters = (step_meters - raw_unit_meters(DemEncoding::Mapbox)).max(0.0);
+			let pixel_meters = coord.ground_size_meters() / 256.0;
+			let shaded = (step_meters / pixel_meters * maplibre_slope_exaggeration(level))
+				.atan()
+				.to_degrees();
+			assert!(shaded <= 1.0, "zoom {level}: a step shades as {shaded:.2}°");
+		}
 	}
 
 	#[test]

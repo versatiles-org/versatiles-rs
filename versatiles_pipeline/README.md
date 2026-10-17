@@ -449,14 +449,14 @@ Only the averaging differs. Read order, what a tile costs to build on demand, an
 
 Quantizes DEM raster tiles by rounding elevations to a per-tile power-of-two step.
 
-Discarding low bits that carry no usable signal makes the tiles compress much better. The step is derived per tile from two physical criteria — `elevation_error` relative to the pixel's ground size, and `slope_error` — and the stricter of the two wins.
+Discarding low bits that carry no usable signal makes the tiles compress much better. The step is derived per tile from two physical criteria — `elevation_error` relative to the pixel's ground size, and `slope_error` — and the stricter of the two wins. The slope criterion applies to the slope as MapLibre shades it, which exaggerates slopes below zoom 15 (64× at zoom 0).
 
 Values are rounded to the nearest multiple of the step rather than truncated, which halves the worst-case elevation error and removes the downward bias at no cost in size. Single-pass: no scan of the data first.
 
 ### Parameters
 
 - _`elevation_error`: f64 (optional)_ - Allowed elevation error as a fraction of the pixel's ground size. Defaults to `0.1`.
-- _`slope_error`: f64 (optional)_ - Largest slope change in degrees that quantization may introduce. Defaults to `1.0`.
+- _`slope_error`: f64 (optional)_ - Largest slope change in degrees, as MapLibre shades it, quantization may add. Defaults to `1.0`.
 - _`encoding`: DemEncoding (optional)_ - Values: `mapbox`, `terrarium`. DEM encoding of the source. Defaults to the encoding its tile schema implies.
 
 ---
