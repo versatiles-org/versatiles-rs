@@ -27,7 +27,8 @@ unmaintained = "workspace"
 yanked = "deny"
 
 # Advisories consciously accepted. Every entry needs a reason and, where the fix
-# is out of our hands, the upstream issue that would close it.
+# is out of our hands, the upstream issue that would close it. The full argument
+# goes in the comment; `reason` is the line cargo-deny prints when it skips one.
 ignore = [
 	# RUSTSEC-2023-0071 — timing sidechannel in `rsa` (Marvin Attack).
 	#
@@ -64,7 +65,7 @@ ignore = [
 	# RustSec lists no safe upgrade (https://github.com/RustCrypto/RSA/issues/626),
 	# so there is nothing to bump to; drop this entry once `russh` depends on a
 	# fixed `rsa`.
-	"RUSTSEC-2023-0071",
+	{ id = "RUSTSEC-2023-0071", reason = "Marvin needs a decryption oracle; an SSH client only signs. No fixed rsa (RustCrypto/RSA#626)" },
 	# RUSTSEC-2026-0097 — `rand` 0.7.3 is unsound with a custom logger.
 	#
 	# Reached through `mlt-core` → `probabilistic-collections` 0.7.0, which pins
@@ -79,7 +80,7 @@ ignore = [
 	# Drop this entry once `mlt-core` no longer depends on
 	# `probabilistic-collections`
 	# (https://github.com/maplibre/maplibre-tile-spec/issues/1950).
-	"RUSTSEC-2026-0097",
+	{ id = "RUSTSEC-2026-0097", reason = "rand 0.7 is built without its log feature; maplibre/maplibre-tile-spec#1950" },
 ]
 
 [licenses]
@@ -132,6 +133,9 @@ wildcards = "deny"
 # file — the cheapest supply-chain guard available.
 unknown-registry = "deny"
 unknown-git = "deny"
+# A git dependency has to name its exact commit: a branch or tag can move under
+# us without a change in this repository.
+required-git-spec = "rev"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 
 # The one exception, and a temporary one: `gdal`/`gdal-sys` are pinned to a fork

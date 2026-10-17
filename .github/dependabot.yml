@@ -19,6 +19,15 @@ updates:
     open-pull-requests-limit: 0
     groups: { security: { applies-to: security-updates, patterns: ['*'] } }
 
+  # The platform packages are this package's own builds, set to the release
+  # version by scripts/sync-version.sh; they are never updated on their own.
+  - package-ecosystem: npm
+    directory: /versatiles_node
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 0
+    ignore: [{ dependency-name: '@versatiles/versatiles-rs-*' }]
+    groups: { security: { applies-to: security-updates, patterns: ['*'] } }
+
   # Monthly regular updates
   - package-ecosystem: cargo
     directory: /
@@ -47,4 +56,12 @@ updates:
     schedule: { interval: monthly }
     groups:
       docker: { patterns: ['*'] }
+      security: { applies-to: security-updates, patterns: ['*'] }
+
+  - package-ecosystem: npm
+    directory: /versatiles_node
+    schedule: { interval: monthly }
+    ignore: [{ dependency-name: '@versatiles/versatiles-rs-*' }]
+    groups:
+      npm: { patterns: ['*'] }
       security: { applies-to: security-updates, patterns: ['*'] }
