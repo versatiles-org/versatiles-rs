@@ -470,6 +470,11 @@ impl VectorTileFeature {
 				// Degenerate ring — would be filtered by the encoder anyway.
 				continue;
 			}
+			// A ring without `ClosePath` is closed here, which is all the
+			// repair it needs; the area above is the same either way.
+			if ring_coords.first() != ring_coords.last() {
+				ring_coords.push(ring_coords[0]);
+			}
 			ensure!(ring_coords.len() >= 4, "polygon ring must have at least 4 points");
 			ensure!(ring_coords.first() == ring_coords.last(), "polygon ring must be closed");
 

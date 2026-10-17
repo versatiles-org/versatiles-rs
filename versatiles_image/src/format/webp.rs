@@ -137,6 +137,9 @@ fn encode_lossless(data: &[u8], width: i32, height: i32, has_alpha: bool, effort
 	config.exact = 1;
 
 	// Map effort (0=fastest, 100=best compression) to libwebp method and quality.
+	// Clamped like the lossy path: an effort above 100 used to miss the
+	// `== 100` arm and get the second-best setting.
+	let effort = effort.min(100);
 	let (method, quality) = if effort == 100 {
 		(6, 100.0)
 	} else if effort >= 90 {
@@ -290,6 +293,18 @@ mod tests {
 	/// and verification that fully opaque RGBA is stored without alpha.
 	use super::*;
 	use crate::traits::DynamicImageTraitTest;
+
+	/// An effort above 100 is the best setting, as in the lossy encoder; it
+	/// used to fall through to the second best.
+	#[test]
+	fn lossless_effort_above_100_is_clamped() -> Result<()> {
+		let image = DynamicImage::new_test_rgb();
+		assert_eq!(
+			encode(&image, Some(100), Some(255))?.as_slice(),
+			encode(&image, Some(100), Some(100))?.as_slice()
+		);
+		Ok(())
+	}
 
 	/// The decoded image is sized by the decoder, not by the file header, and a
 	/// roundtrip still returns the dimensions it went in with.

@@ -13,19 +13,22 @@
 //! - **`MissingVersion`**: sets `layer.version = Some(1)`.
 //! - **`DuplicateLayerName`**: the first layer with a given name is kept; all
 //!   subsequent duplicates are dropped.
-//! - **`OrphanInnerRing`** / **`DegenerateRing`**: the layer is rebuilt through
-//!   [`VectorTileLayer::from_features`], which normalises polygon ring winding
-//!   and drops rings that round to fewer than 3 distinct grid points.
+//! - **`OrphanInnerRing`** / **`DegenerateRing`** / **`UnclosedRing`**: the
+//!   layer is rebuilt through [`VectorTileLayer::from_features`], which
+//!   normalises polygon ring winding and drops rings that round to fewer than 3
+//!   distinct grid points; an unclosed ring is closed on the way.
+//! - **`UnknownGeometryType`**: the feature is kept, without the data it
+//!   carried — geometry type 0 has no shape to read it as — as the spec's
+//!   "no geometry" form.
 //!
 //! ### Controlled by `drop_offenders`
 //!
-//! Some features cannot be decoded at all (geometry byte stream is corrupt) or
-//! carry geometry type 0 with non-empty data (ambiguous). When `drop_offenders`
-//! is `true` these features are silently removed from the output. When it is
-//! `false` (the default), the geometry rebuild for that layer is skipped —
-//! structural fixes (extent, version) are still applied, but the features are
-//! left as they are in the wire bytes, preserving every byte of the original
-//! payload.
+//! Some features cannot be decoded at all: their geometry byte stream is
+//! corrupt. When `drop_offenders` is `true` these features are silently
+//! removed from the output. When it is `false` (the default), the geometry
+//! rebuild for that layer is skipped — structural fixes (extent, version) are
+//! still applied, but the features are left as they are in the wire bytes,
+//! preserving every byte of the original payload.
 
 use std::collections::HashSet;
 
@@ -163,6 +166,44 @@ mod tests {
 		let mut layer = VectorTileLayer::new(name.to_string(), 4096, 1);
 		layer.features = features;
 		layer
+	}
+
+	/// A polygon ring without `ClosePath`: MoveTo, then LineTo three points.
+	fn unclosed_polygon_feature() -> VectorTileFeature {
+		let mut writer = ValueWriterBlob::new_le();
+		writer.write_varint((1 << 3) | 0x1).unwrap();
+		writer.write_svarint(0).unwrap();
+		writer.write_svarint(0).unwrap();
+		writer.write_varint((3 << 3) | 0x2).unwrap();
+		for (dx, dy) in [(4, 0), (0, 4), (-4, 0)] {
+			writer.write_svarint(dx).unwrap();
+			writer.write_svarint(dy).unwrap();
+		}
+		VectorTileFeature {
+			id: None,
+			tag_ids: vec![],
+			geom_type: GeomType::MultiPolygon,
+			geom_data: writer.into_blob(),
+		}
+	}
+
+	/// The strict decoder refuses an unclosed ring, and the validator used to
+	/// pass it, so `repair_tile` returned it unrepaired. It is reported now,
+	/// and closed by the repair.
+	#[test]
+	fn repairs_an_unclosed_ring() -> Result<()> {
+		let feature = unclosed_polygon_feature();
+		assert!(
+			feature.to_geometry().is_err(),
+			"the fixture should be refused by the strict decoder"
+		);
+		let tile = VectorTile::new(vec![layer_with("l", vec![feature])]);
+		assert_eq!(validate_tile(&tile)[0].kind, IssueKind::UnclosedRing);
+
+		let repaired = repair_tile(tile, false)?;
+		assert_eq!(validate_tile(&repaired), []);
+		assert!(repaired.layers[0].features[0].to_geometry().is_ok());
+		Ok(())
 	}
 
 	#[test]

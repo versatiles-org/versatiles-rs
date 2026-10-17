@@ -64,6 +64,9 @@ impl DynamicImageTraitConvert for DynamicImage {
 
 	#[context("creating image from raw ({}x{})", width, height)]
 	fn from_raw(width: usize, height: usize, data: Vec<u8>) -> Result<DynamicImage> {
+		// The channel count is the data length divided by the pixel count, which
+		// a zero dimension made a division by zero.
+		ensure!(width > 0 && height > 0, "an image needs a width and a height above 0");
 		let channel_count = data.len() / (width * height);
 		ensure!(
 			channel_count * width * height == data.len(),
@@ -147,6 +150,13 @@ mod tests {
 
 	use super::*;
 	use crate::{DynamicImageTraitInfo, DynamicImageTraitOperation};
+
+	/// A zero dimension used to divide by zero.
+	#[test]
+	fn from_raw_refuses_an_empty_image() {
+		assert!(DynamicImage::from_raw(0, 0, vec![]).is_err());
+		assert!(DynamicImage::from_raw(0, 3, vec![1, 2, 3]).is_err());
+	}
 
 	fn sample_l8() -> DynamicImage {
 		DynamicImage::from_fn(4, 3, |x, y| [((x + y) % 2) as u8])

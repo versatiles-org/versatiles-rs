@@ -262,6 +262,8 @@ pub struct ValidationCounters {
 	pub duplicate_layer_name: u64,
 	/// Inner rings with no enclosing outer ring — [`IssueKind::OrphanInnerRing`].
 	pub orphan_inner: u64,
+	/// Polygon rings without a `ClosePath` — [`IssueKind::UnclosedRing`].
+	pub unclosed_ring: u64,
 	/// Rings with fewer than three vertices —
 	/// [`DegenerateReason::TooFewVertices`].
 	pub degenerate_too_few: u64,
@@ -299,6 +301,7 @@ impl ValidationCounters {
 			+ self.missing_version
 			+ self.duplicate_layer_name
 			+ self.orphan_inner
+			+ self.unclosed_ring
 			+ self.degenerate_too_few
 			+ self.degenerate_sub_pixel
 			+ self.degenerate_collinear
@@ -316,6 +319,7 @@ impl ValidationCounters {
 			+ self.missing_version
 			+ self.duplicate_layer_name
 			+ self.orphan_inner
+			+ self.unclosed_ring
 			+ self.degenerate_too_few
 			+ self.degenerate_sub_pixel
 			+ self.degenerate_collinear
@@ -337,6 +341,7 @@ impl ValidationCounters {
 			("MissingVersion", self.missing_version),
 			("DuplicateLayerName", self.duplicate_layer_name),
 			("OrphanInnerRing", self.orphan_inner),
+			("UnclosedRing", self.unclosed_ring),
 			("DegenerateRing(TooFewVertices)", self.degenerate_too_few),
 			("DegenerateRing(SubPixel)", self.degenerate_sub_pixel),
 			("DegenerateRing(Collinear)", self.degenerate_collinear),
@@ -354,6 +359,7 @@ impl ValidationCounters {
 			IssueKind::MissingVersion => self.missing_version += 1,
 			IssueKind::DuplicateLayerName => self.duplicate_layer_name += 1,
 			IssueKind::OrphanInnerRing => self.orphan_inner += 1,
+			IssueKind::UnclosedRing => self.unclosed_ring += 1,
 			IssueKind::DegenerateRing(DegenerateReason::TooFewVertices) => self.degenerate_too_few += 1,
 			IssueKind::DegenerateRing(DegenerateReason::SubPixel) => self.degenerate_sub_pixel += 1,
 			IssueKind::DegenerateRing(DegenerateReason::Collinear) => self.degenerate_collinear += 1,
@@ -377,6 +383,7 @@ pub fn describe_issue_kind(kind: &IssueKind) -> String {
 		IssueKind::MissingVersion => "MissingVersion".to_string(),
 		IssueKind::DuplicateLayerName => "DuplicateLayerName".to_string(),
 		IssueKind::OrphanInnerRing => "OrphanInnerRing".to_string(),
+		IssueKind::UnclosedRing => "UnclosedRing".to_string(),
 		IssueKind::DegenerateRing(reason) => format!("DegenerateRing({reason:?})"),
 		IssueKind::UnknownGeometryType => "UnknownGeometryType".to_string(),
 		IssueKind::EmptyGeometryForType(geom_type) => format!("EmptyGeometryForType({geom_type:?})"),

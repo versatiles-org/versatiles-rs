@@ -24,6 +24,8 @@
 //!   (counter-clockwise in screen-Y) appears before any positive-area ring in
 //!   the same feature. The strict decoder drops it; usually a symptom of
 //!   inverted winding in the source data.
+//! - **`UnclosedRing`**: a polygon ring without a `ClosePath`, which the
+//!   strict decoder refuses.
 //! - **`DegenerateRing`**: a ring that rounds to fewer than 3 distinct
 //!   integer-grid points (`SubPixel`), has fewer than 3 vertices
 //!   (`TooFewVertices`), or has zero/near-zero surveyor area (`Collinear`).
@@ -90,6 +92,10 @@ pub enum IssueKind {
 	/// positive-area ring in this feature. The strict decoder drops it as an
 	/// orphan; usually indicates inverted polygon winding upstream.
 	OrphanInnerRing,
+	/// A polygon ring that does not end where it starts: its command stream
+	/// has no `ClosePath`. MVT 2.1 §4.3.4.4 requires one, and the strict
+	/// decoder refuses the feature.
+	UnclosedRing,
 	/// A ring that would not render after encoding to MVT integer-grid
 	/// coordinates. The wrapped reason gives the precise failure mode.
 	DegenerateRing(DegenerateReason),
@@ -228,6 +234,18 @@ fn check_polygon_rings(
 ) {
 	let mut saw_outer = false;
 	for ring in rings {
+		// Checked first: `to_geometry` refuses such a feature outright, and
+		// without this the validator passed it, so `repair_tile` took its fast
+		// path and returned it unrepaired.
+		if ring.first() != ring.last() {
+			issues.push(ValidationIssue {
+				layer: layer.to_string(),
+				feature_index: Some(feature_index),
+				kind: IssueKind::UnclosedRing,
+			});
+			continue;
+		}
+
 		// Degeneracy is a structural issue independent of winding.
 		if let Some(reason) = degeneracy_reason(ring) {
 			issues.push(ValidationIssue {
