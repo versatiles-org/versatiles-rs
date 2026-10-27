@@ -1120,20 +1120,37 @@ jobs:
             gh release edit "$TAG" --draft=false --latest --prerelease=false
           fi
 
+      # `github.token` cannot start workflows in other repositories. This mints
+      # a token from the organisation's release GitHub App instead, valid for
+      # an hour, for the two repositories below and Actions only. It replaced
+      # a personal access token, which expired and failed the v5.4.1 release.
+      - name: Create token for the Docker and Homebrew repositories
+        id: app-token
+        if: needs.prepare.outputs.is_prerelease == 'false'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: versatiles-org
+          repositories: |
+            versatiles-docker
+            homebrew-versatiles
+          permission-actions: write
+
       - name: Trigger Docker release
         if: needs.prepare.outputs.is_prerelease == 'false'
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           echo "Triggering Docker release for stable version"
-          gh auth status -h github.com
-          gh workflow view release.yml --repo versatiles-org/versatiles-docker --yaml
           gh workflow run release.yml --repo versatiles-org/versatiles-docker --ref main
 
+      # Runs even when the Docker trigger failed, so one broken downstream
+      # repository does not hold back the other. The job still fails.
       - name: Trigger Homebrew formula update
-        if: needs.prepare.outputs.is_prerelease == 'false'
+        if: ${{ !cancelled() && steps.app-token.outcome == 'success' && needs.prepare.outputs.is_prerelease == 'false' }}
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           echo "Triggering Homebrew formula update for stable version"
           gh workflow run update_formula.yml --repo versatiles-org/homebrew-versatiles --ref main

@@ -395,7 +395,10 @@ npm publishing uses trusted publishing (OIDC) and needs no token; the rest do:
 
 - `NPM_TOKEN`: Fallback automation token for npm, with publish permissions to the @versatiles scope
 - `CRATES_IO_TOKEN`: Publishes the crates to crates.io
-- `PAT_TOKEN`: Triggers the Docker and Homebrew workflows in their own repositories
+- `RELEASE_APP_PRIVATE_KEY`, with the variable `RELEASE_APP_CLIENT_ID`: a
+  versatiles-org GitHub App with Actions read and write, installed on
+  `versatiles-docker` and `homebrew-versatiles`. The release uses it to trigger
+  their workflows
 - `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`: Docker Hub login for the Linux build containers
 
 ### Local Tools Required
