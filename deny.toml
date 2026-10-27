@@ -18,7 +18,8 @@ all-features = true
 [advisories]
 # Vulnerabilities are always denied. Unsound crates are denied anywhere in the
 # graph: cargo-deny's default reports them only for direct dependencies, which
-# let a transitive one reach a release unnoticed (RUSTSEC-2026-0097 below).
+# let a transitive one reach a release unnoticed (RUSTSEC-2026-0097, `rand` 0.7
+# through `mlt-core`, until mlt-core 0.22).
 # Unmaintained crates are reported only when the workspace depends on one
 # directly: those we can act on. A transitive one is the upstream crate's
 # problem until it turns into an actual advisory.
@@ -66,21 +67,6 @@ ignore = [
 	# so there is nothing to bump to; drop this entry once `russh` depends on a
 	# fixed `rsa`.
 	{ id = "RUSTSEC-2023-0071", reason = "Marvin needs a decryption oracle; an SSH client only signs. No fixed rsa (RustCrypto/RSA#626)" },
-	# RUSTSEC-2026-0097 — `rand` 0.7.3 is unsound with a custom logger.
-	#
-	# Reached through `mlt-core` → `probabilistic-collections` 0.7.0, which pins
-	# `rand` 0.7 and has had no release since 2020; the fix exists only from
-	# 0.8.6, so there is nothing to bump to.
-	#
-	# The unsoundness needs `rand`'s `log` feature, and a logger that draws from
-	# `ThreadRng` while it reseeds. Nothing in the graph enables `log` on
-	# `rand` 0.7 (`cargo tree -i rand@0.7.3 -e features --all-features
-	# --target all`), so the code path does not exist in our builds.
-	#
-	# Drop this entry once `mlt-core` no longer depends on
-	# `probabilistic-collections`
-	# (https://github.com/maplibre/maplibre-tile-spec/issues/1950).
-	{ id = "RUSTSEC-2026-0097", reason = "rand 0.7 is built without its log feature; maplibre/maplibre-tile-spec#1950" },
 ]
 
 [licenses]
