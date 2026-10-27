@@ -300,6 +300,22 @@ jobs:
         working-directory: ./versatiles_node
         run: npm run test:examples
 
+      # The two checks below need Node.js but not the bindings. They live here
+      # because this job already has Node.js and, through the lockfile, the
+      # pinned Prettier; scripts/check.sh runs them too.
+
+      # The markdown-lint job checks the rules, not the formatting. `**.md` is
+      # in `paths-ignore`, so this reaches a Markdown change once a commit
+      # touching anything else is pushed — the release commit, at the latest.
+      - name: Check Markdown format
+        run: versatiles_node/node_modules/.bin/prettier --check "**/*.md"
+
+      # The `drawn` of each case in versatiles_pipeline/tests/reduce_cases/
+      # against MapLibre's style-spec package. The Rust tests only compare the
+      # reduction with those `drawn`, which are written by hand.
+      - name: Check reduction cases against MapLibre
+        run: node scripts/check-reduce-cases.mjs
+
   # ============================================================================
   # Linux: Coverage
   # ============================================================================
