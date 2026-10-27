@@ -163,11 +163,13 @@ watching; only a red run counts as a CI failure.
 
 This script will:
 
-- Check the branch, a clean tree, `gh auth status`, and that `origin/main` is an
-  ancestor of `dev`
+- Check the branch, a clean tree, `cargo-deny`, `gh auth status`, and that
+  `origin/main` is an ancestor of `dev`
 - Regenerate the auto-built READMEs, committing them as a separate signed
   `docs:` commit if they changed
-- Run `./scripts/check.sh`
+- Run `cargo fmt-check` and `cargo deny check`, the two checks most likely to
+  turn the release CI red. Everything else in `./scripts/check.sh` is checked by
+  CI, which the release waits for
 - Set the new version in the Cargo manifests, `Cargo.lock`, `package.json` and
   `package-lock.json` (`cargo release version` only edits files)
 - Create the signed release commit (`git commit -S`)
@@ -399,6 +401,7 @@ npm publishing uses trusted publishing (OIDC) and needs no token; the rest do:
 ### Local Tools Required
 
 - cargo-release: `cargo install cargo-release`
+- cargo-deny: `brew install cargo-deny` or `cargo install cargo-deny`
 - GitHub CLI: `brew install gh` or `apt install gh`, logged in (`gh auth login`)
 - A git signing key (GPG or SSH): the release commit and tag are signed
 - Node.js >= 22.12

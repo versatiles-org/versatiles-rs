@@ -237,6 +237,11 @@ preflight_checks() {
 		exit 1
 	fi
 
+	if ! command -v cargo-deny >/dev/null 2>&1; then
+		log_error "Required: cargo-deny for the pre-release checks (brew install cargo-deny)"
+		exit 1
+	fi
+
 	if ! gh auth status >/dev/null 2>&1; then
 		log_error "Not logged in to GitHub CLI; run: gh auth login"
 		exit 1
@@ -529,9 +534,18 @@ main() {
 	# commit before the release commit so the version-bump diff stays minimal.
 	regenerate_readmes
 
+	# Only the two quick checks most likely to turn the release CI red: it
+	# checks everything scripts/check.sh does and more, and the release waits
+	# for it before main and the tag move. Format, because `cargo fmt-check` is
+	# the cheapest way to fail; deny, because a new RustSec advisory reddens CI
+	# without any change in the repository.
 	log_step "Running checks..."
-	if ! ./scripts/check.sh; then
-		log_error "Checks failed!"
+	if ! cargo fmt-check; then
+		log_error "Format check failed! Run: cargo fmt-all"
+		exit 1
+	fi
+	if ! cargo deny check; then
+		log_error "cargo deny failed!"
 		exit 1
 	fi
 	log_success "Checks passed"
