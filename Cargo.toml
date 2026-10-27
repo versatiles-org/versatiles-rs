@@ -180,7 +180,7 @@ overflow-checks = true
 anyhow = { version = "1.0.104", default-features = false, features = ["std"] }
 async-trait = { version = "0.1.92", default-features = false }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
-enumset = { version = "1.1.14", default-features = false }
+enumset = { version = "1.1.15", default-features = false }
 futures = { version = "0.3.34", features = ["default"] }
 itertools = { version = "0.15.0", default-features = false }
 log = { version = "0.4.34", default-features = false }
@@ -191,7 +191,7 @@ regex = { version = "1.13.1", default-features = false, features = [
 	"unicode-perl",
 ] }
 serde = { version = "1.0.229", features = ["derive"] }
-tokio = { version = "1.53.3", features = ["rt-multi-thread", "sync"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
 clap = { version = "4.6.7", features = ["default", "derive", "wrap_help"] }
@@ -226,23 +226,23 @@ imageproc = { version = "0.27.0", default-features = false }
 # Geometry dependencies
 geo = { version = "0.33.1", default-features = false }
 geo-types = { version = "0.7.20" }
-mlt-core = { version = "0.21.0", default-features = false }
+mlt-core = { version = "0.22.0", default-features = false }
 rstar = { version = "0.13.0", default-features = false }
 
 # Utility dependencies
-wildmatch = { version = "2.6.1", default-features = false }
+wildmatch = { version = "2.7.0", default-features = false }
 
 # Multithreading optimization dependencies
 moka = { version = "0.12", features = ["future"] }  # Lock-free LRU cache
 dashmap = "6.2"                                     # Concurrent HashMap
-parking_lot = "0.12"                                # Fast synchronization
+parking_lot = "0.13"                                # Fast synchronization
 arc-swap = "1.9"                                    # Lock-free updates
 
 # Development dependencies
 approx = { version = "0.5.1", default-features = false, features = ["std"] }
 assert_fs = "1.1.4"
 pretty_assertions = "1.4.1"
-rstest = { version = "0.27.0", default-features = false }
+rstest = { version = "0.28.0", default-features = false }
 tempfile = "3.27.0"
 
 versatiles = { version = "5.4.0", path = "versatiles", default-features = false }

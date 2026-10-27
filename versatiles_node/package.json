@@ -87,7 +87,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@napi-rs/cli": "^3.10.8",
+    "@napi-rs/cli": "^3.10.9",
     "@types/node": "^26.6.5",
     "@vitest/ui": "^5.0.5",
     "chalk": "^6.0.1",
@@ -98,7 +98,7 @@
     "tsx": "^4.23.15",
     "typedoc": "^0.28.20",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.71.2",
+    "typescript-eslint": "^8.72.1",
     "vitest": "^5.0.5"
   },
   "optionalDependencies": {
