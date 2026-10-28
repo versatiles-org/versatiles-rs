@@ -68,6 +68,10 @@ impl<'a> ByteIterator<'a> {
 	}
 
 	#[inline]
+	#[expect(
+		clippy::arithmetic_side_effects,
+		reason = "`buffer_pos` is below `buffer_len`, which is at most BUFFER_SIZE"
+	)]
 	fn next_byte(&mut self) -> Option<u8> {
 		if self.buffer_pos >= self.buffer_len {
 			self.fill_buffer();
@@ -117,9 +121,13 @@ impl<'a> ByteIterator<'a> {
 			if self.peeked_byte.is_none() {
 				debug_output.push_str("<EOF>");
 			}
-			anyhow!("{msg} at position {}: {}", self.position - 1, debug_output)
+			anyhow!(
+				"{msg} at position {}: {}",
+				self.position.saturating_sub(1),
+				debug_output
+			)
 		} else {
-			anyhow!("{msg} at position {}", self.position - 1)
+			anyhow!("{msg} at position {}", self.position.saturating_sub(1))
 		}
 	}
 
@@ -157,7 +165,9 @@ impl<'a> ByteIterator<'a> {
 			let index = self.position % DEBUG_RING_BUFFER_SIZE;
 			self.debug_buffer[index] = byte;
 		}
-		self.position += 1;
+		// Saturating: `advance` past the end keeps counting, and nothing bounds
+		// how often a caller does that.
+		self.position = self.position.saturating_add(1);
 	}
 
 	/// Consumes and returns the current peeked byte, advancing the iterator.
