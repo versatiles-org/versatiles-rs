@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Run all Rust quality checks across the workspace.
 #
-# Steps (in order): rustfmt, cargo check (no-default-features, server, cli,
+# Steps (in order): rustfmt, the copy of the release profile in
+# versatiles/Cargo.toml, cargo check (no-default-features, server, cli,
 # server+cli, default, all-features), clippy with -D warnings (whole workspace,
 # then each crate with each feature alone via cargo-hack), tests with all
 # features, the reduction cases' drawn features against MapLibre, doc build with
@@ -25,6 +26,14 @@ echo "=========================================="
 
 echo "cargo fmt-all"
 cargo fmt-all
+
+# versatiles/Cargo.toml copies the release profile for `cargo install` (#291).
+echo "release profile copy"
+result=$(python3 scripts/check-release-profile.py 2>&1)
+if [ $? -ne 0 ]; then
+   echo -e "$result\nERROR DURING: release profile copy"
+   exit 1
+fi
 
 echo "cargo check"
 result=$(cargo check --color=always --workspace --no-default-features --all-targets 2>&1)

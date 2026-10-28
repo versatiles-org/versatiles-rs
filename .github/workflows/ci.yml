@@ -107,6 +107,11 @@ jobs:
       - name: Check format
         run: cargo fmt-check
 
+      # versatiles/Cargo.toml carries a copy of the release profile for
+      # `cargo install versatiles` (#291). Fails when the two differ.
+      - name: Check release profile copy
+        run: python3 scripts/check-release-profile.py
+
   # ============================================================================
   # Linux: Dependencies
   # ============================================================================

@@ -17,14 +17,15 @@ Run any of them as `./scripts/<name>` from anywhere in the repository.
 
 ## Check / Quality
 
-| Script                   | Purpose                                                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| `check.sh`               | Run all quality checks: Rust, Node.js, and Markdown. Run this before committing or opening a pull request                 |
-| `check-rust.sh`          | Run all Rust quality checks across the workspace                                                                          |
-| `check-node.sh`          | Run all Node.js quality checks for the `versatiles_node` package                                                          |
-| `check-markdown.sh`      | Lint all Markdown files in the repository with `markdownlint-cli2`                                                        |
-| `check-reduce-cases.mjs` | Check the features the `vector_reduce_to_style` cases say are drawn against MapLibre's style-spec; run by `check-rust.sh` |
-| `format.sh`              | Auto-format the codebase in place — the write-mode counterpart to `check.sh`                                              |
+| Script                     | Purpose                                                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `check.sh`                 | Run all quality checks: Rust, Node.js, and Markdown. Run this before committing or opening a pull request                 |
+| `check-rust.sh`            | Run all Rust quality checks across the workspace                                                                          |
+| `check-node.sh`            | Run all Node.js quality checks for the `versatiles_node` package                                                          |
+| `check-markdown.sh`        | Lint all Markdown files in the repository with `markdownlint-cli2`                                                        |
+| `check-reduce-cases.mjs`   | Check the features the `vector_reduce_to_style` cases say are drawn against MapLibre's style-spec; run by `check-rust.sh` |
+| `check-release-profile.py` | Check that `versatiles/Cargo.toml` carries the workspace's release profile, for `cargo install`; run by `check-rust.sh`   |
+| `format.sh`                | Auto-format the codebase in place — the write-mode counterpart to `check.sh`                                              |
 
 ## Test
 

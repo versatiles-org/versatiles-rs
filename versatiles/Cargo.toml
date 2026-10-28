@@ -130,3 +130,33 @@ sftp = ["versatiles_container/sftp"]
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["env_logger", "glob", "termimad"]
+
+# A copy of the workspace's release profile, for builds in which this crate is
+# the root: `cargo install versatiles`, and packagers building from crates.io.
+# Cargo reads profiles only from the root manifest, and a published crate does
+# not carry the workspace's (#291). Without this copy those builds lose LTO and,
+# worse, the overflow checks in the crates that parse untrusted files.
+#
+# Inside the workspace cargo ignores it and warns so on every build. The reasons
+# for each setting are in the root `Cargo.toml`; scripts/check-release-profile.py
+# fails when the two differ.
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = "unwind"
+incremental = false
+overflow-checks = false
+strip = true
+
+[profile.release.package.versatiles_core]
+overflow-checks = true
+
+[profile.release.package.versatiles_container]
+overflow-checks = true
+
+[profile.release.package.versatiles_geometry]
+overflow-checks = true
