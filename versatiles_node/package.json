@@ -82,7 +82,7 @@
     "test:watch": "vitest",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "upgrade": "npm-check-updates -u --peer && npm install",
+    "upgrade": "npm-check-updates -u --peer && npm install && npm audit fix",
     "version": "napi version"
   },
   "devDependencies": {
