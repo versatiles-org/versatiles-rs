@@ -76,24 +76,10 @@ fn parse_writer_options(args: &[String]) -> Result<BTreeMap<String, String>> {
 	Ok(options)
 }
 
+/// The options that shape what a conversion writes, shared by every command
+/// that writes one tile container: `convert` and `merge`.
 #[derive(clap::Args, Debug)]
-#[command(arg_required_else_help = true, disable_version_flag = true)]
-#[expect(
-	clippy::struct_excessive_bools,
-	reason = "a clap arg struct: each bool is one command-line flag, and grouping them into a sub-struct would change the CLI"
-)]
-pub struct Subcommand {
-	/// Input tile container (path, URL, or data source expression).
-	/// Run `versatiles help source` for syntax details.
-	#[arg(verbatim_doc_comment)]
-	input_file: String,
-
-	/// Output tile container path or SFTP URL.
-	/// Supported formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory.
-	/// SFTP URLs: sftp://[user[:pass]@]host[:port]/path (requires the sftp feature)
-	#[arg(verbatim_doc_comment)]
-	output_file: String,
-
+pub struct OutputOptions {
 	/// minimum zoom level
 	#[arg(long, value_name = "int", display_order = 1)]
 	min_zoom: Option<u8>,
@@ -119,14 +105,6 @@ pub struct Subcommand {
 	/// set new compression
 	#[arg(long, short, value_enum, display_order = 2)]
 	compress: Option<TileCompression>,
-
-	/// swap rows and columns, e.g. z/x/y -> z/y/x
-	#[arg(long, display_order = 3)]
-	swap_xy: bool,
-
-	/// flip input vertically
-	#[arg(long, display_order = 3)]
-	flip_y: bool,
 
 	/// set the output tile format, e.g. "webp", "webp,80", "avif,90,50", "mlt"
 	///
@@ -156,6 +134,112 @@ pub struct Subcommand {
 	/// directory is refused unless you say so here.
 	#[arg(long, display_order = 4, verbatim_doc_comment)]
 	force: bool,
+}
+
+impl OutputOptions {
+	/// Configures the runtime for writing: abort on any lost tile, `--force`
+	/// and the writer options.
+	pub fn configure_runtime(&self, runtime: &TilesRuntime) -> Result<()> {
+		// Conversion must fail loudly on any silently-dropped tile: a truncated
+		// output would be indistinguishable from a successful conversion.
+		runtime.set_abort_on_error(true);
+		runtime.set_force(self.force);
+		runtime.set_writer_options(parse_writer_options(&self.writer_option)?);
+		Ok(())
+	}
+
+	/// The converter parameters these options ask for, with no axis swapped or
+	/// flipped.
+	pub fn converter_parameters(&self) -> Result<TilesConverterParameters> {
+		let (tile_pyramid, geo_bbox) = self.tile_pyramid()?;
+
+		let (tile_format, format_quality, format_effort) = if let Some(ref tf) = self.tile_format {
+			let (fmt, q, s) = parse_tile_format(tf)?;
+			(Some(fmt), q, s)
+		} else {
+			(None, None, None)
+		};
+
+		Ok(TilesConverterParameters {
+			tile_pyramid,
+			geo_bbox,
+			bbox_border: self.bbox_border,
+			flip_y: false,
+			swap_xy: false,
+			tile_compression: self.compress,
+			tile_format,
+			format_quality,
+			format_effort,
+		})
+	}
+
+	#[context("Failed to get tile pyramid")]
+	fn tile_pyramid(&self) -> Result<(Option<TilePyramid>, Option<GeoBBox>)> {
+		if self.min_zoom.is_none() && self.max_zoom.is_none() && self.bbox.is_none() {
+			return Ok((None, None));
+		}
+
+		let mut tile_pyramid = TilePyramid::new_full();
+		let mut geo_bbox = None;
+
+		if let Some(level_min) = self.min_zoom {
+			tile_pyramid.set_level_min(level_min);
+		}
+
+		if let Some(level_max) = self.max_zoom {
+			tile_pyramid.set_level_max(level_max);
+		}
+
+		if let Some(bbox) = &self.bbox {
+			log::trace!("parsing bbox argument: {bbox:?}");
+			let values: Vec<f64> = bbox
+				.split(&[' ', ',', ';'])
+				.filter(|s| !s.is_empty())
+				.map(|s| {
+					s.parse::<f64>()
+						.map_err(|_| anyhow::anyhow!("bbox value '{s}' is not a valid number"))
+				})
+				.collect::<Result<Vec<f64>>>()?;
+
+			if values.len() != 4 {
+				bail!("bbox must contain exactly 4 values, got {}: {bbox:?}", values.len());
+			}
+
+			let bbox = GeoBBox::try_from(values)?;
+			// Same rule the `filter` operation applies, so `--bbox-border N` and
+			// `filter bbox_border=N` cannot drift apart.
+			GeoCrop::new(bbox, self.bbox_border.unwrap_or(0)).apply_to_pyramid(&mut tile_pyramid)?;
+			geo_bbox = Some(bbox);
+		}
+
+		Ok((Some(tile_pyramid), geo_bbox))
+	}
+}
+
+#[derive(clap::Args, Debug)]
+#[command(arg_required_else_help = true, disable_version_flag = true)]
+pub struct Subcommand {
+	/// Input tile container (path, URL, or data source expression).
+	/// Run `versatiles help source` for syntax details.
+	#[arg(verbatim_doc_comment)]
+	input_file: String,
+
+	/// Output tile container path or SFTP URL.
+	/// Supported formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory.
+	/// SFTP URLs: sftp://[user[:pass]@]host[:port]/path (requires the sftp feature)
+	#[arg(verbatim_doc_comment)]
+	output_file: String,
+
+	#[command(flatten)]
+	output: OutputOptions,
+
+	/// swap rows and columns, e.g. z/x/y -> z/y/x
+	#[arg(long, display_order = 3)]
+	swap_xy: bool,
+
+	/// flip input vertically
+	#[arg(long, display_order = 3)]
+	flip_y: bool,
 
 	/// check the pipeline and exit without reading or writing any tiles
 	///
@@ -175,11 +259,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		location_for_display(&arguments.output_file)
 	);
 
-	// Conversion must fail loudly on any silently-dropped tile: a truncated
-	// output would be indistinguishable from a successful conversion.
-	runtime.set_abort_on_error(true);
-	runtime.set_force(arguments.force);
-	runtime.set_writer_options(parse_writer_options(&arguments.writer_option)?);
+	arguments.output.configure_runtime(runtime)?;
 
 	// Periodically log RSS so memory growth (e.g. toward an OOM kill, which the
 	// process can't report itself) is visible in the conversion's own output.
@@ -197,25 +277,10 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	let reader = runtime.reader_from_str(&arguments.input_file).await?;
 	log::trace!("convert: source opened in {:.2}s", open_start.elapsed().as_secs_f32());
 
-	let (tile_pyramid, geo_bbox) = tile_pyramid(arguments)?;
-
-	let (tile_format, format_quality, format_effort) = if let Some(ref tf) = arguments.tile_format {
-		let (fmt, q, s) = parse_tile_format(tf)?;
-		(Some(fmt), q, s)
-	} else {
-		(None, None, None)
-	};
-
 	let parameters = TilesConverterParameters {
-		tile_pyramid,
-		geo_bbox,
-		bbox_border: arguments.bbox_border,
 		flip_y: arguments.flip_y,
 		swap_xy: arguments.swap_xy,
-		tile_compression: arguments.compress,
-		tile_format,
-		format_quality,
-		format_effort,
+		..arguments.output.converter_parameters()?
 	};
 
 	log::trace!(
@@ -232,48 +297,6 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	log::info!("finished converting tiles");
 
 	Ok(())
-}
-
-#[context("Failed to get tile pyramid")]
-fn tile_pyramid(arguments: &Subcommand) -> Result<(Option<TilePyramid>, Option<GeoBBox>)> {
-	if arguments.min_zoom.is_none() && arguments.max_zoom.is_none() && arguments.bbox.is_none() {
-		return Ok((None, None));
-	}
-
-	let mut tile_pyramid = TilePyramid::new_full();
-	let mut geo_bbox = None;
-
-	if let Some(level_min) = arguments.min_zoom {
-		tile_pyramid.set_level_min(level_min);
-	}
-
-	if let Some(level_max) = arguments.max_zoom {
-		tile_pyramid.set_level_max(level_max);
-	}
-
-	if let Some(bbox) = &arguments.bbox {
-		log::trace!("parsing bbox argument: {bbox:?}");
-		let values: Vec<f64> = bbox
-			.split(&[' ', ',', ';'])
-			.filter(|s| !s.is_empty())
-			.map(|s| {
-				s.parse::<f64>()
-					.map_err(|_| anyhow::anyhow!("bbox value '{s}' is not a valid number"))
-			})
-			.collect::<Result<Vec<f64>>>()?;
-
-		if values.len() != 4 {
-			bail!("bbox must contain exactly 4 values, got {}: {bbox:?}", values.len());
-		}
-
-		let bbox = GeoBBox::try_from(values)?;
-		// Same rule the `filter` operation applies, so `--bbox-border N` and
-		// `filter bbox_border=N` cannot drift apart.
-		GeoCrop::new(bbox, arguments.bbox_border.unwrap_or(0)).apply_to_pyramid(&mut tile_pyramid)?;
-		geo_bbox = Some(bbox);
-	}
-
-	Ok((Some(tile_pyramid), geo_bbox))
 }
 
 /// Reports problems with the pipeline without opening anything.
