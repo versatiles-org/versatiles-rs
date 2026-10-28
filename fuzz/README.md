@@ -1,6 +1,7 @@
 # Fuzz targets
 
-Four parsers that consume untrusted bytes, driven by [`cargo-fuzz`].
+Four parsers that consume untrusted bytes, and the request handling of the
+server, driven by [`cargo-fuzz`].
 
 The 2026-09 security audit found nine input-handling bugs by hand. Four of them
 — an out-of-bounds tile index, unbounded directory recursion, a `run_length`
@@ -39,6 +40,7 @@ Targets:
 | `vpl`                  | VPL text, both parsers             |
 | `pmtiles_container`    | a `.pmtiles` file, opened and read |
 | `versatiles_container` | a `.versatiles` file, likewise     |
+| `server_request`       | a request path and its headers     |
 
 A time-boxed run, which is what a scheduled job wants:
 
@@ -76,9 +78,28 @@ per-PR run finds nothing new on most PRs and slows every one of them down. The
 corpus is what makes successive runs cumulative.
 
 That is what the `Linux: Fuzz` job in `.github/workflows/ci.yml` does: it runs
-all four targets weekly (or on manual dispatch) and carries
+all five targets weekly (or on manual dispatch) and carries
 `fuzz/corpus/<target>/` between runs in the Actions cache.
 
-`corpus/` and `artifacts/` are not committed.
+`corpus/` and `artifacts/` are not committed. `seeds/<target>/` is: inputs a
+run starts from, taken from the unit tests, so the first run already reaches the
+cases known to matter. Pass them after the corpus, which is where libFuzzer
+writes:
+
+```sh
+cargo +nightly fuzz run server_request fuzz/corpus/server_request fuzz/seeds/server_request
+```
+
+## `server_request`
+
+Unlike the parsers, the server's request handling rarely panics on bad input;
+it returns the wrong answer. So this target asserts what each function is for:
+no dot segment survives `Url::new`, a remote folder never fetches outside its
+base, a tile path is accepted in one spelling only, and so on. Its input is up
+to three lines — the path, the `Accept-Encoding` bytes, and a remote folder's
+base URL — so a seed is a readable text file.
+
+The functions it calls are private. `versatiles::server::fuzzing` exposes them,
+and exists only under `--cfg fuzzing`, which `cargo fuzz` sets.
 
 [`cargo-fuzz`]: https://rust-fuzz.github.io/book/cargo-fuzz.html

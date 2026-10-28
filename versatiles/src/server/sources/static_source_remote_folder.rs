@@ -16,7 +16,7 @@ use super::{
 };
 
 pub struct RemoteFolder {
-	base_url: ReqwestUrl,
+	pub(in crate::server) base_url: ReqwestUrl,
 	name: String,
 }
 
@@ -52,7 +52,7 @@ impl RemoteFolder {
 	/// text against `".."` misses it.
 	///
 	/// Returns `None` for a path that does not resolve to something below the base.
-	fn target_url(&self, url: &Url) -> Option<ReqwestUrl> {
+	pub(in crate::server) fn target_url(&self, url: &Url) -> Option<ReqwestUrl> {
 		let mut segments = Vec::new();
 		for segment in url.as_vec() {
 			let segment = percent_decode_str(&segment).decode_utf8().ok()?;

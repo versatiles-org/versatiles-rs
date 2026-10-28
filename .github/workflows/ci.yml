@@ -857,10 +857,16 @@ jobs:
           set -euo pipefail
           host=$(rustc +nightly -vV | sed -n 's|^host: ||p')
           echo "fuzzing for $host"
-          mkdir -p fuzz/corpus
-          for target in vector_tile vpl pmtiles_container versatiles_container; do
+          for target in vector_tile vpl pmtiles_container versatiles_container server_request; do
             echo "::group::$target"
-            cargo +nightly fuzz run "$target" --target "$host" -- \
+            # The cached corpus first: libFuzzer writes new inputs to the first
+            # directory. Committed seeds, where a target has them, are read too.
+            corpus=("fuzz/corpus/$target")
+            mkdir -p "${corpus[0]}"
+            if [ -d "fuzz/seeds/$target" ]; then
+              corpus+=("fuzz/seeds/$target")
+            fi
+            cargo +nightly fuzz run "$target" --target "$host" "${corpus[@]}" -- \
               -max_total_time=300 \
               -rss_limit_mb=2048
             echo "::endgroup::"

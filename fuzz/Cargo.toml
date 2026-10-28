@@ -12,9 +12,11 @@ edition = "2024"
 cargo-fuzz = true
 
 [dependencies]
+http = "1"
 libfuzzer-sys = "0.4"
 tokio = { version = "1", features = ["rt", "rt-multi-thread"] }
 
+versatiles = { path = "../versatiles", default-features = false, features = ["server"] }
 versatiles_container = { path = "../versatiles_container" }
 versatiles_core = { path = "../versatiles_core" }
 versatiles_geometry = { path = "../versatiles_geometry" }
@@ -53,6 +55,13 @@ bench = false
 [[bin]]
 name = "vpl"
 path = "fuzz_targets/vpl.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "server_request"
+path = "fuzz_targets/server_request.rs"
 test = false
 doc = false
 bench = false

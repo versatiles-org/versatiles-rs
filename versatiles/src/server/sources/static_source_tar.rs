@@ -189,7 +189,7 @@ fn resolve_node<'a>(nodes: &'a HashMap<String, Node>, name: &str) -> Option<&'a 
 ///
 /// Leading `/` and `.` components are dropped, `..` removes the previous component.
 /// Returns `None` if the path is not UTF-8 or escapes the archive root.
-fn resolve_path(base: &str, path: &Path) -> Option<String> {
+pub(in crate::server) fn resolve_path(base: &str, path: &Path) -> Option<String> {
 	let mut parts: Vec<&str> = base.split('/').filter(|s| !s.is_empty()).collect();
 	for component in path.components() {
 		match component {

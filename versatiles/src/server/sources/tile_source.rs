@@ -177,7 +177,7 @@ impl ServerTileSource {
 /// segments and the leading digits of the third, so `3/1/2garbage`,
 /// `3/1/2@2x.png` and `3/1/2/whatever/else` were all the tile `3/1/2` — each a
 /// different URL for the same answer, and none of them what its sender meant.
-fn parse_tile_coord(segments: &[&str]) -> Result<TileCoord> {
+pub(in crate::server) fn parse_tile_coord(segments: &[&str]) -> Result<TileCoord> {
 	use anyhow::{Context as _, bail, ensure};
 
 	let [z, x, y] = segments else {

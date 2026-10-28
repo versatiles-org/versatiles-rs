@@ -50,7 +50,8 @@ exclude = [
 [workspace.lints.rust]
 missing_docs = "deny"
 unused_imports = "deny"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
+# `fuzzing` is set by `cargo fuzz`, and gates `versatiles::server::fuzzing`.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(fuzzing)'] }
 
 [workspace.lints.clippy]
 # Enable pedantic lints for code quality

@@ -2,6 +2,9 @@
 
 mod cors;
 pub mod encoding;
+#[cfg(fuzzing)]
+#[doc(hidden)]
+pub mod fuzzing;
 mod handlers;
 mod reload;
 mod routes;
