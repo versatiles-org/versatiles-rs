@@ -7,6 +7,9 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
+# The native addon of the npm package `@versatiles/versatiles-rs`, of no use as
+# a crate. Two release candidates reached crates.io by mistake (#293).
+publish = false
 
 [lints]
 workspace = true
