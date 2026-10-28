@@ -50,14 +50,24 @@ pub async fn serve_dynamic_tile(
 
 	let source_id = &parts[1];
 
-	// Lookup source (lock-free!)
+	// A source id may contain slashes, so where the id ends is not known.
+	// What follows it is: `meta.json` or `tiles.json`, or `z/x/y`
+	// (`ServerTileSource::get_data`), so one or three segments. Only the two
+	// ids that leave those are looked up.
+	//
+	// This used to try every prefix of the path, longest first, joining each
+	// into a new string: quadratic in the segment count. A 64 KB path of
+	// `a/a/a/…` took a second of CPU to answer with a 404 (#287).
 	let tile_source = if let Some(entry) = state.tile_sources.get(source_id) {
 		Arc::clone(entry.value())
-	} else if let Some(source) = (2..parts.len()).rev().find_map(|n| {
-		// source_id may contain slashes, check if progressively shorter prefixes match a source
-		let entry = state.tile_sources.get(&parts[1..=n].join("/"))?;
-		Some(Arc::clone(entry.value()))
-	}) {
+	} else if let Some(source) = [1, 3]
+		.into_iter()
+		.filter_map(|rest| parts.len().checked_sub(rest + 1))
+		.filter(|&last| last >= 2)
+		.find_map(|last| {
+			let entry = state.tile_sources.get(&parts[1..=last].join("/"))?;
+			Some(Arc::clone(entry.value()))
+		}) {
 		source
 	} else {
 		log::debug!("no tile source matches path: {path}");
@@ -245,5 +255,40 @@ mod tests {
 
 		let (status, _) = get_body_text(app, "/tiles/cheddar/meta.json").await;
 		assert_eq!(status, StatusCode::NOT_FOUND);
+	}
+
+	/// Both shapes of request under a slashed id, and an id that is a prefix of
+	/// another: the lookup only considers ids followed by one or three segments.
+	#[tokio::test]
+	async fn nested_source_ids_resolve_by_what_follows() {
+		let app = app_with_sources(&["a/b", "a/b/c/d"]);
+
+		for (path, status) in [
+			("/tiles/a/b/meta.json", StatusCode::OK),
+			("/tiles/a/b/2/1/1", StatusCode::OK),
+			("/tiles/a/b/c/d/meta.json", StatusCode::OK),
+			("/tiles/a/b/c/d/2/1/1", StatusCode::OK),
+			// Two segments after either id: neither metadata nor a tile.
+			("/tiles/a/b/c/meta.json", StatusCode::NOT_FOUND),
+			("/tiles/a/b/c/d/e/f/meta.json", StatusCode::NOT_FOUND),
+		] {
+			assert_eq!(get_body_text(app.clone(), path).await.0, status, "{path}");
+		}
+	}
+
+	/// The longest path `http::Uri` accepts, in one-byte segments: about a
+	/// second while the lookup was quadratic (#287), in debug and release
+	/// builds alike, and 1.5 ms now. The bound is far from both.
+	#[tokio::test]
+	async fn longest_path_is_answered_quickly() {
+		let app = app_with_sources(&["cheese"]);
+		let path = format!("/tiles/{}", "a/".repeat((65_534 - "/tiles/".len()) / 2));
+
+		let start = std::time::Instant::now();
+		let (status, _) = get_body_text(app, &path).await;
+		let elapsed = start.elapsed();
+
+		assert_eq!(status, StatusCode::NOT_FOUND);
+		assert!(elapsed < std::time::Duration::from_millis(100), "took {elapsed:?}");
 	}
 }
