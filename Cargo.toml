@@ -227,7 +227,7 @@ imageproc = { version = "0.27.0", default-features = false }
 # Geometry dependencies
 geo = { version = "0.33.1", default-features = false }
 geo-types = { version = "0.7.20" }
-mlt-core = { version = "0.22.0", default-features = false }
+mlt-core = { version = "0.22.1", default-features = false }
 rstar = { version = "0.13.0", default-features = false }
 
 # Utility dependencies
