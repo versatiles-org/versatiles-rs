@@ -272,7 +272,7 @@ impl VersaTilesWriter {
 					match rx.next().await {
 						Some(BlockMessage::Tile(coord, blob)) => {
 							block_builder.write_tile(coord, blob).await?;
-							tile_count += 1;
+							tile_count = tile_count.saturating_add(1);
 						}
 						Some(BlockMessage::End) => break,
 						Some(BlockMessage::Start(_)) => return Err(anyhow!("writer protocol error: nested block start")),

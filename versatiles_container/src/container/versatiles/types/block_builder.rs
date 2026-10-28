@@ -138,7 +138,10 @@ impl<'a> BlockBuilder<'a> {
 
 		// Calculate tile range
 		let tiles_end_offset = self.writer.position().await?;
-		let tiles_range = ByteRange::new(self.initial_offset, tiles_end_offset - self.initial_offset);
+		let tiles_length = tiles_end_offset
+			.checked_sub(self.initial_offset)
+			.context("writer position moved backwards while writing a block")?;
+		let tiles_range = ByteRange::new(self.initial_offset, tiles_length);
 
 		// Create optimally-sized TileIndex
 		let tile_count = usize::try_from(self.actual_bbox.count_tiles())?;

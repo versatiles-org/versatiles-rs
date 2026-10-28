@@ -41,8 +41,8 @@ impl BlockDefinition {
 
 		let tiles_coverage = TileBBox::from_min_and_size(
 			level.min(8),
-			bbox.x_min()? - x_min * 256,
-			bbox.y_min()? - y_min * 256,
+			bbox.x_min()? % 256,
+			bbox.y_min()? % 256,
 			bbox.width(),
 			bbox.height(),
 		)?;
@@ -164,7 +164,7 @@ impl BlockDefinition {
 		writer.write_u8(u8::try_from(self.tiles_coverage.y_max()?)?)?;
 
 		ensure!(
-			self.tiles_range.offset + self.tiles_range.length == self.index_range.offset,
+			self.tiles_range.offset.checked_add(self.tiles_range.length) == Some(self.index_range.offset),
 			"tiles_range and index_range do not match"
 		);
 
@@ -288,6 +288,18 @@ mod tests {
 			format!("{error:#}").contains("overflows u32"),
 			"expected an overflow error, got: {error:#}"
 		);
+	}
+
+	/// The sum used to panic in a debug build and wrap in a release one, where a
+	/// wrapped sum could equal the index offset and pass the check.
+	#[test]
+	fn ranges_whose_end_overflows_are_not_written() -> Result<()> {
+		let mut def = BlockDefinition::new(&TileBBox::from_min_and_max(3, 1, 2, 3, 4)?)?;
+		def.tiles_range = ByteRange::new(u64::MAX, 2);
+		def.index_range = ByteRange::new(1, 6);
+		let error = format!("{:#}", def.to_blob().unwrap_err());
+		assert!(error.contains("tiles_range and index_range do not match"), "{error}");
+		Ok(())
 	}
 
 	#[test]

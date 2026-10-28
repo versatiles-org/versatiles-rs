@@ -2,11 +2,11 @@
 //!
 //! The `BlockIndex` struct contains metadata about the blocks, including their coordinates and bounding boxes, and provides methods to manipulate and query this data.
 
-use std::{collections::HashMap, ops::Div};
+use std::collections::HashMap;
 
 use anyhow::{Result, ensure};
 use versatiles_core::{
-	Blob, ByteRange, TileCoord, TilePyramid,
+	Blob, TileCoord, TilePyramid,
 	compression::{compress_brotli_fast, decompress_brotli},
 	io::{ValueWriter, ValueWriterBlob},
 };
@@ -40,16 +40,14 @@ impl BlockIndex {
 	/// Returns an error if the binary data cannot be parsed correctly.
 	#[context("Failed to create BlockIndex from blob")]
 	pub fn from_blob(buf: &Blob) -> Result<Self> {
-		let count = buf.len().div(BLOCK_INDEX_LENGTH);
 		ensure!(
-			count * BLOCK_INDEX_LENGTH == buf.len(),
+			buf.len().is_multiple_of(BLOCK_INDEX_LENGTH),
 			"Block index is defective, because buffer length is not a multiple of {BLOCK_INDEX_LENGTH}"
 		);
 
 		let mut block_index = Self::new_empty();
-		for i in 0..count {
-			let range = &ByteRange::new(i * BLOCK_INDEX_LENGTH, BLOCK_INDEX_LENGTH);
-			block_index.insert_block(BlockDefinition::from_blob(&buf.read_range(range)?)?);
+		for chunk in buf.as_slice().chunks_exact(usize::try_from(BLOCK_INDEX_LENGTH)?) {
+			block_index.insert_block(BlockDefinition::from_blob(&Blob::from(chunk))?);
 		}
 
 		Ok(block_index)
@@ -154,6 +152,35 @@ mod tests {
 		let blob = index1.to_brotli_blob()?;
 		let index2 = BlockIndex::from_brotli_blob(&blob)?;
 		assert_eq!(index1, index2);
+		Ok(())
+	}
+
+	#[test]
+	fn several_blocks_are_read_one_record_each() -> Result<()> {
+		let mut index1 = BlockIndex::new_empty();
+		for (level, x, y) in [(4, 1, 2), (9, 300, 400), (14, 1000, 2000)] {
+			index1.insert_block(BlockDefinition::new(&TileBBox::from_min_and_max(
+				level,
+				x,
+				y,
+				x + 5,
+				y + 7,
+			)?)?);
+		}
+		let index2 = BlockIndex::from_blob(&index1.to_blob()?)?;
+		assert_eq!(index2.len(), 3);
+		assert_eq!(index1, index2);
+		Ok(())
+	}
+
+	#[test]
+	fn a_truncated_block_index_is_rejected() -> Result<()> {
+		let mut index = BlockIndex::new_empty();
+		index.insert_block(BlockDefinition::new(&TileBBox::from_min_and_max(3, 1, 2, 3, 4)?)?);
+		let blob = index.to_blob()?;
+		let truncated = Blob::from(&blob.as_slice()[..32]);
+		let error = format!("{:#}", BlockIndex::from_blob(&truncated).unwrap_err());
+		assert!(error.contains("not a multiple of 33"), "{error}");
 		Ok(())
 	}
 }

@@ -41,7 +41,7 @@ impl TileIndex {
 	pub fn from_blob(blob: Blob) -> Result<Self> {
 		let count = blob.len().div(TILE_INDEX_LENGTH);
 		ensure!(
-			count * TILE_INDEX_LENGTH == blob.len(),
+			blob.len().is_multiple_of(TILE_INDEX_LENGTH),
 			"Tile index is defective: buffer length is not a multiple of {TILE_INDEX_LENGTH}"
 		);
 

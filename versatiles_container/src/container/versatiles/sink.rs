@@ -75,6 +75,10 @@ impl BlockTiles {
 	}
 
 	/// Marks the tile at `coord`; `false` when it was marked already.
+	#[expect(
+		clippy::arithmetic_side_effects,
+		reason = "both remainders are below 256, so the index is below 65536, and `count` counts distinct bits of those"
+	)]
 	fn insert(&mut self, coord: &TileCoord) -> bool {
 		let index = ((coord.y % 256) * 256 + (coord.x % 256)) as usize;
 		let (word, bit) = (index / 64, 1u64 << (index % 64));

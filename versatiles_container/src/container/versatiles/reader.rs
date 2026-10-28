@@ -183,7 +183,8 @@ impl VersaTilesReader {
 			tile_index_cache: Cache::builder()
 				.max_capacity(100_000_000)
 				.weigher(|_k, v: &Arc<TileIndex>| {
-					let bytes = size_of::<TileCoord>() + size_of::<Arc<TileIndex>>() + v.len() * size_of::<ByteRange>();
+					const ENTRY: usize = size_of::<TileCoord>() + size_of::<Arc<TileIndex>>();
+					let bytes = ENTRY.saturating_add(v.len().saturating_mul(size_of::<ByteRange>()));
 					u32::try_from(bytes).unwrap_or(u32::MAX)
 				})
 				.build(),
