@@ -251,7 +251,11 @@ impl PMTilesReader {
 					// Approximate byte weight. EntriesV3 stores Vec<EntryV3>; the exact
 					// struct size isn't directly exposed, so over-estimate via len() * 32B
 					// (close to EntryV3's actual size). The weighted cap stays meaningful.
-					let bytes = size_of::<ByteRange>() + size_of::<Arc<EntriesV3>>() + v.len() * 32;
+					let bytes = v
+						.len()
+						.saturating_mul(32)
+						.saturating_add(size_of::<ByteRange>())
+						.saturating_add(size_of::<Arc<EntriesV3>>());
 					u32::try_from(bytes).unwrap_or(u32::MAX)
 				})
 				.build(),
@@ -507,7 +511,7 @@ fn calc_tile_pyramid_capped(
 					// each coordinate straight into the pyramid keeps that
 					// bounded in memory; the running total keeps it bounded in
 					// time.
-					*total_entries += u64::from(entry.run_length);
+					*total_entries = total_entries.saturating_add(u64::from(entry.run_length));
 					if *total_entries > limit {
 						return Err(TooManyTiles.into());
 					}
@@ -522,6 +526,10 @@ fn calc_tile_pyramid_capped(
 					let range = entry.range;
 					let mut blob = leaves_bytes.read_range(&range)?;
 					blob = decompress(blob, &compression)?;
+					#[expect(
+						clippy::arithmetic_side_effects,
+						reason = "`depth` is below MAX_DIRECTORY_DEPTH, checked above"
+					)]
 					parse_directories(
 						pyramid,
 						total_entries,

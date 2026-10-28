@@ -252,13 +252,16 @@ impl PMTilesWriter {
 
 		let tile_data_end = writer.position().await?;
 
-		header.tile_data = ByteRange::new(tile_data_start, tile_data_end - tile_data_start);
+		let tile_data_length = tile_data_end
+			.checked_sub(tile_data_start)
+			.context("the PMTiles writer's position moved back past the start of the tile data")?;
+		header.tile_data = ByteRange::new(tile_data_start, tile_data_length);
 
 		writer.set_position(HeaderV3::len()).await?;
 		// `build_directory` sorts by tile id; `merge_runs` documents that it
 		// requires sorted input. Today the traversal happens to deliver entries
 		// sorted, so the order of these two worked by accident.
-		let directory = entries.build_directory(16384 - HeaderV3::len(), INTERNAL_COMPRESSION)?;
+		let directory = entries.build_directory(ROOT_DIRECTORY_MAX, INTERNAL_COMPRESSION)?;
 		header.root_dir = writer.append(&directory.root_bytes).await?;
 
 		writer.set_position(tile_data_end).await?;
@@ -275,6 +278,9 @@ impl PMTilesWriter {
 		Ok(())
 	}
 }
+
+/// The root directory has to fit, with the header, into the first 16 KiB.
+const ROOT_DIRECTORY_MAX: u64 = 16384 - HeaderV3::len();
 
 /// Memory the [`DedupCache`] may hold, keys and bookkeeping together.
 const DEDUP_CACHE_BYTES: usize = 10 * 1024 * 1024;
@@ -327,19 +333,19 @@ impl DedupCache {
 
 	/// Records that `blob` was just written to `range`.
 	fn insert(&mut self, blob: &[u8], range: ByteRange) {
-		self.stored += 1;
-		if blob.len() + DEDUP_ENTRY_OVERHEAD <= self.generation_bytes {
+		self.stored = self.stored.saturating_add(1);
+		if blob.len().saturating_add(DEDUP_ENTRY_OVERHEAD) <= self.generation_bytes {
 			self.remember(blob.to_vec(), range);
 		}
 	}
 
 	fn remember(&mut self, key: Vec<u8>, range: ByteRange) {
-		let size = key.len() + DEDUP_ENTRY_OVERHEAD;
-		if self.current_bytes + size > self.generation_bytes {
+		let size = key.len().saturating_add(DEDUP_ENTRY_OVERHEAD);
+		if self.current_bytes.saturating_add(size) > self.generation_bytes {
 			self.previous = std::mem::take(&mut self.current);
 			self.current_bytes = 0;
 		}
-		self.current_bytes += size;
+		self.current_bytes = self.current_bytes.saturating_add(size);
 		self.current.insert(key, range);
 	}
 

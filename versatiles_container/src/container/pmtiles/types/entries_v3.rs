@@ -1,5 +1,4 @@
 use std::{
-	cmp::Ordering,
 	io::Write,
 	slice::{Iter, SliceIndex},
 };
@@ -90,21 +89,22 @@ impl EntriesV3 {
 		// the tile's content and reported success. A wrong answer is worse than
 		// an error, which is why these are checked even though the read that
 		// follows would usually fail anyway.
-		for i in 0..num_entries {
+		let mut previous: Option<ByteRange> = None;
+		for entry in &mut entries {
 			let tmp = reader.read_varint()?;
-			entries[i].range.offset = if i > 0 && tmp == 0 {
-				let previous = entries[i - 1].range;
-				previous
+			entry.range.offset = match previous {
+				Some(previous) if tmp == 0 => previous
 					.offset
 					.checked_add(previous.length)
-					.context("offsets in the PMTiles directory overflow u64")?
-			} else {
+					.context("offsets in the PMTiles directory overflow u64")?,
 				// The offset is stored biased by one so that zero can mean
 				// "directly after the previous entry"; an unbiased zero here is a
 				// malformed directory rather than offset `u64::MAX`.
-				tmp.checked_sub(1)
-					.context("the first entry of a PMTiles directory has no offset")?
+				_ => tmp
+					.checked_sub(1)
+					.context("the first entry of a PMTiles directory has no offset")?,
 			};
+			previous = Some(entry.range);
 		}
 
 		Ok(EntriesV3 { entries })
@@ -151,41 +151,23 @@ impl EntriesV3 {
 		self.entries.sort_by_cached_key(|e| e.tile_id);
 	}
 
-	/// Finds an `EntryV3` by its tile ID using a binary search.
+	/// Finds the entry covering a tile ID using a binary search.
+	///
+	/// That is the last entry starting at or before `tile_id`: a run of tiles
+	/// that reaches it, or a leaf directory pointer (`run_length` 0), which the
+	/// caller descends into.
 	///
 	/// # Arguments
 	/// * `tile_id` - The tile ID to search for.
 	///
-	/// Returns `Some(EntryV3)` if found, or `None` if no entry matches the tile ID.
+	/// Returns `Some(EntryV3)` if found, or `None` if no entry covers the tile ID.
 	pub fn find_tile(&self, tile_id: u64) -> Option<EntryV3> {
-		let mut m: i64 = 0;
-		let mut n: i64 = i64::try_from(self.entries.len()).expect("entries length fits in i64") - 1;
-
-		while m <= n {
-			let k = (n + m) >> 1;
-			let k_idx = usize::try_from(k).expect("k is non-negative and within entries len");
-			let entry_id = self.entries[k_idx].tile_id;
-			match tile_id.cmp(&entry_id) {
-				Ordering::Greater => m = k + 1,
-				Ordering::Less => n = k - 1,
-				Ordering::Equal => return Some(self.entries[k_idx]),
-			}
-		}
-
-		// at this point, m > n
-		if n >= 0 {
-			let entry = self.entries[usize::try_from(n).expect("n is non-negative here")];
-			if entry.run_length == 0 {
-				return Some(entry);
-			}
-			// Saturating rather than bare subtraction: the ordering that would
-			// guarantee `entry.tile_id <= tile_id` comes from the parsed file.
-			if tile_id.saturating_sub(entry.tile_id) < u64::from(entry.run_length) {
-				return Some(entry);
-			}
-		}
-
-		None
+		let index = self.entries.partition_point(|entry| entry.tile_id <= tile_id);
+		let entry = self.entries[index.checked_sub(1)?];
+		// `partition_point` guarantees `entry.tile_id <= tile_id` only if the
+		// entries are sorted, and that ordering comes from the parsed file.
+		let offset = tile_id.checked_sub(entry.tile_id)?;
+		(entry.run_length == 0 || offset < u64::from(entry.run_length)).then_some(entry)
 	}
 
 	/// Converts the entries to a directory format, potentially compressing them,
@@ -243,22 +225,16 @@ impl EntriesV3 {
 			let mut root_entries = EntriesV3::new();
 			let mut leaves_bytes: Vec<u8> = Vec::new();
 
-			let mut idx: usize = 0;
-			while idx < entries.len() {
-				let mut end = idx + leaf_size;
-				if idx + leaf_size > entries.len() {
-					end = entries.len();
-				}
-				let serialized = compress(entries.slice(idx..end).serialize_entries()?, &compression)?;
+			for chunk in entries.entries.chunks(leaf_size) {
+				let chunk = EntriesSliceV3 { entries: chunk };
+				let serialized = compress(chunk.serialize_entries()?, &compression)?;
 
 				root_entries.push(EntryV3::new(
-					entries.get(idx).tile_id,
+					chunk.get(0).tile_id,
 					ByteRange::new(leaves_bytes.len() as u64, serialized.len() as u64),
 					0,
 				));
 				leaves_bytes.write_all(serialized.as_slice())?;
-
-				idx += leaf_size;
 			}
 
 			let root_bytes = compress(root_entries.as_slice().serialize_entries()?, &compression)?;
@@ -277,18 +253,24 @@ impl EntriesV3 {
 	/// Merges consecutive entries that point to the same byte range into
 	/// single entries with accumulated `run_length`. Entries must be sorted
 	/// by `tile_id` before calling this method.
+	///
+	/// A run ends where its `run_length` would overflow `u32`, and the next
+	/// entry starts a new one. Wrapped, it could become 0, which marks a leaf
+	/// directory pointer rather than a run of tiles.
 	pub fn merge_runs(&mut self) {
-		if self.entries.len() <= 1 {
+		let Some((&first, rest)) = self.entries.split_first() else {
 			return;
-		}
+		};
 		let mut merged = Vec::with_capacity(self.entries.len());
-		let mut current = self.entries[0];
-		for &entry in &self.entries[1..] {
-			if entry.range == current.range && entry.tile_id == current.tile_id + u64::from(current.run_length) {
-				current.run_length += entry.run_length;
-			} else {
-				merged.push(current);
-				current = entry;
+		let mut current = first;
+		for &entry in rest {
+			let follows = current.tile_id.checked_add(u64::from(current.run_length)) == Some(entry.tile_id);
+			match current.run_length.checked_add(entry.run_length) {
+				Some(run_length) if follows && entry.range == current.range => current.run_length = run_length,
+				_ => {
+					merged.push(current);
+					current = entry;
+				}
 			}
 		}
 		merged.push(current);
@@ -362,7 +344,10 @@ impl EntriesSliceV3<'_> {
 		// Serialize TileID deltas
 		let mut last_id: u64 = 0;
 		for entry in entries {
-			let delta = entry.tile_id - last_id;
+			let delta = entry
+				.tile_id
+				.checked_sub(last_id)
+				.context("PMTiles directory entries must be sorted by tile id")?;
 			writer.write_varint(delta)?;
 			last_id = entry.tile_id;
 		}
@@ -378,13 +363,22 @@ impl EntriesSliceV3<'_> {
 		}
 
 		// Serialize Offsets
-		for i in 0..entries.len() {
-			let offset = if i > 0 && entries[i].range.offset == entries[i - 1].range.offset + entries[i - 1].range.length {
+		let mut previous: Option<ByteRange> = None;
+		for entry in entries {
+			let follows =
+				previous.is_some_and(|previous| previous.offset.checked_add(previous.length) == Some(entry.range.offset));
+			let offset = if follows {
 				0
 			} else {
-				entries[i].range.offset + 1 // add 1 to not conflict with 0
+				// add 1 to not conflict with 0
+				entry
+					.range
+					.offset
+					.checked_add(1)
+					.context("a PMTiles directory offset overflows u64")?
 			};
 			writer.write_varint(offset)?;
+			previous = Some(entry.range);
 		}
 
 		Ok(writer.into_blob())
@@ -538,6 +532,48 @@ mod tests {
 		let directory = entries.build_directory(1000, TileCompression::Uncompressed)?; // Assuming 1000 is enough size for root
 		assert!(!directory.root_bytes.is_empty());
 		Ok(())
+	}
+
+	/// A run longer than `u32::MAX` tiles is split rather than wrapped. Wrapped,
+	/// its `run_length` became 0, which turns a run of tiles into a pointer to a
+	/// leaf directory.
+	#[test]
+	fn a_run_too_long_for_u32_is_split() {
+		let range = ByteRange::new(0, 10);
+		let mut entries = EntriesV3::new();
+		entries.push(EntryV3::new(0, range, u32::MAX));
+		entries.push(EntryV3::new(u64::from(u32::MAX), range, 1));
+		entries.push(EntryV3::new(u64::from(u32::MAX) + 1, range, 1));
+		entries.merge_runs();
+
+		let runs: Vec<(u64, u32)> = entries.iter().map(|e| (e.tile_id, e.run_length)).collect();
+		assert_eq!(runs, vec![(0, u32::MAX), (u64::from(u32::MAX), 2)]);
+	}
+
+	/// The search finds the entry a tile falls into, and nothing past a run.
+	#[test]
+	fn find_tile_covers_runs_and_leaf_pointers() {
+		let mut entries = EntriesV3::new();
+		entries.push(EntryV3::new(5, ByteRange::new(0, 10), 3)); // tiles 5..8
+		entries.push(EntryV3::new(10, ByteRange::new(10, 10), 0)); // leaf from 10 on
+		let found = |id| entries.find_tile(id).map(|e| e.tile_id);
+
+		assert_eq!(found(4), None);
+		assert_eq!(found(5), Some(5));
+		assert_eq!(found(7), Some(5));
+		assert_eq!(found(8), None);
+		assert_eq!(found(10), Some(10));
+		assert_eq!(found(u64::MAX), Some(10));
+	}
+
+	/// Entries out of order are an error when serialized, not a wrapped delta.
+	#[test]
+	fn serializing_unsorted_entries_is_refused() {
+		let mut entries = EntriesV3::new();
+		entries.push(EntryV3::new(9, ByteRange::new(0, 10), 1));
+		entries.push(EntryV3::new(3, ByteRange::new(10, 10), 1));
+		let error = entries.as_slice().serialize_entries().unwrap_err();
+		assert!(format!("{error:#}").contains("sorted by tile id"), "{error:#}");
 	}
 
 	/// Helper function to create and fill `EntriesV3` with a predetermined number of entries.

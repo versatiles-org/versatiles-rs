@@ -163,7 +163,7 @@ impl HeaderV3 {
 		Ok(header)
 	}
 
-	pub fn len() -> u64 {
+	pub const fn len() -> u64 {
 		127
 	}
 }
