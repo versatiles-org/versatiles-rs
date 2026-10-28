@@ -28,6 +28,13 @@
 //!     Ok(())
 //! }
 //! ```
+//!
+//! # Arithmetic
+//!
+//! Byte ranges come out of container headers and retry counts out of the
+//! environment, so arithmetic on them is checked or saturating (#294). The lint
+//! keeps new code to that. Tests are exempt.
+#![cfg_attr(not(test), deny(clippy::arithmetic_side_effects))]
 
 use std::{
 	fmt, str,
@@ -94,7 +101,7 @@ async fn read_body_limited(response: reqwest::Response, limit: u64) -> std::resu
 	let mut stream = response.bytes_stream();
 	while let Some(chunk) = stream.next().await {
 		let chunk = chunk.map_err(BodyError::Transport)?;
-		if body.len() as u64 + chunk.len() as u64 > limit {
+		if (body.len() as u64).saturating_add(chunk.len() as u64) > limit {
 			return Err(BodyError::TooLarge { limit });
 		}
 		body.extend_from_slice(&chunk);
@@ -135,7 +142,7 @@ fn verify_content_range(response: &reqwest::Response, range: &ByteRange) -> Resu
 		);
 	}
 
-	let expected_end = range.end()? - 1;
+	let expected_end = range.last()?;
 	if content_range_end != expected_end {
 		bail!("Content-Range end mismatch: expected {expected_end}, got {content_range_end}");
 	}
@@ -323,21 +330,22 @@ fn describe_error(err: &reqwest::Error) -> String {
 impl DataReaderHttp {
 	/// Single-range read with retry/backoff.
 	async fn try_read_range_impl(&self, range: &ByteRange) -> Result<Blob> {
-		// `end()` is checked: the range comes from a container header, and an
+		// `last()` is checked: the range comes from a container header, and an
 		// unchecked sum here panics in a debug build and asks for a wrapped byte
-		// range in a release one.
-		let request_range: String = format!("bytes={}-{}", range.offset, range.end()? - 1);
+		// range in a release one. An empty range, which has no last byte, never
+		// gets here: `network_read_range` answers it without a request.
+		let request_range: String = format!("bytes={}-{}", range.offset, range.last()?);
 		let policy = super::retry::policy();
 		let max_retries = policy.max_retries;
-		let total_attempts = max_retries + 1;
+		let total_attempts = max_retries.saturating_add(1);
 		let url = &self.url;
 		let len = range.length;
 
 		for attempt in 0..=max_retries {
-			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
+			let attempt_label = format!("attempt {}/{total_attempts}", attempt.saturating_add(1));
 
-			if attempt > 0 {
-				let backoff = policy.backoff(attempt - 1);
+			if let Some(retry) = attempt.checked_sub(1) {
+				let backoff = policy.backoff(retry);
 				log::warn!("HTTP read {range} from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
@@ -466,14 +474,14 @@ impl DataReaderTrait for DataReaderHttp {
 	async fn read_all(&self) -> Result<Blob> {
 		let policy = super::retry::policy();
 		let max_retries = policy.max_retries;
-		let total_attempts = max_retries + 1;
+		let total_attempts = max_retries.saturating_add(1);
 		let url = &self.url;
 
 		for attempt in 0..=max_retries {
-			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
+			let attempt_label = format!("attempt {}/{total_attempts}", attempt.saturating_add(1));
 
-			if attempt > 0 {
-				let backoff = policy.backoff(attempt - 1);
+			if let Some(retry) = attempt.checked_sub(1) {
+				let backoff = policy.backoff(retry);
 				log::warn!("HTTP read from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
@@ -800,6 +808,22 @@ mod body_limit_tests {
 			message.contains("expected 10 bytes") && message.contains("carried 3"),
 			"unhelpful message: {message}"
 		);
+	}
+
+	/// A range from a crafted header whose end overflows is refused before a
+	/// request is sent, instead of panicking or asking for a wrapped range.
+	#[tokio::test]
+	async fn a_range_whose_end_overflows_is_refused() {
+		let url = Url::parse("http://127.0.0.1:9/x").unwrap();
+		let reader = DataReaderHttp::try_from(&url).unwrap();
+
+		let error = reader
+			.read_range(&ByteRange::new(u64::MAX - 1, 5))
+			.await
+			.expect_err("an overflowing range must be refused");
+
+		let message = format!("{error:#}");
+		assert!(message.contains("overflows u64"), "unhelpful message: {message}");
 	}
 
 	/// A response that matches what was asked for still reads normally.

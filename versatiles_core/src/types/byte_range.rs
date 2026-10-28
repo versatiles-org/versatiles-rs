@@ -218,6 +218,32 @@ impl ByteRange {
 			.with_context(|| format!("ByteRange offset + length overflows u64: {self}"))
 	}
 
+	/// The offset of the last byte in the range, as HTTP `Range` and
+	/// `Content-Range` headers name it.
+	///
+	/// # Errors
+	/// Returns an error if the range is empty, as it has no last byte, or if
+	/// its end does not fit in a `u64`.
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// use versatiles_core::ByteRange;
+	///
+	/// assert_eq!(ByteRange::new(10, 5).last().unwrap(), 14);
+	/// assert!(ByteRange::new(0, 0).last().is_err());
+	/// ```
+	pub fn last(&self) -> Result<u64> {
+		let last_index = self
+			.length
+			.checked_sub(1)
+			.with_context(|| format!("ByteRange {self} is empty and has no last byte"))?;
+		self
+			.offset
+			.checked_add(last_index)
+			.with_context(|| format!("ByteRange offset + length overflows u64: {self}"))
+	}
+
 	/// Converts the `ByteRange` to a `std::ops::Range<usize>`.
 	///
 	/// # Returns
@@ -279,6 +305,17 @@ mod tests {
 		assert!(ByteRange::new(u64::MAX, 1).end().is_err());
 		assert!(ByteRange::new(1, u64::MAX).end().is_err());
 		assert!(ByteRange::new(u64::MAX, u64::MAX).end().is_err());
+	}
+
+	#[test]
+	fn last_is_checked() {
+		assert_eq!(ByteRange::new(10, 5).last().unwrap(), 14);
+		assert_eq!(ByteRange::new(0, 1).last().unwrap(), 0);
+		assert_eq!(ByteRange::new(u64::MAX, 1).last().unwrap(), u64::MAX);
+
+		assert!(ByteRange::new(0, 0).last().is_err());
+		assert!(ByteRange::new(7, 0).last().is_err());
+		assert!(ByteRange::new(u64::MAX, 2).last().is_err());
 	}
 
 	/// Verifies that `new` correctly sets offset and length.
