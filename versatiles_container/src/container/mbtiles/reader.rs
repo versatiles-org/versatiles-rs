@@ -455,13 +455,12 @@ impl TileSource for MBTilesReader {
 		let mut stmt =
 			conn.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")?;
 
-		let max_index = 2u32.pow(u32::from(coord.level)) - 1;
+		let mut tms = *coord;
+		tms.flip_y();
 		// Only "no such row" is an absent tile. Anything else — a NULL or
 		// non-blob `tile_data`, a locked or corrupt database — is an error.
 		let vec = stmt
-			.query_row([coord.x, max_index - coord.y, u32::from(coord.level)], |row| {
-				row.get::<_, Vec<u8>>(0)
-			})
+			.query_row([tms.x, tms.y, u32::from(tms.level)], |row| row.get::<_, Vec<u8>>(0))
 			.optional()?;
 		Ok(vec.map(|vec| {
 			Tile::from_blob(

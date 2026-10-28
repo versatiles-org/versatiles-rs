@@ -99,10 +99,11 @@ impl MBTilesTileSink {
 		let mut conn = self.pool.get()?;
 		let transaction = conn.transaction()?;
 		for (c, blob) in tiles {
-			let max_index = 2u32.pow(u32::from(c.level)) - 1;
+			let mut tms = *c;
+			tms.flip_y();
 			transaction.execute(
 				"INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?1, ?2, ?3, ?4)",
-				params![c.level, c.x, max_index - c.y, blob.as_slice()],
+				params![tms.level, tms.x, tms.y, blob.as_slice()],
 			)?;
 		}
 		transaction.commit()?;
@@ -249,6 +250,15 @@ mod tests {
 		let reader = MBTilesReader::open(&temp, TilesRuntime::default())?;
 		assert_eq!(reader.metadata().tile_format(), &TileFormat::PNG);
 		assert_eq!(reader.tile_pyramid().await?.count_tiles(), 1);
+		assert!(reader.tile(&coord).await?.is_some());
+
+		// Stored as TMS: row 2^3 - 1 - 2.
+		let row: u32 = r2d2_sqlite::rusqlite::Connection::open(temp.path())?.query_row(
+			"SELECT tile_row FROM tiles WHERE zoom_level = 3 AND tile_column = 1",
+			[],
+			|row| row.get(0),
+		)?;
+		assert_eq!(row, 5);
 
 		Ok(())
 	}
