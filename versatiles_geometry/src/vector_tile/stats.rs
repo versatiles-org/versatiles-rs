@@ -48,35 +48,43 @@ impl LayerStats {
 	/// Property-table bytes: keys + values (not the per-feature tag refs).
 	#[must_use]
 	pub fn property_bytes(&self) -> usize {
-		self.key_bytes + self.value_bytes
+		self.key_bytes.saturating_add(self.value_bytes)
 	}
 
 	/// Residual bytes not attributed to geometry/tags/properties/ids: geom-type
 	/// fields, the layer name, and all the PBF key/length framing.
 	#[must_use]
 	pub fn other_bytes(&self) -> usize {
-		self
-			.encoded_bytes
-			.saturating_sub(self.geometry_bytes + self.tag_bytes + self.property_bytes() + self.id_bytes)
+		self.encoded_bytes.saturating_sub(
+			[
+				self.geometry_bytes,
+				self.tag_bytes,
+				self.property_bytes(),
+				self.id_bytes,
+			]
+			.into_iter()
+			.fold(0, usize::saturating_add),
+		)
 	}
 
 	/// Add another layer's byte counts into this one (for cross-tile
 	/// aggregation). Leaves `name` untouched.
 	pub fn add(&mut self, other: &LayerStats) {
-		self.feature_count += other.feature_count;
-		self.vertex_count += other.vertex_count;
-		self.geometry_bytes += other.geometry_bytes;
-		self.tag_bytes += other.tag_bytes;
-		self.key_bytes += other.key_bytes;
-		self.value_bytes += other.value_bytes;
-		self.id_bytes += other.id_bytes;
-		self.encoded_bytes += other.encoded_bytes;
+		self.feature_count = self.feature_count.saturating_add(other.feature_count);
+		self.vertex_count = self.vertex_count.saturating_add(other.vertex_count);
+		self.geometry_bytes = self.geometry_bytes.saturating_add(other.geometry_bytes);
+		self.tag_bytes = self.tag_bytes.saturating_add(other.tag_bytes);
+		self.key_bytes = self.key_bytes.saturating_add(other.key_bytes);
+		self.value_bytes = self.value_bytes.saturating_add(other.value_bytes);
+		self.id_bytes = self.id_bytes.saturating_add(other.id_bytes);
+		self.encoded_bytes = self.encoded_bytes.saturating_add(other.encoded_bytes);
 	}
 }
 
 /// Byte length of `value` as an unsigned LEB128 varint (matches the MVT/PBF
 /// packed `tag_ids` and feature-id encoding).
 #[must_use]
+#[expect(clippy::arithmetic_side_effects, reason = "a u64 takes at most 10 varint bytes")]
 pub fn varint_len(mut value: u64) -> usize {
 	let mut len = 1;
 	while value >= 0x80 {
@@ -98,24 +106,27 @@ pub fn layer_stats(vt: &VectorTile) -> Result<Vec<LayerStats>> {
 		};
 
 		for feature in &layer.features {
-			stats.geometry_bytes += usize::try_from(feature.geom_data.len())?;
-			stats.vertex_count += feature.count_geometry_points();
-			stats.tag_bytes += feature
+			let geometry_bytes = usize::try_from(feature.geom_data.len())?;
+			stats.geometry_bytes = stats.geometry_bytes.saturating_add(geometry_bytes);
+			stats.vertex_count = stats.vertex_count.saturating_add(feature.count_geometry_points());
+			let tag_bytes = feature
 				.tag_ids
 				.iter()
 				.map(|id| varint_len(u64::from(*id)))
-				.sum::<usize>();
+				.fold(0, usize::saturating_add);
+			stats.tag_bytes = stats.tag_bytes.saturating_add(tag_bytes);
 			// Feature id (MVT field 1, varint): one key byte + the id varint.
 			if let Some(id) = feature.id {
-				stats.id_bytes += 1 + varint_len(id);
+				stats.id_bytes = stats.id_bytes.saturating_add(varint_len(id).saturating_add(1));
 			}
 		}
 
 		for key in layer.property_manager.iter_key() {
-			stats.key_bytes += key.len();
+			stats.key_bytes = stats.key_bytes.saturating_add(key.len());
 		}
 		for value in layer.property_manager.iter_val() {
-			stats.value_bytes += GeoValuePBF::to_blob(value).map_or(0, |b| usize::try_from(b.len()).unwrap_or(0));
+			let value_bytes = GeoValuePBF::to_blob(value).map_or(0, |b| usize::try_from(b.len()).unwrap_or(0));
+			stats.value_bytes = stats.value_bytes.saturating_add(value_bytes);
 		}
 
 		out.push(stats);
@@ -172,6 +183,21 @@ mod tests {
 		// Categories must never overcount the real encoded size.
 		assert!(s.geometry_bytes + s.tag_bytes + s.property_bytes() + s.id_bytes <= s.encoded_bytes);
 		Ok(())
+	}
+
+	/// Aggregates run over every tile of a probe; a total pinned at the maximum
+	/// is still a truer report than a panic or a total wrapped to near zero.
+	#[test]
+	fn add_saturates() {
+		let mut total = LayerStats {
+			encoded_bytes: usize::MAX - 1,
+			..LayerStats::default()
+		};
+		total.add(&LayerStats {
+			encoded_bytes: 5,
+			..LayerStats::default()
+		});
+		assert_eq!(total.encoded_bytes, usize::MAX);
 	}
 
 	#[test]

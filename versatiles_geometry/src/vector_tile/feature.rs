@@ -1,8 +1,3 @@
-// Geometry is decoded from tiles and encoded from any input, so integer
-// arithmetic is checked or saturating, and the lint keeps it that way (#294).
-// Tests are exempt.
-#![cfg_attr(not(test), deny(clippy::arithmetic_side_effects))]
-
 use anyhow::{Context, Result, bail, ensure};
 use byteorder::LE;
 use geo_types::{
@@ -94,7 +89,7 @@ pub(crate) fn normalize_multipolygon_winding(mp: MultiPolygon<f64>) -> MultiPoly
 
 /// A ring without the closing vertex that repeats its first one, if it has it.
 /// MVT closes rings with `ClosePath` instead.
-fn without_closing_vertex(coords: &[Coord<f64>]) -> &[Coord<f64>] {
+pub(super) fn without_closing_vertex(coords: &[Coord<f64>]) -> &[Coord<f64>] {
 	match coords.split_last() {
 		Some((last, open)) if open.first() == Some(last) => open,
 		_ => coords,

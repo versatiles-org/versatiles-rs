@@ -55,7 +55,7 @@ use geo_types::Coord;
 
 use super::{
 	VectorTile,
-	feature::{WINDING_EPSILON, parse_geom_command_stream, ring_signed_double_area},
+	feature::{WINDING_EPSILON, parse_geom_command_stream, ring_signed_double_area, without_closing_vertex},
 	geometry_type::GeomType,
 };
 
@@ -275,15 +275,11 @@ fn check_polygon_rings(
 /// Like `ring_is_degenerate` from `feature.rs` but returns the specific reason
 /// so the validator can surface it. Returns `None` for non-degenerate rings.
 fn degeneracy_reason(coords: &[Coord<f64>]) -> Option<DegenerateReason> {
-	let n = if coords.len() >= 2 && coords.first() == coords.last() {
-		coords.len() - 1
-	} else {
-		coords.len()
-	};
+	let coords = without_closing_vertex(coords);
+	let n = coords.len();
 	if n < 3 {
 		return Some(DegenerateReason::TooFewVertices);
 	}
-	let coords = &coords[..n];
 
 	let mut seen = std::collections::HashSet::<(i64, i64)>::with_capacity(n);
 	for c in coords {

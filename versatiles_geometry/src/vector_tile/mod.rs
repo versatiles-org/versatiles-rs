@@ -10,6 +10,13 @@
 //!
 //! This module re‑exports the most commonly used types for convenience:
 //! [`VectorTileLayer`] and [`VectorTile`].
+//!
+//! ## Arithmetic
+//! Geometry and tag ids are decoded from tiles, and geometry is encoded from any
+//! input, so integer arithmetic is checked or saturating (#294). The lint keeps
+//! new code to that; arithmetic that cannot overflow says why where it is
+//! allowed. Tests are exempt.
+#![cfg_attr(not(test), deny(clippy::arithmetic_side_effects))]
 
 mod feature;
 mod geometry_type;

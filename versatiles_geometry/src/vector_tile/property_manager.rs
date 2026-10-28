@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Div};
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
 use anyhow::{Context, Result, anyhow, ensure};
 
@@ -134,8 +134,14 @@ impl PropertyManager {
 				if *v == GeoValue::Null {
 					continue;
 				}
-				key_map.entry(k.clone()).and_modify(|n| *n += 1).or_insert(0);
-				val_map.entry(v.clone()).and_modify(|n| *n += 1).or_insert(0);
+				key_map
+					.entry(k.clone())
+					.and_modify(|n| *n = n.saturating_add(1))
+					.or_insert(0);
+				val_map
+					.entry(v.clone())
+					.and_modify(|n| *n = n.saturating_add(1))
+					.or_insert(0);
 			}
 		}
 
@@ -178,9 +184,8 @@ impl PropertyManager {
 		);
 		let mut properties = GeoProperties::new();
 
-		for i in 0..tag_ids.len().div(2) {
-			let tag_key = tag_ids[i * 2];
-			let tag_val = tag_ids[i * 2 + 1];
+		let (pairs, _) = tag_ids.as_chunks::<2>();
+		for &[tag_key, tag_val] in pairs {
 			properties.insert(
 				self.key.get(tag_key).context("Failed to get property key")?.to_owned(),
 				self.val.get(tag_val).context("Failed to get property value")?.clone(),
