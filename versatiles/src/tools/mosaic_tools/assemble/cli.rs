@@ -134,51 +134,6 @@ pub(super) fn parse_quality(quality: &str) -> Result<[Option<u8>; 32]> {
 	Ok(result)
 }
 
-pub(super) fn parse_input_list(content: &str) -> Vec<String> {
-	content
-		.lines()
-		.map(|line| {
-			let line = if let Some(idx) = line.find('#') {
-				&line[..idx]
-			} else {
-				line
-			};
-			line.trim().to_string()
-		})
-		.filter(|line| !line.is_empty())
-		.collect()
-}
-
-pub(super) fn resolve_inputs(args: &[String]) -> Result<Vec<String>> {
-	let mut result = Vec::new();
-	for arg in args {
-		if let Some(file_path) = arg.strip_prefix('@') {
-			let content = std::fs::read_to_string(file_path)
-				.with_context(|| format!("Failed to read input list file: {file_path}"))?;
-			result.extend(parse_input_list(&content));
-		} else if std::path::Path::new(arg)
-			.extension()
-			.is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
-		{
-			let content =
-				std::fs::read_to_string(arg).with_context(|| format!("Failed to read input list file: {arg}"))?;
-			result.extend(parse_input_list(&content));
-		} else if arg.contains('*') || arg.contains('?') || arg.contains('[') {
-			let mut matches: Vec<String> = Vec::new();
-			for entry in glob::glob(arg).with_context(|| format!("Invalid glob pattern: {arg}"))? {
-				let path = entry.with_context(|| format!("Error reading glob result for: {arg}"))?;
-				matches.push(path.to_string_lossy().into_owned());
-			}
-			ensure!(!matches.is_empty(), "glob pattern matched no files: {arg}");
-			matches.sort();
-			result.extend(matches);
-		} else {
-			result.push(arg.clone());
-		}
-	}
-	Ok(result)
-}
-
 pub(super) fn parse_buffer_size(s: &str) -> Result<u64> {
 	let s = s.trim();
 	if s == "0" {
@@ -264,43 +219,6 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test_parse_input_list() {
-		let content = "
-# This is a comment
-tiles/001.versatiles
-tiles/002.versatiles
-
-  tiles/003.versatiles
-# Another comment
-https://example.com/tiles/004.versatiles
-";
-		let paths = parse_input_list(content);
-		assert_eq!(
-			paths,
-			vec![
-				"tiles/001.versatiles",
-				"tiles/002.versatiles",
-				"tiles/003.versatiles",
-				"https://example.com/tiles/004.versatiles",
-			]
-		);
-	}
-
-	#[test]
-	fn test_parse_input_list_inline_comments() {
-		let content = "tiles/001.versatiles # first container\ntiles/002.versatiles";
-		let paths = parse_input_list(content);
-		assert_eq!(paths, vec!["tiles/001.versatiles", "tiles/002.versatiles"]);
-	}
-
-	#[test]
-	fn test_parse_input_list_empty() {
-		let content = "\n# only comments\n  \n";
-		let paths = parse_input_list(content);
-		assert_eq!(paths, Vec::<String>::new());
-	}
-
-	#[test]
 	fn test_parse_buffer_size() {
 		// Plain bytes
 		assert_eq!(parse_buffer_size("0").unwrap(), 0);
@@ -358,81 +276,6 @@ https://example.com/tiles/004.versatiles
 	}
 
 	#[test]
-	fn test_resolve_inputs_literal() {
-		let args = vec!["a.versatiles".to_string(), "b.versatiles".to_string()];
-		let result = resolve_inputs(&args).unwrap();
-		assert_eq!(result, vec!["a.versatiles", "b.versatiles"]);
-	}
-
-	#[test]
-	fn test_resolve_inputs_at_file() {
-		let dir = tempfile::tempdir().unwrap();
-		let list_path = dir.path().join("inputs.txt");
-		std::fs::write(&list_path, "one.versatiles\ntwo.versatiles\n# comment\n").unwrap();
-
-		let args = vec![format!("@{}", list_path.display())];
-		let result = resolve_inputs(&args).unwrap();
-		assert_eq!(result, vec!["one.versatiles", "two.versatiles"]);
-	}
-
-	#[test]
-	fn test_resolve_inputs_glob() {
-		let dir = tempfile::tempdir().unwrap();
-		std::fs::write(dir.path().join("a.versatiles"), "").unwrap();
-		std::fs::write(dir.path().join("b.versatiles"), "").unwrap();
-		std::fs::write(dir.path().join("c.txt"), "").unwrap();
-
-		let pattern = format!("{}/*.versatiles", dir.path().display());
-		let args = vec![pattern];
-		let result = resolve_inputs(&args).unwrap();
-		assert_eq!(result.len(), 2);
-		assert!(result[0].ends_with("a.versatiles"));
-		assert!(result[1].ends_with("b.versatiles"));
-	}
-
-	#[test]
-	fn test_resolve_inputs_txt_file() {
-		let dir = tempfile::tempdir().unwrap();
-		let list_path = dir.path().join("sources.txt");
-		std::fs::write(&list_path, "alpha.versatiles\n# skip\nbeta.versatiles\n").unwrap();
-
-		let args = vec![list_path.to_string_lossy().into_owned()];
-		let result = resolve_inputs(&args).unwrap();
-		assert_eq!(result, vec!["alpha.versatiles", "beta.versatiles"]);
-	}
-
-	#[test]
-	fn test_resolve_inputs_glob_no_match() {
-		let args = vec!["/nonexistent_dir_xyz/*.versatiles".to_string()];
-		assert!(resolve_inputs(&args).is_err());
-	}
-
-	#[test]
-	fn test_resolve_inputs_at_file_missing() {
-		let args = vec!["@/nonexistent/path.txt".to_string()];
-		assert!(resolve_inputs(&args).is_err());
-	}
-
-	#[test]
-	fn test_resolve_inputs_mixed_args() {
-		let dir = tempfile::tempdir().unwrap();
-		std::fs::write(dir.path().join("a.versatiles"), "").unwrap();
-		let list_path = dir.path().join("list.txt");
-		std::fs::write(&list_path, "from_list.versatiles\n").unwrap();
-
-		let args = vec![
-			"literal.versatiles".to_string(),
-			format!("@{}", list_path.display()),
-			format!("{}/*.versatiles", dir.path().display()),
-		];
-		let result = resolve_inputs(&args).unwrap();
-		assert_eq!(result.len(), 3);
-		assert_eq!(result[0], "literal.versatiles");
-		assert_eq!(result[1], "from_list.versatiles");
-		assert!(result[2].ends_with("a.versatiles"));
-	}
-
-	#[test]
 	fn test_parse_quality_single_value_fills_all_zooms() {
 		let q = parse_quality("60").unwrap();
 		for i in &q {
@@ -477,20 +320,6 @@ https://example.com/tiles/004.versatiles
 	}
 
 	#[test]
-	fn test_parse_input_list_whitespace_only_lines() {
-		let content = "  \n\t\npath.versatiles\n   \n";
-		let paths = parse_input_list(content);
-		assert_eq!(paths, vec!["path.versatiles"]);
-	}
-
-	#[test]
-	fn test_parse_input_list_comment_at_start_of_line() {
-		let content = "# comment\nfoo.versatiles\n#bar.versatiles";
-		let paths = parse_input_list(content);
-		assert_eq!(paths, vec!["foo.versatiles"]);
-	}
-
-	#[test]
 	fn test_parse_buffer_size_zero_with_unit() {
 		// "0" is special-cased, but "0g" goes through the normal path
 		assert_eq!(parse_buffer_size("0g").unwrap(), 0);
@@ -510,16 +339,5 @@ https://example.com/tiles/004.versatiles
 			assert!(parse_buffer_size("100%").is_err());
 		}
 		assert!(parse_buffer_size("-1%").is_err());
-	}
-
-	#[test]
-	fn test_resolve_inputs_empty_list_file() {
-		let dir = tempfile::tempdir().unwrap();
-		let list_path = dir.path().join("empty.txt");
-		std::fs::write(&list_path, "# only comments\n\n").unwrap();
-
-		let args = vec![list_path.to_string_lossy().into_owned()];
-		let result = resolve_inputs(&args).unwrap();
-		assert_eq!(result, Vec::<String>::new());
 	}
 }

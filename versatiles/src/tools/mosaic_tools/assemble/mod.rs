@@ -45,7 +45,7 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 
 	log::info!("mosaic assemble to {output:?}");
 
-	let paths = cli::resolve_inputs(input_args)?;
+	let paths = crate::tools::inputs::resolve_inputs(input_args)?;
 	ensure!(!paths.is_empty(), "no input container paths resolved");
 
 	let quality = cli::parse_quality(&args.quality)?;
