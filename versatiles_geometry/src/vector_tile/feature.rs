@@ -1,3 +1,8 @@
+// Geometry is decoded from tiles and encoded from any input, so integer
+// arithmetic is checked or saturating, and the lint keeps it that way (#294).
+// Tests are exempt.
+#![cfg_attr(not(test), deny(clippy::arithmetic_side_effects))]
+
 use anyhow::{Context, Result, bail, ensure};
 use byteorder::LE;
 use geo_types::{
@@ -37,12 +42,14 @@ impl Default for VectorTileFeature {
 /// Returns 2 × the signed area of a closed ring (trapezoid form, matching the
 /// historical versatiles convention: positive for counter-clockwise rings).
 pub(super) fn ring_signed_double_area(coords: &[Coord<f64>]) -> f64 {
-	let n = coords.len();
-	if n < 3 {
+	let Some(&last) = coords.last() else {
+		return 0.0;
+	};
+	if coords.len() < 3 {
 		return 0.0;
 	}
 	let mut sum = 0.0;
-	let mut prev = coords[n - 1];
+	let mut prev = last;
 	for &p in coords {
 		sum += (prev.x - p.x) * (p.y + prev.y);
 		prev = p;
@@ -85,6 +92,15 @@ pub(crate) fn normalize_multipolygon_winding(mp: MultiPolygon<f64>) -> MultiPoly
 	MultiPolygon(mp.0.into_iter().map(normalize_polygon_winding).collect())
 }
 
+/// A ring without the closing vertex that repeats its first one, if it has it.
+/// MVT closes rings with `ClosePath` instead.
+fn without_closing_vertex(coords: &[Coord<f64>]) -> &[Coord<f64>] {
+	match coords.split_last() {
+		Some((last, open)) if open.first() == Some(last) => open,
+		_ => coords,
+	}
+}
+
 /// Returns `true` if a ring would round to a degenerate shape on the MVT
 /// integer grid. A ring is degenerate when any of these hold:
 ///
@@ -98,15 +114,11 @@ pub(crate) fn normalize_multipolygon_winding(mp: MultiPolygon<f64>) -> MultiPoly
 /// render — and emitting them risks turning interior rings into orphan inners
 /// at the decoder if the exterior is the degenerate one.
 pub(super) fn ring_is_degenerate(coords: &[Coord<f64>]) -> bool {
-	let n = if coords.len() >= 2 && coords.first() == coords.last() {
-		coords.len() - 1
-	} else {
-		coords.len()
-	};
+	let coords = without_closing_vertex(coords);
+	let n = coords.len();
 	if n < 3 {
 		return true;
 	}
-	let coords = &coords[..n];
 
 	let mut seen = std::collections::HashSet::<(i64, i64)>::with_capacity(n);
 	for c in coords {
@@ -264,7 +276,7 @@ impl VectorTileFeature {
 						if reader.read_svarint().is_err() || reader.read_svarint().is_err() {
 							return total;
 						}
-						total += 1;
+						total = total.saturating_add(1);
 					}
 				}
 				// ClosePath: no coordinates.
@@ -512,8 +524,14 @@ impl VectorTileFeature {
 		fn write_coord(writer: &mut ValueWriterBlob<LE>, coord0: &mut (i64, i64), coord: Coord<f64>) -> Result<()> {
 			let x = float_to_int(coord.x)?;
 			let y = float_to_int(coord.y)?;
-			writer.write_svarint(x - coord0.0)?;
-			writer.write_svarint(y - coord0.1)?;
+			// Any `i64` passes `float_to_int`, so the step from the previous
+			// vertex can still overflow, e.g. from -5e18 to 5e18.
+			let delta = |to: i64, from: i64| {
+				to.checked_sub(from)
+					.with_context(|| format!("step from {from} to {to} between vertices overflows i64"))
+			};
+			writer.write_svarint(delta(x, coord0.0)?)?;
+			writer.write_svarint(delta(y, coord0.1)?)?;
 			coord0.0 = x;
 			coord0.1 = y;
 			Ok(())
@@ -560,19 +578,13 @@ impl VectorTileFeature {
 
 		fn write_ring(writer: &mut ValueWriterBlob<LE>, point0: &mut (i64, i64), ring: &LineString<f64>) -> Result<()> {
 			let coords = &ring.0;
-			// Drop closing duplicate vertex if present (MVT closes via ClosePath, not by repeating).
-			let trim_to = if coords.len() >= 2 && coords.first() == coords.last() {
-				coords.len() - 1
-			} else {
-				coords.len()
-			};
-			if trim_to < 3 {
+			let coords = without_closing_vertex(coords);
+			if coords.len() < 3 {
 				// degenerate ring; skip
 				return Ok(());
 			}
-			let coords = &coords[..trim_to];
 
-			let (first, rest) = coords.split_first().expect("trim_to >= 3");
+			let (first, rest) = coords.split_first().expect("at least 3 vertices");
 
 			writer.write_varint((1 << 3) | 0x1)?; // MoveTo command
 			write_coord(writer, point0, *first)?;
@@ -694,6 +706,28 @@ mod tests {
 	use geo_types::{LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
 
 	use super::*;
+
+	/// The encoder's counterpart: every vertex fits an `i64`, but the step from
+	/// one to the next did not, here 1e19, and its subtraction panicked or wrapped.
+	#[test]
+	fn encoding_a_step_that_overflows_is_rejected() {
+		let line = LineString::from(vec![(-5e18, 0.0), (5e18, 0.0)]);
+		let error = VectorTileFeature::from_geometry(None, vec![], Geometry::LineString(line)).unwrap_err();
+		assert!(format!("{error:#}").contains("overflows i64"), "{error:#}");
+	}
+
+	#[test]
+	fn the_closing_vertex_is_dropped_only_when_it_repeats_the_first() {
+		let c = |x: f64| Coord { x, y: 0.0 };
+		assert_eq!(without_closing_vertex(&[]), &[] as &[Coord<f64>]);
+		assert_eq!(without_closing_vertex(&[c(1.0)]), &[c(1.0)]);
+		assert_eq!(without_closing_vertex(&[c(1.0), c(1.0)]), &[c(1.0)]);
+		assert_eq!(without_closing_vertex(&[c(1.0), c(2.0), c(1.0)]), &[c(1.0), c(2.0)]);
+		assert_eq!(
+			without_closing_vertex(&[c(1.0), c(2.0), c(3.0)]),
+			&[c(1.0), c(2.0), c(3.0)]
+		);
+	}
 
 	/// Geometry deltas accumulate, and they come from the tile. A stream of large
 	/// but individually legal deltas used to overflow the `i64` accumulator: a
