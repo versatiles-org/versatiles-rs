@@ -112,6 +112,10 @@ jobs:
       - name: Check release profile copy
         run: python3 scripts/check-release-profile.py
 
+      # Every published crate carries the licence text (#292).
+      - name: Check crate licences
+        run: ./scripts/check-crate-licenses.sh
+
   # ============================================================================
   # Linux: Dependencies
   # ============================================================================

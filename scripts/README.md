@@ -25,6 +25,7 @@ Run any of them as `./scripts/<name>` from anywhere in the repository.
 | `check-markdown.sh`        | Lint all Markdown files in the repository with `markdownlint-cli2`                                                        |
 | `check-reduce-cases.mjs`   | Check the features the `vector_reduce_to_style` cases say are drawn against MapLibre's style-spec; run by `check-rust.sh` |
 | `check-release-profile.py` | Check that `versatiles/Cargo.toml` carries the workspace's release profile, for `cargo install`; run by `check-rust.sh`   |
+| `check-crate-licenses.sh`  | Check that every crate the workspace publishes contains `LICENSE`; run by `check-rust.sh`                                 |
 | `format.sh`                | Auto-format the codebase in place — the write-mode counterpart to `check.sh`                                              |
 
 ## Test
