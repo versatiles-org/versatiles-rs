@@ -277,6 +277,7 @@ Usage: versatiles [OPTIONS] <COMMAND>
 
 Commands:
   convert  Convert between different tile containers
+  merge    Merge many tile containers into one
   probe    Show information about a tile container
   reduce   Reduce a tileset to what a style actually draws
   serve    Serve tiles via HTTP
@@ -349,6 +350,35 @@ versatiles convert --min-zoom=1 --max-zoom=10 \
 # Write directly to a remote server via SFTP (requires sftp feature)
 versatiles convert tiles.mbtiles \
   sftp://user@host/path/to/output.versatiles
+```
+
+#### merge - Join Tile Containers
+
+Merge many tile containers into one, without writing a VPL pipeline. Where more than one input has a tile, the earlier input takes priority. Inputs are anything `convert` reads, plus globs (quoted, matches sorted), `.txt` files and `@file` arguments listing one input per line.
+
+```sh
+versatiles merge -o merged.versatiles 'regions/*.versatiles' extra.pmtiles
+```
+
+| Option             | Description                                                                                                                       | Example             |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `--output`, `-o`   | Output tile container (required)                                                                                                  | `-o out.versatiles` |
+| `--strategy`       | `first`: the first input's tile, as it is; `blend`: raster tiles composited; `layers`: vector tiles with the layers of all inputs | `--strategy=layers` |
+| `--auto-overscale` | With `blend`: fill each input's gaps from its lower zoom levels                                                                   | `--auto-overscale`  |
+| `--dry-run`        | List the inputs and exit, opening none                                                                                            | `--dry-run`         |
+
+The output options of `convert` apply as well: `--min-zoom`, `--max-zoom`, `--bbox`, `--bbox-border`, `--compress`, `--tile-format`, `--writer-option` and `--force`.
+
+Every input is opened, and its tile type checked, before any tile is read. Raster and vector inputs cannot be merged, `first` needs every input in the same tile format, `blend` takes only raster tiles and `layers` only vector tiles; the error names the input that differs. All inputs stay open until the output is written, so above 256 inputs `merge` warns about the open-file limit.
+
+`merge` builds the same pipeline as a hand-written `from_stacked`, `from_stacked_raster` or `from_merged_vector`. For large raster mosaics, `versatiles mosaic assemble` reads the inputs in two passes and keeps memory within `--max-buffer-size`.
+
+```sh
+# Put an overlay's layers into a basemap's tiles
+versatiles merge -o out.versatiles --strategy=layers basemap.versatiles overlay.mbtiles
+
+# Inputs listed in a file, cut at zoom 14
+versatiles merge -o out.pmtiles --max-zoom=14 @inputs.txt
 ```
 
 #### probe - Inspect Tile Containers

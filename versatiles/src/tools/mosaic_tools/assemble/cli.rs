@@ -15,6 +15,9 @@ every source once and classifies each tile as opaque, empty, or translucent;
 the second pass only re-opens the sources needed to composite each
 translucent tile.
 
+For vector tiles, or to merge containers in a single pass without memory
+limits, see `versatiles merge`.
+
 EXAMPLES
 
   # Two literal inputs + an output (last path is always the output).

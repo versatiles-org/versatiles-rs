@@ -4,6 +4,7 @@
 //!
 //! ## Subcommands
 //! - **Convert**: Convert between different tile containers.
+//! - **Merge**: Merge many tile containers into one.
 //! - **Probe**: Show information about a tile container.
 //! - **Serve**: Serve tiles via HTTP.
 //!
@@ -105,6 +106,9 @@ enum Commands {
 	#[clap(alias = "converter")]
 	/// Convert between different tile containers
 	Convert(tools::convert::Subcommand),
+
+	/// Merge many tile containers into one
+	Merge(tools::merge::Subcommand),
 
 	/// Show information about a tile container
 	Probe(tools::probe::Subcommand),
@@ -208,6 +212,7 @@ fn main() {
 fn run(cli: &Cli, runtime: &TilesRuntime) -> Result<()> {
 	match &cli.command {
 		Commands::Convert(arguments) => tools::convert::run(arguments, runtime),
+		Commands::Merge(arguments) => tools::merge::run(arguments, runtime),
 		Commands::Help(arguments) => tools::help::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments, runtime),
 		Commands::Reduce(arguments) => tools::reduce::run(arguments, runtime),
