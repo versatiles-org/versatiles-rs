@@ -23,6 +23,16 @@ pub fn raw_unit_meters(encoding: DemEncoding) -> f64 {
 	}
 }
 
+/// The elevation in meters that one pixel's `[r, g, b]` encodes.
+#[must_use]
+pub fn decode_elevation(encoding: DemEncoding, [r, g, b]: [u8; 3]) -> f64 {
+	let raw = f64::from((u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b));
+	match encoding {
+		DemEncoding::Mapbox => raw * 0.1 - 10000.0,
+		DemEncoding::Terrarium => raw / 256.0 - 32768.0,
+	}
+}
+
 /// Detect `DemEncoding` from a `TileSchema`.
 pub fn from_tile_schema(schema: Option<&TileSchema>) -> Result<DemEncoding> {
 	match schema {
@@ -87,6 +97,15 @@ mod tests {
 	fn test_raw_unit_meters() {
 		assert!((raw_unit_meters(DemEncoding::Mapbox) - 0.1).abs() < f64::EPSILON);
 		assert!((raw_unit_meters(DemEncoding::Terrarium) - 1.0 / 256.0).abs() < f64::EPSILON);
+	}
+
+	#[test]
+	fn decode_elevation_matches_both_specifications() {
+		// Mapbox: raw 100000 is 0 m; Terrarium: 128 * 65536 is 0 m.
+		assert!((decode_elevation(DemEncoding::Mapbox, [1, 134, 160]) - 0.0).abs() < 1e-9);
+		assert!((decode_elevation(DemEncoding::Mapbox, [1, 134, 170]) - 1.0).abs() < 1e-9);
+		assert!((decode_elevation(DemEncoding::Terrarium, [128, 0, 0]) - 0.0).abs() < 1e-9);
+		assert!((decode_elevation(DemEncoding::Terrarium, [128, 1, 128]) - 1.5).abs() < 1e-9);
 	}
 
 	#[test]

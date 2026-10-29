@@ -14,7 +14,7 @@ versatiles serve pipeline.vpl
 
 **Read:** [`from_color`](#from_color) · [`from_container`](#from_container) · [`from_csv`](#from_csv) · [`from_debug`](#from_debug) · [`from_gdal_dem`](#from_gdal_dem) · [`from_gdal_raster`](#from_gdal_raster) · [`from_geo`](#from_geo) · [`from_grid`](#from_grid) · [`from_h3`](#from_h3) · [`from_merged_vector`](#from_merged_vector) · [`from_stacked`](#from_stacked) · [`from_stacked_raster`](#from_stacked_raster) · [`from_tile`](#from_tile) · [`from_tilejson`](#from_tilejson)
 
-**Transform:** [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_overzoom`](#vector_overzoom) · [`vector_reduce_to_style`](#vector_reduce_to_style) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
+**Transform:** [`dem_hillshade`](#dem_hillshade) · [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_overzoom`](#vector_overzoom) · [`vector_reduce_to_style`](#vector_reduce_to_style) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
 
 ## Defining a pipeline
 
@@ -427,6 +427,27 @@ The TileJSON document is fetched once when the pipeline is built, and each tile 
 ---
 
 # TRANSFORM operations
+
+---
+
+## dem_hillshade
+
+Renders DEM tiles as hillshading, the way MapLibre's `hillshade` layer shades them.
+
+The result is RGBA tiles that are transparent on flat ground and shade slopes by their steepness and the direction they face. They are an ordinary raster source for any map client, and much smaller than the elevation tiles, since they can be encoded lossily with a following `raster_format format=webp quality=70`.
+
+The shading is MapLibre's default `standard` method, including the slope exaggeration it applies below zoom 15 and its correction for latitude, so a tile looks as a live `hillshade` layer would at the same zoom. The colours are given as `RRGGBB`, `RRGGBBAA` or `[r,g,b,a]`, and an alpha below `FF` makes that part of the shading lighter.
+
+The slopes at a tile's edge are computed with the pixels of the adjacent tiles, so there are no seams; the tiles are read in chunks with a one-tile ring around them, and decoded heights are cached for the neighbours that follow. Across the antimeridian the neighbour wraps around. Where there is none, at the poles or the edge of the data, the edge pixels are repeated.
+
+### Parameters
+
+- _`azimuth`: f64 (optional)_ - Direction the light comes from, in degrees clockwise from north. Defaults to `335`.
+- _`exaggeration`: f64 (optional)_ - Intensity of the shading, from 0 to 1. Defaults to `0.5`.
+- _`shadow_color`: RRGGBB | [r,g,b] (optional)_ - Colour of slopes facing away from the light. Defaults to `000000`.
+- _`highlight_color`: RRGGBB | [r,g,b] (optional)_ - Colour of slopes facing the light. Defaults to `FFFFFF`.
+- _`accent_color`: RRGGBB | [r,g,b] (optional)_ - Colour that accentuates steep terrain, such as cliffs and gorges. Defaults to `000000`.
+- _`encoding`: DemEncoding (optional)_ - Values: `mapbox`, `terrarium`. DEM encoding of the source. Defaults to the encoding its tile schema implies.
 
 ---
 

@@ -1,6 +1,14 @@
 # The VPL metadata surface, as consumers see it. Generated — see tests/metadata_surface.rs.
 # A diff in this file is a change other people's software can see.
 
+dem_hillshade [transform]
+dem_hillshade.azimuth: Option<f64> | optional | default=335 | bounds=(-inf,inf) float
+dem_hillshade.exaggeration: Option<f64> | optional | default=0.5 | bounds=(-inf,inf) float
+dem_hillshade.shadow_color: Option<HexColor> | optional | default=000000
+dem_hillshade.highlight_color: Option<HexColor> | optional | default=FFFFFF
+dem_hillshade.accent_color: Option<HexColor> | optional | default=000000
+dem_hillshade.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium]
+
 dem_overview [transform]
 dem_overview.level: Option<ZoomLevel> | optional | bounds=[0,30] int
 dem_overview.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium]

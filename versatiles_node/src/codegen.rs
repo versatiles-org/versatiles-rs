@@ -983,6 +983,7 @@ mod tests {
 		("from_csv", "point_reduction", &["none", "drop_rate", "min_distance"]),
 		("raster_format", "format", &["avif", "jpg", "png", "webp"]),
 		("raster_mask", "blur_function", &["linear", "cosine"]),
+		("dem_hillshade", "encoding", &["mapbox", "terrarium"]),
 		("dem_quantize", "encoding", &["mapbox", "terrarium"]),
 	];
 
