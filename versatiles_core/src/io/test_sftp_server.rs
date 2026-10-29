@@ -5,7 +5,7 @@ use reqwest::Url;
 use russh::{
 	Channel, ChannelId,
 	keys::{
-		Algorithm, PrivateKey,
+		Algorithm, PrivateKey, PublicKey,
 		ssh_key::rand_core::{TryCryptoRng, TryRng},
 	},
 	server::{self, Auth, Msg, Session},
@@ -65,6 +65,23 @@ use tokio::{
 };
 
 type Fs = Arc<Mutex<HashMap<PathBuf, FsEntry>>>;
+
+/// The host keys of every test server started in this process.
+///
+/// Each server generates a fresh key and binds a random port, so recording them
+/// in a known-hosts file is wrong twice over: the file fills up with entries for
+/// servers that no longer exist, and once a port comes round again, the new key
+/// is refused as a changed one.
+static HOST_KEYS: std::sync::Mutex<Vec<PublicKey>> = std::sync::Mutex::new(Vec::new());
+
+/// Whether `key` belongs to a test server, so host-key verification can let it
+/// through without touching a known-hosts file.
+pub(crate) fn is_test_server_key(key: &PublicKey) -> bool {
+	HOST_KEYS
+		.lock()
+		.unwrap_or_else(std::sync::PoisonError::into_inner)
+		.contains(key)
+}
 
 enum FsEntry {
 	File(Vec<u8>),
@@ -362,6 +379,10 @@ impl TestSftpServer {
 	/// runtime with heavily-loaded test workers.
 	pub async fn start() -> Self {
 		let key = PrivateKey::random(&mut OsRng, Algorithm::Ed25519).unwrap();
+		HOST_KEYS
+			.lock()
+			.unwrap_or_else(std::sync::PoisonError::into_inner)
+			.push(key.public_key().clone());
 		let config = Arc::new(server::Config {
 			keys: vec![key],
 			..Default::default()

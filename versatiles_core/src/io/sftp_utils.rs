@@ -588,6 +588,15 @@ impl client::Handler for ClientHandler {
 /// Returns an error on a mismatched key, and if the known-hosts file cannot be
 /// read or written.
 fn verify_host_key(key: &ssh_key::PublicKey, host: &str, port: u16) -> Result<()> {
+	// The tests of other crates build this one without `cfg(test)`, so without
+	// this they would check the in-process test server against the developer's
+	// own known-hosts file. A file named explicitly still applies, which is how
+	// the tests of this function point it at a temporary one.
+	#[cfg(any(test, feature = "test"))]
+	if std::env::var_os("VERSATILES_SFTP_KNOWN_HOSTS").is_none() && super::test_sftp_server::is_test_server_key(key) {
+		return Ok(());
+	}
+
 	let Some(path) = known_hosts_path()? else {
 		log::warn!("SFTP host key verification is disabled for {host}:{port} (VERSATILES_SFTP_KNOWN_HOSTS)");
 		return Ok(());
@@ -638,7 +647,8 @@ fn verify_host_key(key: &ssh_key::PublicKey, host: &str, port: u16) -> Result<()
 /// throwaway hosts whose key changes on every boot. Under `cfg(test)` the
 /// default is "disabled" so that running the suite never reads or writes the
 /// developer's own `~/.ssh/known_hosts`; the tests that exercise this code set
-/// the variable to a temporary file.
+/// the variable to a temporary file. Other crates' tests get the same
+/// protection from [`verify_host_key`], which skips the test server's keys.
 fn known_hosts_path() -> Result<Option<PathBuf>> {
 	if let Ok(value) = std::env::var("VERSATILES_SFTP_KNOWN_HOSTS") {
 		let value = value.trim();
