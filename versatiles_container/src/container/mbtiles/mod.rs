@@ -7,8 +7,9 @@
 //! - `MBTilesWriter`: Writes tiles to an `MBTiles` `SQLite` database.
 //!
 //! ## Arithmetic
-//! Rows are flipped between XYZ and TMS with [`TileCoord::flip_y`], not by hand,
-//! and the lint keeps it that way (#294). Tests are exempt.
+//! Rows are flipped between XYZ and TMS with
+//! [`TileCoord::flip_y`](versatiles_core::TileCoord::flip_y), not by hand, and
+//! the lint keeps it that way (#294). Tests are exempt.
 #![cfg_attr(not(test), deny(clippy::arithmetic_side_effects))]
 
 mod reader;
