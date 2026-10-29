@@ -159,6 +159,30 @@ mod tests {
 
 	use super::*;
 
+	/// The length is taken when the file is opened, but nothing stops reading
+	/// past it if the file has grown since. `remaining` then wrapped to nearly
+	/// 2^64, and `ensure_available` approved any length on that basis.
+	#[test]
+	fn a_file_that_grew_past_its_length_has_no_remainder() -> Result<()> {
+		use std::io::Write;
+
+		let file = NamedTempFile::new("grows.bin")?;
+		file.write_binary(&[1, 2])?;
+		let mut reader = ValueReaderFile::new_le(File::open(&file)?)?;
+		std::fs::OpenOptions::new()
+			.append(true)
+			.open(&file)?
+			.write_all(&[3, 4])?;
+
+		assert_eq!(reader.read_u8()?, 1);
+		assert_eq!(reader.read_u8()?, 2);
+		assert_eq!(reader.read_u8()?, 3);
+		let error = reader.remaining().unwrap_err();
+		assert!(error.to_string().contains("past the end"), "{error}");
+		assert!(reader.ensure_available(1000).is_err());
+		Ok(())
+	}
+
 	fn create_temp_file_with_content(content: &[u8]) -> Result<File> {
 		let file = NamedTempFile::new("test.bin")?;
 		file.write_binary(content)?;

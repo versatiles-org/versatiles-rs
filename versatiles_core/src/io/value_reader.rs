@@ -30,6 +30,12 @@
 //     assert_eq!(reader_be.read_u16()?, 0x0102);
 // }
 // ```
+//
+// # Arithmetic
+//
+// Lengths, positions and varints come from the data being read, so arithmetic
+// on them is checked (#294), and the lint keeps it that way. Tests are exempt.
+#![cfg_attr(not(test), deny(clippy::arithmetic_side_effects))]
 
 use std::io::{Read, Seek};
 
@@ -82,8 +88,16 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	///
 	/// # Returns
 	/// The number of remaining bytes as a `u64`.
+	///
+	/// # Errors
+	/// Returns an error if the position is past the end, which a file that grew
+	/// after it was opened allows. Unchecked, the remainder wrapped to nearly
+	/// 2^64 and let [`ensure_available`](Self::ensure_available) approve any
+	/// length.
 	fn remaining(&mut self) -> Result<u64> {
-		Ok(self.len() - self.position()?)
+		let (len, position) = (self.len(), self.position()?);
+		len.checked_sub(position)
+			.with_context(|| format!("position {position} is past the end at {len}"))
 	}
 
 	/// Checks if there are any bytes remaining to be read.
@@ -124,22 +138,22 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// The decoded `u64` value.
 	///
 	/// # Errors
-	/// Returns an error if reading fails or the varint is too long (more than 70 bits).
+	/// Returns an error if reading fails, the varint is longer than ten bytes,
+	/// or its value does not fit in a `u64`.
 	fn read_varint(&mut self) -> Result<u64> {
 		let mut value = 0;
-		let mut shift = 0;
-		loop {
+		for shift in (0..64).step_by(7) {
 			let byte = self.reader().read_u8()?;
-			value |= (u64::from(byte) & 0x7F) << shift;
+			let bits = u64::from(byte & 0x7F);
+			// The tenth byte holds bit 63 alone. Shifting more than that in
+			// dropped the high bits without a word, and read a wrong value.
+			ensure!(bits.leading_zeros() >= shift, "Varint overflows u64");
+			value |= bits << shift;
 			if byte & 0x80 == 0 {
-				break;
-			}
-			shift += 7;
-			if shift >= 70 {
-				bail!("Varint too long");
+				return Ok(value);
 			}
 		}
-		Ok(value)
+		bail!("Varint too long")
 	}
 
 	/// Reads a variable-length signed integer (zigzag-encoded varint) from the data.
@@ -154,7 +168,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 		// encoding of |v| ≥ 2^62, which `write_svarint` produces, and used to
 		// fail the conversion to `i64` that came first.
 		let value = self.read_varint()?;
-		Ok((value >> 1).cast_signed() ^ -(value & 1).cast_signed())
+		Ok((value >> 1).cast_signed() ^ (value & 1).cast_signed().wrapping_neg())
 	}
 
 	/// Reads a 32-bit floating point number from the data.
@@ -457,6 +471,28 @@ mod tests {
 		let mut reader = ValueReaderSlice::new_le(&[0xAC, 0x02]);
 		let value = reader.read_varint().unwrap();
 		assert_eq!(value, 300);
+	}
+
+	#[test]
+	fn the_widest_varint_still_fits() {
+		let mut bytes = vec![0xFF; 9];
+		bytes.push(0x01);
+		let mut reader = ValueReaderSlice::new_le(&bytes);
+		assert_eq!(reader.read_varint().unwrap(), u64::MAX);
+		assert_eq!(reader.position().unwrap(), 10);
+	}
+
+	/// The tenth byte holds only bit 63. Anything above it used to be shifted
+	/// out without a word, so `FF…FF 7F` read as `u64::MAX`, and `80…80 02` as 0.
+	#[test]
+	fn a_varint_that_overflows_u64_is_refused() {
+		for last in [0x02, 0x7F] {
+			let mut bytes = vec![0x80; 9];
+			bytes.push(last);
+			let mut reader = ValueReaderSlice::new_le(&bytes);
+			let error = reader.read_varint().unwrap_err();
+			assert!(error.to_string().contains("overflows u64"), "{error}");
+		}
 	}
 
 	#[test]
