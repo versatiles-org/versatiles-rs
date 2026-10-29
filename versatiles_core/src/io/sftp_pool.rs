@@ -204,7 +204,9 @@ impl Connection {
 			.with_context(|| format!("failed to open remote file {path:?}"))?;
 		live.files.insert(id, file);
 		inner.registered.insert(id, path.to_owned());
-		inner.next_file_id += 1;
+		// Saturating would hand out the last id twice; 2^64 opens never happen,
+		// but if they did, this is an error rather than two files sharing an id.
+		inner.next_file_id = id.checked_add(1).context("SFTP file ids are exhausted")?;
 		Ok((id, size))
 	}
 
@@ -308,7 +310,8 @@ impl Connection {
 			sftp,
 			files,
 		});
-		inner.generation += 1;
+		// Only ever compared for equality, so wrapping keeps it working.
+		inner.generation = inner.generation.wrapping_add(1);
 		inner.last_used = Instant::now();
 		log::debug!(
 			"[sftp conn {}] reconnect complete (generation {})",
@@ -383,14 +386,16 @@ pub async fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Conn
 		let decision = {
 			let mut guard = pool().lock().await;
 			let server = guard.entry(key.clone()).or_default();
-			if server.connections.len() + server.opening < connections_per_server() {
-				server.opening += 1;
+			if server.connections.len().saturating_add(server.opening) < connections_per_server() {
+				server.opening = server.opening.saturating_add(1);
 				Decision::Open
 			} else if server.connections.is_empty() {
 				Decision::Wait
 			} else {
 				let connection = Arc::clone(&server.connections[server.next]);
-				server.next = (server.next + 1) % server.connections.len();
+				// Connections are only ever added, so `next` stays in bounds.
+				let next = server.next.saturating_add(1);
+				server.next = if next < server.connections.len() { next } else { 0 };
 				Decision::Reuse(connection)
 			}
 		};
@@ -424,7 +429,7 @@ pub async fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Conn
 				let outcome = {
 					let mut guard = pool().lock().await;
 					let server = guard.entry(key.clone()).or_default();
-					server.opening -= 1;
+					server.opening = server.opening.saturating_sub(1);
 					match result {
 						Ok(connection) => {
 							server.connections.push(Arc::clone(&connection));

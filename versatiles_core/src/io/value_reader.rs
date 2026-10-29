@@ -30,12 +30,6 @@
 //     assert_eq!(reader_be.read_u16()?, 0x0102);
 // }
 // ```
-//
-// # Arithmetic
-//
-// Lengths, positions and varints come from the data being read, so arithmetic
-// on them is checked (#294), and the lint keeps it that way. Tests are exempt.
-#![cfg_attr(not(test), deny(clippy::arithmetic_side_effects))]
 
 use std::io::{Read, Seek};
 

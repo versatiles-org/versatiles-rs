@@ -28,13 +28,6 @@
 //!     Ok(())
 //! }
 //! ```
-//!
-//! # Arithmetic
-//!
-//! Byte ranges come out of container headers and retry counts out of the
-//! environment, so arithmetic on them is checked or saturating (#294). The lint
-//! keeps new code to that. Tests are exempt.
-#![cfg_attr(not(test), deny(clippy::arithmetic_side_effects))]
 
 use std::{
 	fmt, str,

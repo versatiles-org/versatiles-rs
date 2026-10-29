@@ -81,7 +81,7 @@ impl DataReaderSftp {
 	async fn try_read_range_impl(&self, range: &ByteRange) -> Result<Blob> {
 		let policy = super::retry::policy();
 		let max_retries = policy.max_retries;
-		let total_attempts = max_retries + 1;
+		let total_attempts = max_retries.saturating_add(1);
 		let name = &self.name;
 		let len = range.length;
 		// Generation observed for the most recent read attempt. Passed to
@@ -90,10 +90,10 @@ impl DataReaderSftp {
 		let mut generation = self.connection.generation().await;
 
 		for attempt in 0..=max_retries {
-			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
+			let attempt_label = format!("attempt {}/{total_attempts}", attempt.saturating_add(1));
 
-			if attempt > 0 {
-				let backoff = policy.backoff(attempt - 1);
+			if let Some(retry) = attempt.checked_sub(1) {
+				let backoff = policy.backoff(retry);
 				log::warn!("SFTP read {range} from '{name}': retrying ({attempt_label}, waiting {backoff:?})");
 				tokio::time::sleep(backoff).await;
 

@@ -42,21 +42,20 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 		let blob_len = blob.len();
 		let policy = super::retry::policy();
 		let max_retries = policy.max_retries;
-		let total_attempts = max_retries + 1;
+		let total_attempts = max_retries.saturating_add(1);
 
 		for attempt in 0..=max_retries {
-			if attempt > 0 {
-				let backoff = policy.backoff(attempt - 1);
+			let number = attempt.saturating_add(1);
+			if let Some(retry) = attempt.checked_sub(1) {
+				let backoff = policy.backoff(retry);
 				log::warn!(
-					"write to '{name}' at position {pos}: retrying (attempt {}/{total_attempts}, waiting {backoff:?})",
-					attempt + 1
+					"write to '{name}' at position {pos}: retrying (attempt {number}/{total_attempts}, waiting {backoff:?})"
 				);
 				tokio::time::sleep(backoff).await;
 
 				if let Err(e) = self.reconnect().await {
 					log::warn!(
-						"write to '{name}' at position {pos}: reconnect failed (attempt {}/{total_attempts}): {e}",
-						attempt + 1
+						"write to '{name}' at position {pos}: reconnect failed (attempt {number}/{total_attempts}): {e}"
 					);
 					if attempt >= max_retries {
 						return Err(e).with_context(|| {
@@ -72,8 +71,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 				Err(e) if attempt < max_retries => {
 					let ctx = self.failure_context();
 					log::warn!(
-						"write to '{name}' at position {pos}: {e}{ctx} (attempt {}/{total_attempts}), will retry",
-						attempt + 1
+						"write to '{name}' at position {pos}: {e}{ctx} (attempt {number}/{total_attempts}), will retry"
 					);
 				}
 				Err(e) => {
@@ -95,24 +93,19 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 		let blob_len = blob.len();
 		let policy = super::retry::policy();
 		let max_retries = policy.max_retries;
-		let total_attempts = max_retries + 1;
+		let total_attempts = max_retries.saturating_add(1);
 
 		for attempt in 0..=max_retries {
+			let number = attempt.saturating_add(1);
 			let restore_pos = self.tracked_position();
 
-			if attempt > 0 {
-				let backoff = policy.backoff(attempt - 1);
-				log::warn!(
-					"write_start to '{name}': retrying (attempt {}/{total_attempts}, waiting {backoff:?})",
-					attempt + 1
-				);
+			if let Some(retry) = attempt.checked_sub(1) {
+				let backoff = policy.backoff(retry);
+				log::warn!("write_start to '{name}': retrying (attempt {number}/{total_attempts}, waiting {backoff:?})");
 				tokio::time::sleep(backoff).await;
 
 				if let Err(e) = self.reconnect().await {
-					log::warn!(
-						"write_start to '{name}': reconnect failed (attempt {}/{total_attempts}): {e}",
-						attempt + 1
-					);
+					log::warn!("write_start to '{name}': reconnect failed (attempt {number}/{total_attempts}): {e}");
 					if attempt >= max_retries {
 						return Err(e).with_context(|| {
 							format!("could not write {blob_len} bytes at start of '{name}': reconnect failed — gave up after {total_attempts} attempts")
@@ -126,10 +119,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 				Ok(()) => return Ok(()),
 				Err(e) if attempt < max_retries => {
 					let ctx = self.failure_context();
-					log::warn!(
-						"write_start to '{name}': {e}{ctx} (attempt {}/{total_attempts}), will retry",
-						attempt + 1
-					);
+					log::warn!("write_start to '{name}': {e}{ctx} (attempt {number}/{total_attempts}), will retry");
 				}
 				Err(e) => {
 					return Err(e).with_context(|| {
@@ -149,21 +139,20 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 		let name = self.writer_name().to_string();
 		let policy = super::retry::policy();
 		let max_retries = policy.max_retries;
-		let total_attempts = max_retries + 1;
+		let total_attempts = max_retries.saturating_add(1);
 
 		for attempt in 0..=max_retries {
-			if attempt > 0 {
-				let backoff = policy.backoff(attempt - 1);
+			let number = attempt.saturating_add(1);
+			if let Some(retry) = attempt.checked_sub(1) {
+				let backoff = policy.backoff(retry);
 				log::warn!(
-					"seek in '{name}' to position {position}: retrying (attempt {}/{total_attempts}, waiting {backoff:?})",
-					attempt + 1
+					"seek in '{name}' to position {position}: retrying (attempt {number}/{total_attempts}, waiting {backoff:?})"
 				);
 				tokio::time::sleep(backoff).await;
 
 				if let Err(e) = self.reconnect().await {
 					log::warn!(
-						"seek in '{name}' to position {position}: reconnect failed (attempt {}/{total_attempts}): {e}",
-						attempt + 1
+						"seek in '{name}' to position {position}: reconnect failed (attempt {number}/{total_attempts}): {e}"
 					);
 					if attempt >= max_retries {
 						return Err(e).with_context(|| {
@@ -181,8 +170,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 				Err(e) if attempt < max_retries => {
 					let ctx = self.failure_context();
 					log::warn!(
-						"seek in '{name}' to position {position}: {e}{ctx} (attempt {}/{total_attempts}), will retry",
-						attempt + 1
+						"seek in '{name}' to position {position}: {e}{ctx} (attempt {number}/{total_attempts}), will retry"
 					);
 				}
 				Err(e) => {

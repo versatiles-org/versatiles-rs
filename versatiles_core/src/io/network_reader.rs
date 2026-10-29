@@ -95,6 +95,10 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 	/// may recurse back into `network_read_range`). The two halves are
 	/// fetched concurrently so wall-clock stays near max(left, right)
 	/// instead of left + right.
+	#[expect(
+		clippy::arithmetic_side_effects,
+		reason = "checked once by `range.end()`: everything here stays at or under the end of the range"
+	)]
 	async fn split_and_read(&self, range: &ByteRange) -> Result<Blob> {
 		// One checked question up front: everything below stays at or under the
 		// end of the range, so nothing else here can overflow.

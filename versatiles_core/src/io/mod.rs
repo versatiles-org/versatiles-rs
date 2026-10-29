@@ -16,6 +16,14 @@
 //!     // Now you can use all the imported modules and structs, such as `DataReaderBlob`, `DataWriterFile`, etc.
 //! }
 //! ```
+//!
+//! # Arithmetic
+//!
+//! Byte ranges and lengths come out of the data being read, and retry counts
+//! out of the environment, so arithmetic on them is checked or saturating
+//! (#294). The lint keeps new code to that; arithmetic that cannot overflow says
+//! why where it is allowed. Tests are exempt.
+#![cfg_attr(not(test), deny(clippy::arithmetic_side_effects))]
 
 use std::sync::{LazyLock, OnceLock};
 
@@ -188,6 +196,10 @@ mod sftp_wrappers;
 /// this one can exercise their own SFTP paths against it — the alternative is
 /// leaving their remote wiring untested, which is where the bugs are.
 #[cfg(all(feature = "sftp", any(test, feature = "test")))]
+#[allow(
+	clippy::arithmetic_side_effects,
+	reason = "test support, serving files the tests wrote"
+)]
 pub mod test_sftp_server;
 #[cfg(feature = "sftp")]
 pub use sftp_wrappers::*;

@@ -619,7 +619,7 @@ fn verify_host_key(key: &ssh_key::PublicKey, host: &str, port: u16) -> Result<()
 			 on line {} of {}. Either the server's key changed, or this connection is being intercepted. \
 			 If the change was expected, remove the stale line from that file.",
 			fingerprint(key),
-			line + 1,
+			line.saturating_add(1),
 			path.display()
 		),
 		Err(e) => Err(anyhow!(e)).with_context(|| {
