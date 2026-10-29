@@ -783,12 +783,13 @@ mod tests {
 	}
 
 	/// A source that takes its time over every tile, and says when a request
-	/// for one has reached it.
+	/// for one has reached it, and with which cancel token.
 	#[derive(Debug)]
 	struct SlowSource {
 		reader: MockReader,
 		delay: std::time::Duration,
 		arrived: tokio::sync::Notify,
+		cancel: std::sync::Mutex<Option<versatiles_core::CancelToken>>,
 	}
 
 	impl SlowSource {
@@ -797,6 +798,7 @@ mod tests {
 				reader: MockReader::new_mock_profile(MRP::Pbf)?,
 				delay,
 				arrived: tokio::sync::Notify::new(),
+				cancel: std::sync::Mutex::new(None),
 			}))
 		}
 	}
@@ -819,10 +821,43 @@ mod tests {
 			&self,
 			bbox: versatiles_core::TileBBox,
 		) -> Result<versatiles_core::TileStream<'static, versatiles_container::Tile>> {
+			*self.cancel.lock().unwrap() = Some(versatiles_core::CancelToken::current());
 			self.arrived.notify_one();
 			tokio::time::sleep(self.delay).await;
 			self.reader.tile_stream(bbox).await
 		}
+	}
+
+	/// A client that goes away cancels the work for its tile (#265): the
+	/// handler is dropped, and with it the guard that cancels the token. Work
+	/// that the drop itself does not reach, on the blocking pool, sees that.
+	#[tokio::test]
+	async fn a_client_that_goes_away_cancels_its_request() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		let slow = SlowSource::new(std::time::Duration::from_secs(600))?;
+		server.add_tile_source("slow".to_string(), slow.clone()).await?;
+		server.start().await?;
+		let port = server.port();
+
+		let request = tokio::spawn(reqwest::get(format!("http://{IP}:{port}/tiles/slow/3/1/2")));
+		slow.arrived.notified().await;
+		let cancel = slow
+			.cancel
+			.lock()
+			.unwrap()
+			.clone()
+			.expect("the request reached the source");
+		assert!(!cancel.is_cancelled(), "nobody has given up yet");
+
+		request.abort();
+		let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+		while !cancel.is_cancelled() {
+			assert!(std::time::Instant::now() < deadline, "the token was not cancelled");
+			tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+		}
+
+		server.stop().await;
+		Ok(())
 	}
 
 	/// `stop` lets a request that is being answered finish, and returns only

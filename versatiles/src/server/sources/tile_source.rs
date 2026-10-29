@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use anyhow::Result;
 use versatiles_container::{SharedTileSource, TileSource};
-use versatiles_core::{Blob, TileCompression, TileCoord, TileType};
+use versatiles_core::{Blob, CancelToken, TileCompression, TileCoord, TileType};
 use versatiles_derive::context;
 
 use super::{super::utils::Url, SourceResponse, TileResponse};
@@ -90,9 +90,14 @@ impl ServerTileSource {
 			// lower zoom level — and a proxy keeps the answer, so a source that
 			// hiccuped once left holes behind for as long as a 404 is cached,
 			// and neither the user nor any monitoring saw a fault.
-			let tile = self
-				.reader
-				.tile(&coord)
+			//
+			// The client going away drops this future, and with it the guard,
+			// which cancels the token: work that outlives the future, such as a
+			// GDAL warp on the blocking pool, stops too (#265).
+			let cancel = CancelToken::new();
+			let _cancel_on_drop = cancel.cancel_on_drop();
+			let tile = cancel
+				.scope(self.reader.tile(&coord))
 				.await
 				.with_context(|| format!("could not produce tile {} of '{}'", coord.to_json(), self.id))?;
 
