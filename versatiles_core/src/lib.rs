@@ -51,7 +51,7 @@ pub struct ReadmeDoctests;
 pub mod byte_iterator;
 /// Telling a tile request to stop.
 pub mod cancel;
-pub use cancel::{CancelOnDrop, CancelToken, Cancelled};
+pub use cancel::{CancelOnDrop, CancelToken, Cancelled, SharedWork};
 pub mod compression;
 /// Helpers for running work across threads.
 pub mod concurrency;
