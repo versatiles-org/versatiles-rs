@@ -8,4 +8,5 @@ use raster_source::RasterSource;
 
 use super::{
 	CrsExtent, Cutline, GdalPool, GeoreferenceOverride, Instance, RasterTransform, ResampleAlg, get_spatial_ref,
+	stop_warp_when_cancelled,
 };

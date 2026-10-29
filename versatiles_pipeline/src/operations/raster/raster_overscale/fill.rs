@@ -23,8 +23,8 @@ use futures::{StreamExt, TryStreamExt, stream};
 use moka::future::Cache;
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use versatiles_core::{
-	ConcurrencyLimits, GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover, TileFormat, TileJSON, TilePyramid,
-	TileSchema, TileStream,
+	CancelToken, ConcurrencyLimits, GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover, TileFormat, TileJSON,
+	TilePyramid, TileSchema, TileStream,
 };
 use versatiles_image::DynamicImage;
 
@@ -276,12 +276,18 @@ impl FillOverscale {
 
 	/// The decoded tile of the source at `coord`, or `None` if it has none.
 	async fn image(&self, coord: TileCoord) -> Result<Option<Arc<DynamicImage>>> {
+		// Shared between every tile made from this one, so read under no
+		// request's token: under the token of the request that started the
+		// read, cancelling that request would fail all the others (#265).
 		self
 			.images
-			.try_get_with(coord, async {
-				let tile = self.source.tile(&coord).await?;
-				tile.map(|tile| tile.into_image().map(Arc::new)).transpose()
-			})
+			.try_get_with(
+				coord,
+				CancelToken::never().scope(async {
+					let tile = self.source.tile(&coord).await?;
+					tile.map(|tile| tile.into_image().map(Arc::new)).transpose()
+				}),
+			)
 			.await
 			.map_err(|error: Arc<anyhow::Error>| anyhow!("{error:#}"))
 	}

@@ -3,10 +3,12 @@ use std::{path::Path, sync::Arc};
 use anyhow::{Context, Result, bail, ensure};
 use gdal::{Dataset, DriverManager, GeoTransform};
 use imageproc::image::{DynamicImage, RgbImage};
-use versatiles_core::GeoBBox;
+use versatiles_core::{CancelToken, GeoBBox};
 use versatiles_derive::context;
 
-use super::{Cutline, GdalPool, GeoreferenceOverride, Instance, ResampleAlg, get_spatial_ref};
+use super::{
+	Cutline, GdalPool, GeoreferenceOverride, Instance, ResampleAlg, get_spatial_ref, stop_warp_when_cancelled,
+};
 /// DEM encoding format.
 ///
 /// Re-exported rather than redeclared: `encoding=` on `from_gdal_dem` and on the
@@ -49,6 +51,9 @@ fn reproject_to_float_dataset(
 	cutline: Option<&Cutline>,
 ) -> Result<Dataset> {
 	log::trace!("reproject_to_float_dataset started for size={width}x{height}");
+	// Kept until the warp is done: GDAL holds a pointer to it.
+	let cancel = CancelToken::current();
+	cancel.check()?;
 
 	let bbox_mer = bbox.to_mercator();
 
@@ -111,6 +116,7 @@ fn reproject_to_float_dataset(
 
 		(*options_ptr).pTransformerArg = GDALCreateGenImgProjTransformer2(h_src_ds, h_dst_ds, core::ptr::null_mut());
 		(*options_ptr).pfnTransformer = Some(GDALGenImgProjTransform);
+		stop_warp_when_cancelled(options_ptr, &cancel);
 
 		let operation: GDALWarpOperationH = GDALCreateWarpOperation(options_ptr);
 
@@ -127,6 +133,8 @@ fn reproject_to_float_dataset(
 		GDALDestroyWarpOptions(options_ptr);
 
 		if rv != CPLErr::CE_None {
+			// Stopped by the token, not failed: say so rather than "User terminated".
+			cancel.check()?;
 			bail!("{:?}", CPLGetLastErrorMsg());
 		}
 	}
@@ -186,31 +194,43 @@ impl DemSource {
 		height: usize,
 		encoding: DemEncoding,
 	) -> Result<Option<DynamicImage>> {
+		// Opening a dataset can take a long time, and nothing stops it once
+		// started, so ask before. The token is captured here because the warp
+		// below runs on the blocking pool, which does not inherit it.
+		let cancel = CancelToken::current();
+		cancel.check()?;
+
 		let instance = self.pool.instance().await?;
+		let cutline = self.cutline.clone();
+		let bbox = *bbox;
 
-		let dst = reproject_to_float_dataset(&instance, width, height, bbox, self.cutline.as_ref())?;
+		// The warp, too, runs on the blocking pool, as in `RasterSource::image`.
+		// It used to run here on the async executor, where it held a worker
+		// thread for as long as the warp took.
+		let image = tokio::task::spawn_blocking(move || {
+			cancel.sync_scope(|| -> Result<Option<DynamicImage>> {
+				let dst = reproject_to_float_dataset(&instance, width, height, &bbox, cutline.as_ref())?;
+				let band = dst.rasterband(1)?.read_band_as::<f32>()?;
+				let data = band.data();
+				ensure!(
+					data.len() == width * height,
+					"Band data length mismatch: expected {} but got {}",
+					width * height,
+					data.len()
+				);
 
-		let image = tokio::task::spawn_blocking(move || -> Result<Option<DynamicImage>> {
-			let band = dst.rasterband(1)?.read_band_as::<f32>()?;
-			let data = band.data();
-			ensure!(
-				data.len() == width * height,
-				"Band data length mismatch: expected {} but got {}",
-				width * height,
-				data.len()
-			);
+				let mut rgb_buf = vec![0u8; width * height * 3];
+				for (i, &elev) in data.iter().enumerate() {
+					let [r, g, b] = encode_elevation(elev, encoding);
+					rgb_buf[i * 3] = r;
+					rgb_buf[i * 3 + 1] = g;
+					rgb_buf[i * 3 + 2] = b;
+				}
 
-			let mut rgb_buf = vec![0u8; width * height * 3];
-			for (i, &elev) in data.iter().enumerate() {
-				let [r, g, b] = encode_elevation(elev, encoding);
-				rgb_buf[i * 3] = r;
-				rgb_buf[i * 3 + 1] = g;
-				rgb_buf[i * 3 + 2] = b;
-			}
-
-			let img = RgbImage::from_raw(u32::try_from(width)?, u32::try_from(height)?, rgb_buf)
-				.context("Failed to create RgbImage from elevation data")?;
-			Ok(Some(DynamicImage::ImageRgb8(img)))
+				let img = RgbImage::from_raw(u32::try_from(width)?, u32::try_from(height)?, rgb_buf)
+					.context("Failed to create RgbImage from elevation data")?;
+				Ok(Some(DynamicImage::ImageRgb8(img)))
+			})
 		})
 		.await??;
 
@@ -391,6 +411,30 @@ mod tests {
 		let image = ds.elevation_tile(&bbox_in, 256, 256, encoding).await.unwrap().unwrap();
 		assert_eq!(image.width(), 256);
 		assert_eq!(image.height(), 256);
+	}
+
+	/// The token reaches the warp on the blocking pool, and its error says the
+	/// request was cancelled rather than that it failed (#265).
+	#[tokio::test(flavor = "multi_thread")]
+	async fn a_cancelled_request_gets_no_elevation_tile() {
+		let bbox_in = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
+		let ds = DemSource::from_testdata(bbox_in).unwrap();
+
+		let cancel = CancelToken::new();
+		cancel.cancel();
+		let error = cancel
+			.scope(ds.elevation_tile(&bbox_in, 256, 256, DemEncoding::Mapbox))
+			.await
+			.unwrap_err();
+		assert!(versatiles_core::Cancelled::is_cause_of(&error), "{error:#}");
+
+		// A request without a token is not affected.
+		assert!(
+			ds.elevation_tile(&bbox_in, 256, 256, DemEncoding::Mapbox)
+				.await
+				.unwrap()
+				.is_some()
+		);
 	}
 
 	#[test]

@@ -3,11 +3,14 @@ use std::{path::Path, sync::Arc};
 use anyhow::{Result, ensure};
 use gdal::{Dataset, GeoTransform};
 use imageproc::image::DynamicImage;
-use versatiles_core::GeoBBox;
+use versatiles_core::{CancelToken, GeoBBox};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitConvert;
 
-use super::{BandMapping, BandMappingItem, Cutline, GdalPool, GeoreferenceOverride, Instance, ResampleAlg};
+use super::{
+	BandMapping, BandMappingItem, Cutline, GdalPool, GeoreferenceOverride, Instance, ResampleAlg,
+	stop_warp_when_cancelled,
+};
 
 /// Reproject the source dataset into an 8-bit in-memory dataset in EPSG:3857.
 #[context("Failed to reproject GDAL dataset to target bbox ({bbox:?}) and size {width}x{height}")]
@@ -21,6 +24,9 @@ fn reproject_to_dataset(
 	nodata: &[f64],
 ) -> Result<Dataset> {
 	log::trace!("reproject_image started for size={width}x{height}");
+	// Kept until the warp is done: GDAL holds a pointer to it.
+	let cancel = CancelToken::current();
+	cancel.check()?;
 
 	let bbox_mer = bbox.to_mercator();
 
@@ -87,6 +93,7 @@ fn reproject_to_dataset(
 
 		(*options_ptr).pTransformerArg = GDALCreateGenImgProjTransformer2(h_src_ds, h_dst_ds, core::ptr::null_mut());
 		(*options_ptr).pfnTransformer = Some(GDALGenImgProjTransform);
+		stop_warp_when_cancelled(options_ptr, &cancel);
 
 		let operation: GDALWarpOperationH = GDALCreateWarpOperation(options_ptr);
 
@@ -97,6 +104,8 @@ fn reproject_to_dataset(
 		GDALDestroyWarpOptions(options_ptr);
 
 		if rv != CPLErr::CE_None {
+			// Stopped by the token, not failed: say so rather than "User terminated".
+			cancel.check()?;
 			anyhow::bail!("{:?}", CPLGetLastErrorMsg());
 		}
 	}
@@ -242,6 +251,12 @@ impl RasterSource {
 		let nodata = self.nodata.clone();
 		let extra_nodata = self.extra_nodata.clone();
 
+		// Opening a dataset can take a long time, and nothing stops it once
+		// started, so ask before. The token is captured here because the warp
+		// below runs on the blocking pool, which does not inherit it.
+		let cancel = CancelToken::current();
+		cancel.check()?;
+
 		// Get instance from pool - single synchronization point!
 		let instance = self.pool.instance().await?;
 
@@ -250,78 +265,80 @@ impl RasterSource {
 		let band_mapping2 = self.band_mapping.clone();
 		let channel_count = band_mapping2.len(); // color bands + alpha
 		let bbox = *bbox;
-		let image = tokio::task::spawn_blocking(move || -> Result<Option<DynamicImage>> {
-			let dst = reproject_to_dataset(
-				&instance,
-				width,
-				height,
-				&bbox,
-				&band_mapping,
-				cutline.as_ref(),
-				&nodata,
-			)?;
-			// Instance automatically returned to pool when `instance` is dropped
-			let band_mapping = band_mapping2;
-			let mut buf = vec![0u8; width * height * channel_count];
+		let image = tokio::task::spawn_blocking(move || {
+			cancel.sync_scope(|| -> Result<Option<DynamicImage>> {
+				let dst = reproject_to_dataset(
+					&instance,
+					width,
+					height,
+					&bbox,
+					&band_mapping,
+					cutline.as_ref(),
+					&nodata,
+				)?;
+				// Instance automatically returned to pool when `instance` is dropped
+				let band_mapping = band_mapping2;
+				let mut buf = vec![0u8; width * height * channel_count];
 
-			// Read color bands
-			for BandMappingItem {
-				channel_index,
-				band_index,
-			} in band_mapping.iter()
-			{
-				let band = dst.rasterband(band_index)?.read_band_as::<u8>()?;
+				// Read color bands
+				for BandMappingItem {
+					channel_index,
+					band_index,
+				} in band_mapping.iter()
+				{
+					let band = dst.rasterband(band_index)?.read_band_as::<u8>()?;
+					let data = band.data();
+					ensure!(
+						data.len() == width * height,
+						"Band {} data length mismatch: expected {} but got {}",
+						band_index,
+						width * height,
+						data.len()
+					);
+					for (i, &px) in data.iter().enumerate() {
+						buf[i * channel_count + channel_index] = px;
+					}
+				}
+
+				// Read alpha band (always the last band in the destination)
+				let alpha_channel_index = band_mapping.color_band_count();
+				let alpha_band_index = band_mapping.color_band_count() + 1;
+				let band = dst.rasterband(alpha_band_index)?.read_band_as::<u8>()?;
 				let data = band.data();
 				ensure!(
 					data.len() == width * height,
-					"Band {} data length mismatch: expected {} but got {}",
-					band_index,
+					"Alpha band data length mismatch: expected {} but got {}",
 					width * height,
 					data.len()
 				);
 				for (i, &px) in data.iter().enumerate() {
-					buf[i * channel_count + channel_index] = px;
+					buf[i * channel_count + alpha_channel_index] = px;
 				}
-			}
 
-			// Read alpha band (always the last band in the destination)
-			let alpha_channel_index = band_mapping.color_band_count();
-			let alpha_band_index = band_mapping.color_band_count() + 1;
-			let band = dst.rasterband(alpha_band_index)?.read_band_as::<u8>()?;
-			let data = band.data();
-			ensure!(
-				data.len() == width * height,
-				"Alpha band data length mismatch: expected {} but got {}",
-				width * height,
-				data.len()
-			);
-			for (i, &px) in data.iter().enumerate() {
-				buf[i * channel_count + alpha_channel_index] = px;
-			}
-
-			// Apply extra nodata masks: zero alpha for pixels matching any additional nodata set.
-			// The first nodata set was already handled by GDAL during warp; these are the rest.
-			if !extra_nodata.is_empty() {
-				let n_color = alpha_channel_index; // number of color channels
-				for i in 0..width * height {
-					let base = i * channel_count;
-					if buf[base + alpha_channel_index] == 0 {
-						continue; // already transparent
-					}
-					for nd in &extra_nodata {
-						let matches = (0..n_color).all(|c| buf[base + c] == nd[c]);
-						if matches {
-							buf[base + alpha_channel_index] = 0;
-							break;
+				// Apply extra nodata masks: zero alpha for pixels matching any additional nodata set.
+				// The first nodata set was already handled by GDAL during warp; these are the rest.
+				if !extra_nodata.is_empty() {
+					let n_color = alpha_channel_index; // number of color channels
+					for i in 0..width * height {
+						let base = i * channel_count;
+						if buf[base + alpha_channel_index] == 0 {
+							continue; // already transparent
+						}
+						for nd in &extra_nodata {
+							let matches = (0..n_color).all(|c| buf[base + c] == nd[c]);
+							if matches {
+								buf[base + alpha_channel_index] = 0;
+								break;
+							}
 						}
 					}
 				}
-			}
 
-			log::trace!("Filled image buffer ({} bytes)", buf.len());
-			let img =
-				DynamicImage::from_raw(width, height, buf).context("Failed to create DynamicImage from GDAL dataset")?;
-			Ok(Some(img))
+				log::trace!("Filled image buffer ({} bytes)", buf.len());
+				let img =
+					DynamicImage::from_raw(width, height, buf).context("Failed to create DynamicImage from GDAL dataset")?;
+				Ok(Some(img))
+			})
 		})
 		.await??;
 

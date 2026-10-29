@@ -9,7 +9,7 @@ use imageproc::image::{DynamicImage, GenericImage};
 use versatiles_container::{
 	Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime, Traversal, TraversalOrder,
 };
-use versatiles_core::{Blob, TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStream};
+use versatiles_core::{Blob, CancelToken, TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
 
 use super::overview_cache::BlockCache;
@@ -297,6 +297,9 @@ impl OverviewCore {
 		budget: Option<Arc<ReadBudget>>,
 	) -> futures::future::BoxFuture<'_, Result<TileBBoxMap<Option<DynamicImage>>>> {
 		async move {
+			// Between blocks: the pause where a request that is no longer
+			// wanted can stop (#265), next to the read budget below.
+			CancelToken::current().check()?;
 			if bbox.level() == self.level_base {
 				log::trace!("overview: reading images from the source for {bbox:?}");
 				// The only place source tiles are read, so the only place a
@@ -352,9 +355,15 @@ impl OverviewCore {
 			// them cheap. The failure is transient — the cache does not keep the
 			// error, so a retry recomputes — and it only reaches requests for a
 			// region that was already over the ceiling.
+			//
+			// The computation runs under no request's token. It is polled by
+			// whichever caller started it, and under that caller's token,
+			// cancelling it would fail everyone else waiting for the block. So
+			// a shared block is never cancelled, and requests stop at the next
+			// block of their own instead.
 			self
 				.cache
-				.get_or_compute(key, self.compute_scaled_block(key, budget))
+				.get_or_compute(key, CancelToken::never().scope(self.compute_scaled_block(key, budget)))
 				.await
 				// The cache hands back a shared error, which `anyhow` cannot take
 				// ownership of; keep the whole chain as the message.
@@ -408,6 +417,7 @@ impl OverviewCore {
 		let children: Vec<TileBBox> = block.leveled_up().iter_grid(BLOCK_TILE_COUNT).collect();
 
 		for child in children {
+			CancelToken::current().check()?;
 			let key = child.min_tile()?;
 
 			// The pyramid check is a shortcut past *computing* a block, not a
@@ -963,6 +973,32 @@ mod tests {
 
 		let warm = core.tile_within(&coord, Some(Arc::new(ReadBudget::new(0)))).await?;
 		assert!(warm.is_some(), "a request that reads nothing should not be refused");
+		Ok(())
+	}
+
+	/// A request whose token is cancelled stops between blocks with
+	/// `Cancelled`, and a request for the same tile running beside it, which
+	/// shares the blocks, still gets its tile (#265).
+	#[tokio::test]
+	async fn a_cancelled_request_stops_without_failing_its_neighbour() -> Result<()> {
+		let core = make_core(8)?;
+		let coord = core
+			.metadata
+			.tile_pyramid()
+			.unwrap()
+			.level_ref(3)
+			.to_bbox()
+			.min_tile()?;
+
+		let cancelled = CancelToken::new();
+		cancelled.cancel();
+		let (a, b) = tokio::join!(
+			cancelled.scope(core.tile_within(&coord, None)),
+			CancelToken::new().scope(core.tile_within(&coord, None)),
+		);
+		let error = a.unwrap_err();
+		assert!(versatiles_core::Cancelled::is_cause_of(&error), "{error:#}");
+		assert!(b?.is_some());
 		Ok(())
 	}
 
