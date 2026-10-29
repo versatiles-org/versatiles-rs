@@ -17,6 +17,13 @@
 //! // Access the parsed object
 //! assert!(json.as_object().is_ok());
 //! ```
+//!
+//! # Arithmetic
+//!
+//! Depths, line numbers and widths are saturating (#294): the parser caps the
+//! depth, but a [`JsonValue`] built in code has no such cap. The lint keeps new
+//! code to that. Tests are exempt.
+#![cfg_attr(not(test), deny(clippy::arithmetic_side_effects))]
 
 mod parse;
 mod read;

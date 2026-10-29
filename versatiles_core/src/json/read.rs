@@ -44,10 +44,9 @@ fn process_line(line: std::io::Result<String>) -> Option<Result<JsonValue>> {
 /// }
 /// ```
 pub fn read_ndjson_iter(reader: impl BufRead) -> impl Iterator<Item = Result<JsonValue>> {
-	reader
-		.lines()
-		.enumerate()
-		.filter_map(|(index, line)| process_line(line).map(|r| r.with_context(|| format!("error in line {}", index + 1))))
+	reader.lines().enumerate().filter_map(|(index, line)| {
+		process_line(line).map(|r| r.with_context(|| format!("error in line {}", index.saturating_add(1))))
+	})
 }
 
 /// Create an asynchronous stream over NDJSON values from a buffered reader.
@@ -74,9 +73,9 @@ pub fn read_ndjson_iter(reader: impl BufRead) -> impl Iterator<Item = Result<Jso
 pub fn read_ndjson_stream(reader: impl BufRead) -> impl Stream<Item = Result<JsonValue>> {
 	stream::iter(reader.lines().enumerate())
 		.map(|(index, line)| {
-			tokio::spawn(
-				async move { process_line(line).map(|r| r.with_context(|| format!("error in line {}", index + 1))) },
-			)
+			tokio::spawn(async move {
+				process_line(line).map(|r| r.with_context(|| format!("error in line {}", index.saturating_add(1))))
+			})
 		})
 		.buffered(num_cpus::get())
 		.filter_map(|f| {

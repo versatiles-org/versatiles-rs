@@ -47,7 +47,12 @@ impl JsonArray {
 			.map(|value| {
 				format!(
 					"{indent}  {}",
-					stringify_pretty_multi_line(value, max_width, depth + 1, depth * 2 + 2)
+					stringify_pretty_multi_line(
+						value,
+						max_width,
+						depth.saturating_add(1),
+						indent.len().saturating_add(2)
+					)
 				)
 			})
 			.collect::<Vec<_>>();

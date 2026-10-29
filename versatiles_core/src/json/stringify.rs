@@ -43,14 +43,14 @@ pub fn stringify_pretty_multi_line(json: &JsonValue, max_width: usize, depth: us
 	match json {
 		JsonValue::Array(arr) => {
 			let single_line = arr.stringify_pretty_single_line();
-			if single_line.len() + indention <= max_width {
+			if single_line.len().saturating_add(indention) <= max_width {
 				return single_line;
 			}
 			arr.stringify_pretty_multi_line(max_width, depth)
 		}
 		JsonValue::Object(obj) => {
 			let single_line = obj.stringify_pretty_single_line();
-			if single_line.len() + indention <= max_width {
+			if single_line.len().saturating_add(indention) <= max_width {
 				return single_line;
 			}
 			obj.stringify_pretty_multi_line(max_width, depth)

@@ -48,7 +48,7 @@ fn parse_json_at_depth(iter: &mut ByteIterator, depth: usize) -> Result<JsonValu
 
 	iter.skip_whitespace();
 	match iter.expect_peeked_byte()? {
-		b'[' => parse_array_entries(iter, |iter2| parse_json_at_depth(iter2, depth + 1))
+		b'[' => parse_array_entries(iter, |iter2| parse_json_at_depth(iter2, depth.saturating_add(1)))
 			.map(|i| JsonValue::Array(JsonArray(i))),
 		b'{' => parse_json_object(iter, depth),
 		b'"' => parse_quoted_json_string(iter).map(JsonValue::String),
@@ -82,7 +82,7 @@ fn parse_finite_number(iter: &mut ByteIterator) -> Result<f64> {
 fn parse_json_object(iter: &mut ByteIterator, depth: usize) -> Result<JsonValue> {
 	let mut list: Vec<(String, JsonValue)> = Vec::new();
 	parse_object_entries(iter, |key, iter2| {
-		list.push((key, parse_json_at_depth(iter2, depth + 1)?));
+		list.push((key, parse_json_at_depth(iter2, depth.saturating_add(1))?));
 		Ok(())
 	})?;
 	Ok(JsonValue::Object(JsonObject(BTreeMap::from_iter(list))))
