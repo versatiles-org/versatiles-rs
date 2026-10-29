@@ -4,7 +4,7 @@
 
 use anyhow::{Result, bail, ensure};
 use versatiles_core::{
-	Blob, ByteRange, GeoBBox, TileCompression, TileFormat,
+	Blob, ByteRange, GeoBBox, MAX_ZOOM_LEVEL, TileCompression, TileFormat,
 	io::{DataReader, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 	utils::float_to_int,
 };
@@ -42,12 +42,7 @@ impl FileHeader {
 		zoom_range: [u8; 2],
 		bbox: &GeoBBox,
 	) -> Result<FileHeader> {
-		ensure!(
-			zoom_range[0] <= zoom_range[1],
-			"zoom_range[0] ({}) must be <= zoom_range[1] ({})",
-			zoom_range[0],
-			zoom_range[1]
-		);
+		check_zoom_range(zoom_range)?;
 
 		let arr = bbox.as_array();
 		Ok(FileHeader {
@@ -106,10 +101,7 @@ impl FileHeader {
 			TOPOJSON => 0x22,
 			JSON => 0x23,
 
-			// The container spec has no code for MLT yet (versatiles-spec#11).
-			MLT => {
-				bail!("the VersaTiles container cannot store MLT tiles yet: the format has no tile-type code in the spec")
-			}
+			MLT => 0x24,
 		})?;
 
 		// compression
@@ -151,7 +143,7 @@ impl FileHeader {
 	#[context("Failed to create FileHeader from blob")]
 	fn from_blob(blob: &Blob) -> Result<FileHeader> {
 		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
-		use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MVT, PNG, SVG, TOPOJSON, WEBP};
+		use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MLT, MVT, PNG, SVG, TOPOJSON, WEBP};
 
 		if blob.len() != HEADER_LENGTH {
 			bail!("'{blob:?}' is not a valid versatiles header. A header should be {HEADER_LENGTH} bytes long.");
@@ -176,6 +168,7 @@ impl FileHeader {
 			0x21 => GEOJSON,
 			0x22 => TOPOJSON,
 			0x23 => JSON,
+			0x24 => MLT,
 			value => bail!("unknown tile_type value: {value}"),
 		};
 
@@ -188,6 +181,7 @@ impl FileHeader {
 		};
 
 		let zoom_range: [u8; 2] = [reader.read_u8()?, reader.read_u8()?];
+		check_zoom_range(zoom_range)?;
 
 		let bbox: [i32; 4] = [
 			reader.read_i32()?,
@@ -195,6 +189,10 @@ impl FileHeader {
 			reader.read_i32()?,
 			reader.read_i32()?,
 		];
+		// Within -180..180 and -90..90, minimum at most maximum: a bbox that
+		// crosses the antimeridian is not one the spec allows.
+		let [x_min, y_min, x_max, y_max] = bbox.map(|value| f64::from(value) / BBOX_SCALE);
+		GeoBBox::new(x_min, y_min, x_max, y_max).with_context(|| format!("the header's bbox {bbox:?} is invalid"))?;
 
 		let meta_range = reader.read_range()?;
 		let blocks_range = reader.read_range()?;
@@ -208,6 +206,19 @@ impl FileHeader {
 			blocks_range,
 		})
 	}
+}
+
+/// Zoom levels run from 0 to 30, and the minimum is at most the maximum.
+fn check_zoom_range([min, max]: [u8; 2]) -> Result<()> {
+	ensure!(
+		min <= max,
+		"the minimum zoom level ({min}) must be <= the maximum ({max})"
+	);
+	ensure!(
+		max <= MAX_ZOOM_LEVEL,
+		"the maximum zoom level ({max}) must be <= {MAX_ZOOM_LEVEL}"
+	);
+	Ok(())
 }
 
 #[cfg(test)]
@@ -342,7 +353,7 @@ mod tests {
 		let zoom_range = [0, 0];
 		let bbox = GeoBBox::new(0.0, 0.0, 0.0, 0.0).unwrap();
 
-		let tile_formats = vec![BIN, PNG, JPG, WEBP, AVIF, SVG, MVT, GEOJSON, TOPOJSON, JSON];
+		let tile_formats = vec![BIN, PNG, JPG, WEBP, AVIF, SVG, MVT, GEOJSON, TOPOJSON, JSON, MLT];
 
 		for tile_format in tile_formats {
 			let header = FileHeader::new(tile_format, compression, zoom_range, &bbox).unwrap();
@@ -352,10 +363,84 @@ mod tests {
 			assert_eq!(header2.tile_format, tile_format);
 			assert_eq!(header2.compression, compression);
 		}
+	}
 
-		let header = FileHeader::new(MLT, compression, zoom_range, &bbox).unwrap();
-		let err = format!("{:#}", header.to_blob().unwrap_err());
-		assert!(err.contains("MLT"), "got: {err}");
+	/// The code the spec gives MLT, in both directions.
+	#[test]
+	fn mlt_is_0x24() -> Result<()> {
+		let header = FileHeader::new(
+			TileFormat::MLT,
+			Uncompressed,
+			[0, 14],
+			&GeoBBox::new(0.0, 0.0, 0.0, 0.0)?,
+		)?;
+		let blob = header.to_blob()?;
+		assert_eq!(blob.as_slice()[14], 0x24);
+		assert_eq!(FileHeader::from_blob(&blob)?.tile_format, TileFormat::MLT);
+		Ok(())
+	}
+
+	/// A header written with `fields` changed at their offsets, as a file with
+	/// a header no writer of ours produces would have it.
+	fn patched(fields: &[(usize, &[u8])]) -> Blob {
+		let mut blob = FileHeader::new(
+			TileFormat::PNG,
+			Gzip,
+			[0, 14],
+			&GeoBBox::new(-10.0, -10.0, 10.0, 10.0).unwrap(),
+		)
+		.unwrap()
+		.to_blob()
+		.unwrap();
+		for (offset, bytes) in fields {
+			blob.as_mut_slice()[*offset..*offset + bytes.len()].copy_from_slice(bytes);
+		}
+		blob
+	}
+
+	fn i32_bytes(degrees: f64) -> [u8; 4] {
+		float_to_int::<f64, i32>(degrees * BBOX_SCALE).unwrap().to_be_bytes()
+	}
+
+	/// The spec's ranges: longitude -180..180, latitude -90..90, minimum at
+	/// most maximum on both axes, so no bbox crossing the antimeridian.
+	#[rstest::rstest]
+	#[case::longitude_below(18, -180.5)]
+	#[case::latitude_below(22, -90.5)]
+	#[case::longitude_above(26, 180.5)]
+	#[case::latitude_above(30, 90.5)]
+	#[case::crossing_the_antimeridian(18, 170.0)]
+	#[case::min_latitude_above_max(22, 20.0)]
+	fn an_invalid_bbox_is_rejected(#[case] offset: usize, #[case] degrees: f64) {
+		let error = FileHeader::from_blob(&patched(&[(offset, &i32_bytes(degrees))])).unwrap_err();
+		assert!(format!("{error:#}").contains("bbox"), "{error:#}");
+	}
+
+	#[test]
+	fn the_full_extent_is_a_valid_bbox() -> Result<()> {
+		let edges: [&[u8]; 4] = [
+			&i32_bytes(-180.0),
+			&i32_bytes(-90.0),
+			&i32_bytes(180.0),
+			&i32_bytes(90.0),
+		];
+		let blob = patched(&[(18, edges[0]), (22, edges[1]), (26, edges[2]), (30, edges[3])]);
+		assert_eq!(
+			FileHeader::from_blob(&blob)?.bbox,
+			[-1800000000, -900000000, 1800000000, 900000000]
+		);
+		Ok(())
+	}
+
+	#[rstest::rstest]
+	#[case::min_above_max([14, 10], "must be <= the maximum")]
+	#[case::beyond_30([0, 31], "must be <= 30")]
+	fn an_invalid_zoom_range_is_rejected(#[case] zoom: [u8; 2], #[case] reason: &str) {
+		let error = FileHeader::from_blob(&patched(&[(16, &zoom)])).unwrap_err();
+		assert!(format!("{error:#}").contains(reason), "{error:#}");
+
+		let error = FileHeader::new(TileFormat::PNG, Gzip, zoom, &GeoBBox::new(0.0, 0.0, 0.0, 0.0).unwrap()).unwrap_err();
+		assert!(format!("{error:#}").contains(reason), "{error:#}");
 	}
 
 	#[test]

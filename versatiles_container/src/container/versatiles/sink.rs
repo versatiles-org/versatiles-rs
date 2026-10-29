@@ -518,6 +518,35 @@ mod tests {
 		Ok(())
 	}
 
+	/// MLT has the code `0x24` in the container spec, so a container can hold
+	/// it. The tiles pass through as bytes; MLT's internal compression is no
+	/// reason to refuse a precompression on top.
+	#[tokio::test]
+	async fn mlt_tiles_round_trip() -> Result<()> {
+		let temp_dir = assert_fs::TempDir::new()?;
+		let output = temp_dir.path().join("mlt.versatiles");
+		let runtime = TilesRuntime::default();
+
+		let sink = VersaTilesSink::open(
+			output.to_str().unwrap(),
+			TileFormat::MLT,
+			TileCompression::Gzip,
+			&runtime,
+		)?;
+		let coord = TileCoord::new(3, 4, 2)?;
+		let blob = Blob::from(vec![42u8; 64]);
+		sink.write_tile(&coord, &blob).await?;
+		let mut tilejson = TileJSON::default();
+		tilejson.set_string("tilejson", "3.0.0")?;
+		Box::new(sink).finish(&tilejson, &runtime).await?;
+
+		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
+		assert_eq!(reader.metadata().tile_format(), &TileFormat::MLT);
+		let tile = reader.tile(&coord).await?.expect("the tile written");
+		assert_eq!(tile.into_blob(&TileCompression::Gzip)?.as_slice(), blob.as_slice());
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn write_multiple_levels() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;

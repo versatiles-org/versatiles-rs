@@ -47,7 +47,17 @@ impl BlockIndex {
 
 		let mut block_index = Self::new_empty();
 		for chunk in buf.as_slice().chunks_exact(usize::try_from(BLOCK_INDEX_LENGTH)?) {
-			block_index.insert_block(BlockDefinition::from_blob(&Blob::from(chunk))?);
+			let block = BlockDefinition::from_blob(&Blob::from(chunk))?;
+			// Two entries for one block would leave it to the order of the index
+			// which of them is read, so the spec has readers reject them.
+			let coord = *block.coord();
+			ensure!(
+				block_index.lookup.insert(coord, block).is_none(),
+				"Block index is defective, because it lists the block at level {}, column {}, row {} more than once",
+				coord.level,
+				coord.x,
+				coord.y
+			);
 		}
 
 		Ok(block_index)
@@ -170,6 +180,20 @@ mod tests {
 		let index2 = BlockIndex::from_blob(&index1.to_blob()?)?;
 		assert_eq!(index2.len(), 3);
 		assert_eq!(index1, index2);
+		Ok(())
+	}
+
+	#[test]
+	fn a_block_listed_twice_is_rejected() -> Result<()> {
+		let mut index = BlockIndex::new_empty();
+		index.insert_block(BlockDefinition::new(&TileBBox::from_min_and_max(
+			9, 300, 400, 305, 407,
+		)?)?);
+		let entry = index.to_blob()?;
+		let twice = Blob::from([entry.as_slice(), entry.as_slice()].concat());
+		let error = format!("{:#}", BlockIndex::from_blob(&twice).unwrap_err());
+		assert!(error.contains("more than once"), "{error}");
+		assert!(error.contains("level 9, column 1, row 1"), "{error}");
 		Ok(())
 	}
 
