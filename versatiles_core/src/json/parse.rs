@@ -37,7 +37,12 @@ pub fn parse_json_str(json: &str) -> Result<JsonValue> {
 /// Returns an error if an unexpected character is encountered or parsing fails.
 #[context("while parsing JSON data")]
 pub fn parse_json_iter(iter: &mut ByteIterator) -> Result<JsonValue> {
-	parse_json_at_depth(iter, 0)
+	let value = parse_json_at_depth(iter, 0)?;
+	// A number or literal can end where a failed read ended the input.
+	if let Some(error) = iter.take_read_error() {
+		return Err(error);
+	}
+	Ok(value)
 }
 
 /// Parse a value that sits `depth` levels inside the document.
@@ -91,6 +96,36 @@ fn parse_json_object(iter: &mut ByteIterator, depth: usize) -> Result<JsonValue>
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// A source whose every read fails.
+	struct Broken;
+	impl std::io::Read for Broken {
+		fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+			Err(std::io::Error::other("disk on fire"))
+		}
+	}
+
+	fn parse_before_a_failed_read(text: &'static str) -> Result<JsonValue> {
+		let reader = std::io::Read::chain(Cursor::new(text), Broken);
+		parse_json_iter(&mut ByteIterator::from_reader(reader, true))
+	}
+
+	/// `12` of `123` is a complete number, and parsed as one when the failed
+	/// read looked like the end of the input (#296).
+	#[test]
+	fn a_value_cut_short_by_a_failed_read_is_an_error() {
+		let error = format!("{:#}", parse_before_a_failed_read("12").unwrap_err());
+		assert!(
+			error.contains("reading the input failed after 2 bytes: disk on fire"),
+			"{error}"
+		);
+
+		let error = format!("{:#}", parse_before_a_failed_read("[1,").unwrap_err());
+		assert!(
+			error.contains("because reading the input failed: disk on fire"),
+			"{error}"
+		);
+	}
 
 	/// `1e999` overflows an `f64` to infinity, which JSON cannot represent.
 	#[test]

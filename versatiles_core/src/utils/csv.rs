@@ -82,7 +82,10 @@ fn read_csv_fields<'a>(
 	let mut iter = ByteIterator::from_reader(reader, true);
 
 	std::iter::from_fn(move || -> Option<Result<(Vec<String>, usize)>> {
-		iter.peek()?;
+		if iter.peek().is_none() {
+			// The end of the input, or a failed read that looks like it.
+			return iter.take_read_error().map(Err);
+		}
 
 		let mut fields = Vec::new();
 
@@ -110,6 +113,10 @@ fn read_csv_fields<'a>(
 						return Some(Ok((fields, iter.position())));
 					}
 					None => {
+						// A record cut short by a failed read is not a record.
+						if let Some(error) = iter.take_read_error() {
+							return Some(Err(error));
+						}
 						if (fields.len() == 1) && (fields.first().expect("len == 1").is_empty()) {
 							return None;
 						}
@@ -267,9 +274,46 @@ fn read_first_record(path: &Path, separator: u8) -> Result<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-	use std::io::Cursor;
+	use std::io::{Cursor, Read};
 
 	use super::*;
+
+	/// A source whose every read fails.
+	struct Broken;
+	impl Read for Broken {
+		fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+			Err(std::io::Error::other("disk on fire"))
+		}
+	}
+
+	fn records_before_a_failed_read(text: &'static str) -> Vec<Result<Vec<String>>> {
+		let reader = std::io::BufReader::new(Cursor::new(text).chain(Broken));
+		read_csv_iter(reader, b',')
+			.unwrap()
+			.map(|r| r.map(|(fields, _, _)| fields))
+			.collect()
+	}
+
+	/// The reader used to treat a failed read as the end of the file, and the
+	/// records before it as all there are (#296).
+	#[test]
+	fn a_failed_read_is_an_error_not_the_end_of_the_file() {
+		// Cut mid-record: `3,4` may be the start of `3,45`, so it is not returned.
+		let records = records_before_a_failed_read("a,b\n1,2\n3,4");
+		assert_eq!(records.len(), 3, "{records:?}");
+		assert_eq!(records[0].as_ref().unwrap(), &["a", "b"]);
+		assert_eq!(records[1].as_ref().unwrap(), &["1", "2"]);
+		let error = format!("{:#}", records[2].as_ref().unwrap_err());
+		assert!(
+			error.contains("reading the input failed after 11 bytes: disk on fire"),
+			"{error}"
+		);
+
+		// Cut at a record boundary: the records are complete, the file is not.
+		let records = records_before_a_failed_read("a,b\n1,2\n");
+		assert_eq!(records.len(), 3, "{records:?}");
+		assert!(records[2].is_err());
+	}
 
 	#[test]
 	fn test_parse_simple_csv_string() {
