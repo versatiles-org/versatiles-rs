@@ -14,7 +14,7 @@ versatiles serve pipeline.vpl
 
 **Read:** [`from_color`](#from_color) · [`from_container`](#from_container) · [`from_csv`](#from_csv) · [`from_debug`](#from_debug) · [`from_gdal_dem`](#from_gdal_dem) · [`from_gdal_raster`](#from_gdal_raster) · [`from_geo`](#from_geo) · [`from_grid`](#from_grid) · [`from_h3`](#from_h3) · [`from_merged_vector`](#from_merged_vector) · [`from_stacked`](#from_stacked) · [`from_stacked_raster`](#from_stacked_raster) · [`from_tile`](#from_tile) · [`from_tilejson`](#from_tilejson)
 
-**Transform:** [`dem_colorize`](#dem_colorize) · [`dem_hillshade`](#dem_hillshade) · [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_overzoom`](#vector_overzoom) · [`vector_reduce_to_style`](#vector_reduce_to_style) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
+**Transform:** [`dem_colorize`](#dem_colorize) · [`dem_hillshade`](#dem_hillshade) · [`dem_overscale`](#dem_overscale) · [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_overzoom`](#vector_overzoom) · [`vector_reduce_to_style`](#vector_reduce_to_style) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
 
 ## Defining a pipeline
 
@@ -468,6 +468,23 @@ The slopes at a tile's edge are computed with the pixels of the adjacent tiles, 
 
 ---
 
+## dem_overscale
+
+Creates the DEM tiles a source lacks by upscaling the tiles it has, as heights.
+
+A tile the source has is passed on untouched. A tile it lacks is created from the nearest tile it has at a lower zoom level: the area is cut out and its heights are interpolated up to a full tile, then encoded without loss. This is how a DEM reaches the zoom levels a map asks for when its data ends lower, for a hillshade or contour lines that stay sharp at the edge of the data instead of disappearing.
+
+It is `raster_overscale` for elevation tiles, with the same rules for where tiles are created: inside the source's bounds, up to `level_max`, and never below the source's lowest level. Unlike `raster_overscale`, it always scales heights, never colours, so a source without a DEM tile schema needs `encoding` rather than being scaled as an image; the result carries the tile schema of that encoding.
+
+A following `raster_format` must keep `quality=100`, since a lossy encoder changes the heights.
+
+### Parameters
+
+- _`level_max`: 0-30 (optional)_ - Highest zoom level to create tiles at. Defaults to the source's highest.
+- _`encoding`: DemEncoding (optional)_ - Values: `mapbox`, `terrarium`. DEM encoding of the source. Defaults to the encoding its tile schema implies.
+
+---
+
 ## dem_overview
 
 Generates lower-zoom DEM overview tiles by averaging 24-bit elevation values.
@@ -634,7 +651,7 @@ A tile the source has is passed on untouched. A tile it lacks is created from th
 
 Tiles are only created inside the bounds of the source, so set them with `meta_update bounds=…` in front if they are missing or too wide. A tile that would be completely transparent is not created; a transparent tile the source has is passed on like any other. Nothing is created below the source's lowest level.
 
-Elevation tiles are scaled as heights, not as colors, and encoded without loss. They are recognised by the tile schema of the source, `dem/mapbox` or `dem/terrarium`; set it with `meta_update schema=…` in front if the source does not declare it. A source with the schema `dem/versatiles` is refused: its tiles cannot be scaled as heights.
+Elevation tiles are scaled as heights, not as colors, and encoded without loss. They are recognised by the tile schema of the source, `dem/mapbox` or `dem/terrarium`; set it with `meta_update schema=…` in front if the source does not declare it. A source with the schema `dem/versatiles` is refused: its tiles cannot be scaled as heights. `dem_overscale` does the same for elevation tiles only, and takes the encoding as a parameter instead.
 
 A source whose bounds are the whole world is filled for the whole world, which is fine for serving and far too many tiles to write to a file at a high `level_max`.
 

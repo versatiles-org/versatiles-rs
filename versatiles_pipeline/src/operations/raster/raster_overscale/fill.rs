@@ -48,6 +48,8 @@ const TILES_PER_TASK: usize = 16;
 /// on untouched.
 #[derive(Clone)]
 pub struct FillOverscale {
+	/// The operation's VPL tag, for log lines and errors.
+	name: &'static str,
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 	source: SharedTileSource,
@@ -90,16 +92,42 @@ impl Debug for FillOverscale {
 impl FillOverscale {
 	/// `level_max` defaults to the source's highest level.
 	pub async fn new(source: Box<dyn TileSource>, level_max: Option<u8>, runtime: TilesRuntime) -> Result<Self> {
+		Self::build("raster_overscale", source, level_max, None, runtime).await
+	}
+
+	/// The operation behind `dem_overscale`: the tiles are heights in the
+	/// encoding `schema` names, whatever the source's own tile schema says.
+	pub async fn for_elevation(
+		source: Box<dyn TileSource>,
+		level_max: Option<u8>,
+		schema: TileSchema,
+		runtime: TilesRuntime,
+	) -> Result<Self> {
+		Self::build("dem_overscale", source, level_max, Some(schema), runtime).await
+	}
+
+	async fn build(
+		name: &'static str,
+		source: Box<dyn TileSource>,
+		level_max: Option<u8>,
+		schema: Option<TileSchema>,
+		runtime: TilesRuntime,
+	) -> Result<Self> {
 		let source: SharedTileSource = Arc::from(source);
 		let native = source.tile_pyramid().await?;
 		let level_min = native.level_min().context("source pyramid is empty")?;
 		let level_top = native.level_max().context("source pyramid is empty")?;
 		let level_max = level_max.unwrap_or(level_top).min(MAX_ZOOM_LEVEL);
-		let scaling = Scaling::for_source(source.tilejson())?;
+		let mut tilejson = source.tilejson().clone();
+		if let Some(schema) = schema {
+			tilejson.tile_schema = Some(schema);
+		}
+		let scaling = Scaling::for_source(&tilejson)?;
 
 		let mut operation = Self {
+			name,
 			metadata: source.metadata().clone(),
-			tilejson: source.tilejson().clone(),
+			tilejson,
 			source,
 			native,
 			fill: Arc::new(TilePyramid::new_empty()),
@@ -152,7 +180,7 @@ impl FillOverscale {
 		// Where tiles are created follows from the source's metadata, not from
 		// a parameter, so say what was read from it.
 		log::info!(
-			"raster_overscale: creating missing tiles at levels {}-{level_max} from levels {level_min}-{level_top}, scaled as {}, inside {}{}",
+			"{name}: creating missing tiles at levels {}-{level_max} from levels {level_min}-{level_top}, scaled as {}, inside {}{}",
 			level_min.saturating_add(1),
 			match scaling {
 				Scaling::Color => "color",
@@ -489,7 +517,7 @@ impl FillOverscale {
 				Err(error) => {
 					this
 						.runtime
-						.record_error(&format!("raster_overscale creating tiles in {bbox:?}"), &error);
+						.record_error(&format!("{} creating tiles in {bbox:?}", this.name), &error);
 					TileStream::empty().inner
 				}
 			}
@@ -522,12 +550,13 @@ impl FillOverscale {
 				let this = this.clone();
 				async move {
 					let runtime = this.runtime.clone();
+					let name = this.name;
 					let image = match this.image(source_coord).await {
 						Ok(Some(image)) => image,
 						Ok(None) => return Vec::new(),
 						Err(error) => {
 							this.runtime.record_error(
-								&format!("raster_overscale reading tile {}", source_coord.to_json()),
+								&format!("{} reading tile {}", this.name, source_coord.to_json()),
 								&error,
 							);
 							return Vec::new();
@@ -541,7 +570,7 @@ impl FillOverscale {
 								Err(error) => {
 									this
 										.runtime
-										.record_error(&format!("raster_overscale creating tile {}", coord.to_json()), &error);
+										.record_error(&format!("{} creating tile {}", this.name, coord.to_json()), &error);
 									None
 								}
 							})
@@ -549,7 +578,7 @@ impl FillOverscale {
 					});
 					scaled.await.unwrap_or_else(|error| {
 						runtime.record_error(
-							&format!("raster_overscale creating tiles from {}", source_coord.to_json()),
+							&format!("{} creating tiles from {}", name, source_coord.to_json()),
 							&anyhow!("the task failed: {error}"),
 						);
 						Vec::new()
@@ -642,7 +671,7 @@ impl TileSource for FillOverscale {
 	}
 
 	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_processor("raster_overscale", self.source.source_type())
+		SourceType::new_processor(self.name, self.source.source_type())
 	}
 
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
@@ -650,7 +679,7 @@ impl TileSource for FillOverscale {
 	}
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("raster_overscale::tile_stream {bbox:?}");
+		log::trace!("{}::tile_stream {bbox:?}", self.name);
 
 		if !self.creates_in(&bbox) {
 			return self.native_stream(bbox).await;
@@ -671,7 +700,7 @@ impl TileSource for FillOverscale {
 						Err(error) => {
 							this
 								.runtime
-								.record_error(&format!("raster_overscale reading tiles in {cell:?}"), &error);
+								.record_error(&format!("{} reading tiles in {cell:?}", this.name), &error);
 							TileStream::empty().inner
 						}
 					}
@@ -701,7 +730,7 @@ impl TileSource for FillOverscale {
 						Err(error) => {
 							this
 								.runtime
-								.record_error(&format!("raster_overscale listing tiles in {cell:?}"), &error);
+								.record_error(&format!("{} listing tiles in {cell:?}", this.name), &error);
 							Vec::new()
 						}
 					}

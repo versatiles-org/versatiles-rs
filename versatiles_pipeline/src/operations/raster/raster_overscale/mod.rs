@@ -68,6 +68,8 @@ use crate::{PipelineFactory, operations::removed::refuse_removed_parameters, vpl
 /// `dem/terrarium`; set it with `meta_update schema=…` in front if the source
 /// does not declare it. A source with the schema `dem/versatiles` is refused:
 /// its tiles cannot be scaled as heights.
+/// `dem_overscale` does the same for elevation tiles only, and takes the
+/// encoding as a parameter instead.
 ///
 /// A source whose bounds are the whole world is filled for the whole world,
 /// which is fine for serving and far too many tiles to write to a file at a

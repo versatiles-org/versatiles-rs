@@ -23,6 +23,7 @@ pub fn transform_operation_factories() -> Vec<Box<dyn TransformOperationFactoryT
 		Box::new(general::remap_coords::Factory {}),
 		Box::new(dem::dem_colorize::Factory {}),
 		Box::new(dem::dem_hillshade::Factory {}),
+		Box::new(dem::dem_overscale::Factory {}),
 		Box::new(dem::dem_overview::Factory {}),
 		Box::new(dem::dem_quantize::Factory {}),
 		Box::new(dem::dem_tile_resize::Factory {}),

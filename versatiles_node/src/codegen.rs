@@ -986,6 +986,7 @@ mod tests {
 		("raster_mask", "blur_function", &["linear", "cosine"]),
 		("dem_colorize", "encoding", &["mapbox", "terrarium"]),
 		("dem_hillshade", "encoding", &["mapbox", "terrarium"]),
+		("dem_overscale", "encoding", &["mapbox", "terrarium"]),
 		("dem_quantize", "encoding", &["mapbox", "terrarium"]),
 	];
 

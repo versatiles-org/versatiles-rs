@@ -13,6 +13,10 @@ dem_hillshade.highlight_color: Option<HexColor> | optional | default=FFFFFF
 dem_hillshade.accent_color: Option<HexColor> | optional | default=000000
 dem_hillshade.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium]
 
+dem_overscale [transform]
+dem_overscale.level_max: Option<ZoomLevel> | optional | bounds=[0,30] int
+dem_overscale.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium]
+
 dem_overview [transform]
 dem_overview.level: Option<ZoomLevel> | optional | bounds=[0,30] int
 dem_overview.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium]
