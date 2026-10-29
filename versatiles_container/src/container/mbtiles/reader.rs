@@ -8,6 +8,8 @@
 //! - `format = "jpg"` → `TileFormat::JPG` + `TileCompression::Uncompressed`
 //! - `format = "webp"` → `TileFormat::WEBP` + `TileCompression::Uncompressed`
 //! - `format = "pbf"` → `TileFormat::MVT`  + `TileCompression::Gzip`
+//! - `format = "application/vnd.maplibre-tile"` (or `"mlt"`) → `TileFormat::MLT`,
+//!   each tile gzipped or not, as its own bytes say
 //!
 //! It also reads optional fields like `bounds`, `minzoom`, `maxzoom`, and `json` (for
 //! `vector_layers`) and merges them into an internal [`TileJSON`].
@@ -67,7 +69,7 @@ use r2d2_sqlite::{
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	TileCompression::{Gzip, Uncompressed},
-	TileFormat::{JPG, MVT, PNG, WEBP},
+	TileFormat::{JPG, MLT, MVT, PNG, WEBP},
 	json::parse_json_str,
 	types::{
 		Blob, GeoBBox, GeoCenter, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileSchema,
@@ -215,10 +217,12 @@ impl MBTilesReader {
 						tile_format = Ok(WEBP);
 						compression = Ok(Uncompressed);
 					}
-					// Written by the MLT tools; some gzip each tile by its own
-					// size, so the compression is not knowable here (#111).
-					"mlt" | "application/vnd.maplibre-tile" => {
-						bail!("MLT tiles in mbtiles are not supported yet ('{}')", self.name)
+					// The MLT tools write the media type, as the MBTiles spec
+					// asks for a format it does not name; the older type and
+					// the bare name turn up too (#111).
+					"application/vnd.maplibre-tile" | "application/vnd.maplibre-vector-tile" | "mlt" => {
+						tile_format = Ok(MLT);
+						compression = Ok(Uncompressed);
 					}
 					_ => bail!("unknown tile format '{value}' in mbtiles metadata of '{}'", self.name),
 				},
@@ -320,6 +324,26 @@ impl MBTilesReader {
 			);
 		}
 		Ok(detected)
+	}
+
+	/// A tile from the bytes of its `tile_data`.
+	///
+	/// MLT tiles carry their own compression. The MLT tools gzip a tile only
+	/// where that saves enough, so one file holds both, and each tile is
+	/// read as what its bytes are: gzip by its signature, uncompressed
+	/// otherwise. Everything else has the one compression the file declares.
+	fn tile_from_data(&self, data: Vec<u8>) -> Tile {
+		let format = *self.metadata.tile_format();
+		let compression = if format == MLT {
+			if data.starts_with(&[0x1F, 0x8B, 0x08]) {
+				Gzip
+			} else {
+				Uncompressed
+			}
+		} else {
+			*self.metadata.tile_compression()
+		};
+		Tile::from_blob(Blob::from(data), compression, format)
 	}
 
 	/// Compute the exact tile coverage pyramid from the `tiles` table.
@@ -462,13 +486,7 @@ impl TileSource for MBTilesReader {
 		let vec = stmt
 			.query_row([tms.x, tms.y, u32::from(tms.level)], |row| row.get::<_, Vec<u8>>(0))
 			.optional()?;
-		Ok(vec.map(|vec| {
-			Tile::from_blob(
-				Blob::from(vec),
-				*self.metadata.tile_compression(),
-				*self.metadata.tile_format(),
-			)
-		}))
+		Ok(vec.map(|vec| self.tile_from_data(vec)))
 	}
 
 	#[context("streaming tile coords for bbox {:?}", bbox)]
@@ -586,14 +604,7 @@ impl TileSource for MBTilesReader {
 		)?;
 		let vec: Vec<(TileCoord, Tile)> = report_unreadable_rows(rows, &self.runtime, &self.name)
 			.into_iter()
-			.map(|(coord, data)| {
-				let tile = Tile::from_blob(
-					Blob::from(data),
-					*self.metadata.tile_compression(),
-					*self.metadata.tile_format(),
-				);
-				(coord, tile)
-			})
+			.map(|(coord, data)| (coord, self.tile_from_data(data)))
 			.collect();
 
 		log::trace!("got {} tiles", vec.len());
@@ -871,6 +882,69 @@ mod read_only_tests {
 		let path = mbtiles_with(dir.path(), &[("format", "pbf")], gzipped.as_slice())?;
 		let reader = MBTilesReader::open(&path, TilesRuntime::default())?;
 		assert_eq!(reader.metadata().tile_compression(), &Gzip);
+		Ok(())
+	}
+
+	/// An MBTiles file of MLT tiles as the MLT tools write one: tile 0/0/0
+	/// uncompressed, tile 1/0/0 gzipped, as each was smaller. Returns the
+	/// path and the bytes of both tiles.
+	fn mixed_mlt_mbtiles(dir: &Path, format: &str) -> Result<(std::path::PathBuf, Vec<u8>)> {
+		let raw_mlt = vec![0x05, 0x01, 0x02, 0x03, 0x04, 0x05];
+		let path = mbtiles_with(dir, &[("format", format)], &raw_mlt)?;
+		let gzipped = versatiles_core::compression::compress_gzip(&Blob::from(raw_mlt.clone()))?;
+		let conn = r2d2_sqlite::rusqlite::Connection::open(&path)?;
+		conn.execute("INSERT INTO tiles VALUES (1, 0, 1, ?1)", [gzipped.as_slice()])?;
+		Ok((path, raw_mlt))
+	}
+
+	/// Each MLT tile is read as what its bytes are, gzipped or not, under any
+	/// of the names the format goes by (#111).
+	#[rstest::rstest]
+	#[case("application/vnd.maplibre-tile")]
+	#[case("application/vnd.maplibre-vector-tile")]
+	#[case("mlt")]
+	#[tokio::test]
+	async fn mlt_tiles_are_read_whether_gzipped_or_not(#[case] format: &str) -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let (path, raw_mlt) = mixed_mlt_mbtiles(dir.path(), format)?;
+		let reader = MBTilesReader::open(&path, TilesRuntime::default())?;
+		assert_eq!(reader.metadata().tile_format(), &TileFormat::MLT);
+
+		for coord in [TileCoord::new(0, 0, 0)?, TileCoord::new(1, 0, 0)?] {
+			let tile = reader.tile(&coord).await?.expect("a tile");
+			assert_eq!(
+				tile.into_blob(&Uncompressed)?.as_slice(),
+				raw_mlt.as_slice(),
+				"{coord:?}"
+			);
+		}
+		let streamed = reader.tile_stream(TileBBox::new_full(1)?).await?.to_vec().await;
+		assert_eq!(streamed.len(), 1);
+		assert_eq!(
+			streamed[0].1.clone().into_blob(&Uncompressed)?.as_slice(),
+			raw_mlt.as_slice()
+		);
+		Ok(())
+	}
+
+	/// Written back, MLT goes under its media type and uncompressed, so the
+	/// gzipped tile comes out like the other.
+	#[tokio::test]
+	async fn mlt_tiles_are_written_uncompressed_under_their_media_type() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let (path, raw_mlt) = mixed_mlt_mbtiles(dir.path(), "mlt")?;
+		let source = MBTilesReader::open(&path, TilesRuntime::default())?;
+
+		let output = dir.path().join("written.mbtiles");
+		<crate::MBTilesWriter as crate::TilesWriter>::write_to_path(&source, &output, TilesRuntime::default()).await?;
+
+		let conn = r2d2_sqlite::rusqlite::Connection::open(&output)?;
+		let format: String = conn.query_row("SELECT value FROM metadata WHERE name = 'format'", [], |row| row.get(0))?;
+		assert_eq!(format, "application/vnd.maplibre-tile");
+		let mut stmt = conn.prepare("SELECT tile_data FROM tiles")?;
+		let tiles: Vec<Vec<u8>> = stmt.query_map([], |row| row.get(0))?.collect::<Result<_, _>>()?;
+		assert_eq!(tiles.len(), 2);
+		assert!(tiles.iter().all(|tile| tile == &raw_mlt), "{tiles:?}");
 		Ok(())
 	}
 

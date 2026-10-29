@@ -27,17 +27,20 @@ pub use writer::MBTilesWriter;
 ///
 /// MBTiles allows exactly one compression per format — raster formats
 /// uncompressed, vector tiles gzipped — so this is a mapping rather than a
-/// check. Shared by the writer, which recompresses to match, and the sink,
+/// check. MLT, a format the spec predates, is written under its media type as
+/// the spec asks for such formats, and uncompressed, since it compresses
+/// internally; the reader also takes the gzipped MLT tiles other tools write. Shared by the writer, which recompresses to match, and the sink,
 /// which only receives finished blobs and can therefore just verify.
 pub(crate) fn required_encoding(format: TileFormat) -> Result<(&'static str, TileCompression)> {
 	use TileCompression::{Gzip, Uncompressed};
-	use TileFormat::{JPG, MVT, PNG, WEBP};
+	use TileFormat::{JPG, MLT, MVT, PNG, WEBP};
 
 	Ok(match format {
 		JPG => ("jpg", Uncompressed),
 		MVT => ("pbf", Gzip),
+		MLT => ("application/vnd.maplibre-tile", Uncompressed),
 		PNG => ("png", Uncompressed),
 		WEBP => ("webp", Uncompressed),
-		other => bail!("MBTiles cannot store {other} tiles; it supports jpg, png, webp and pbf (mvt)"),
+		other => bail!("MBTiles cannot store {other} tiles; it supports jpg, png, webp, pbf (mvt) and mlt"),
 	})
 }

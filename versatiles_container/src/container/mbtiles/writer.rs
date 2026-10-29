@@ -318,7 +318,7 @@ mod tests {
 	fn an_unsupported_format_still_fails() {
 		let err = super::super::required_encoding(TileFormat::JSON).unwrap_err();
 		assert!(
-			format!("{err}").contains("supports jpg, png, webp and pbf"),
+			format!("{err}").contains("supports jpg, png, webp, pbf (mvt) and mlt"),
 			"unexpected: {err}"
 		);
 	}
