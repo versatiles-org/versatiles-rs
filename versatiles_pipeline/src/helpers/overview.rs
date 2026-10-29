@@ -3,13 +3,13 @@ use std::sync::{
 	atomic::{AtomicU64, Ordering},
 };
 
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, ensure};
 use futures::FutureExt;
 use imageproc::image::{DynamicImage, GenericImage};
 use versatiles_container::{
 	Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime, Traversal, TraversalOrder,
 };
-use versatiles_core::{Blob, CancelToken, TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStream};
+use versatiles_core::{Blob, CancelToken, SharedWork, TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
 
 use super::overview_cache::BlockCache;
@@ -158,6 +158,9 @@ pub struct OverviewCore {
 	/// thing however the requests arrive — a tile server asking for one tile
 	/// out of nowhere gets the same bytes as a converter walking the pyramid.
 	pub cache: BlockCache,
+	/// Which requests wait for which block the cache computes, so that a block
+	/// stops once all of them are cancelled, and only then (#265).
+	shared: SharedWork<TileCoord>,
 	/// Source tiles a single request may read, or `None` when the ceiling is
 	/// switched off. Read from the environment once, when the operation is
 	/// built, rather than on every request.
@@ -267,6 +270,7 @@ impl OverviewCore {
 			level_base,
 			tile_size,
 			cache,
+			shared: SharedWork::new(),
 			request_budget,
 			scale_fn,
 			lossless: false,
@@ -356,18 +360,19 @@ impl OverviewCore {
 			// error, so a retry recomputes — and it only reaches requests for a
 			// region that was already over the ceiling.
 			//
-			// The computation runs under no request's token. It is polled by
-			// whichever caller started it, and under that caller's token,
-			// cancelling it would fail everyone else waiting for the block. So
-			// a shared block is never cancelled, and requests stop at the next
-			// block of their own instead.
+			// The same goes for cancelling (#265), except that there it is
+			// handled: the computation runs under a token that is cancelled
+			// only once every request waiting for the block is. Under the token
+			// of the caller that started it, cancelling that one would fail
+			// everyone else.
 			self
-				.cache
-				.get_or_compute(key, CancelToken::never().scope(self.compute_scaled_block(key, budget)))
+				.shared
+				.run(key, || {
+					self
+						.cache
+						.get_or_compute(key, self.compute_scaled_block(key, budget.clone()))
+				})
 				.await
-				// The cache hands back a shared error, which `anyhow` cannot take
-				// ownership of; keep the whole chain as the message.
-				.map_err(|e: Arc<anyhow::Error>| anyhow!("{e:#}"))
 		}
 		.boxed()
 	}
@@ -999,6 +1004,176 @@ mod tests {
 		let error = a.unwrap_err();
 		assert!(versatiles_core::Cancelled::is_cause_of(&error), "{error:#}");
 		assert!(b?.is_some());
+		Ok(())
+	}
+
+	/// A source whose first read of base tiles waits at a gate until released,
+	/// and which counts its reads. The overview reads one block at a time, so
+	/// while the gate is shut, the build is paused at a known point.
+	#[derive(Debug)]
+	struct GatedSource {
+		inner: Box<dyn TileSource>,
+		gate: tokio::sync::Semaphore,
+		reads: AtomicU64,
+	}
+
+	#[async_trait::async_trait]
+	impl TileSource for GatedSource {
+		fn source_type(&self) -> Arc<versatiles_container::SourceType> {
+			self.inner.source_type()
+		}
+
+		fn metadata(&self) -> &TileSourceMetadata {
+			self.inner.metadata()
+		}
+
+		fn tilejson(&self) -> &TileJSON {
+			self.inner.tilejson()
+		}
+
+		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+			if self.reads.fetch_add(1, Ordering::SeqCst) == 0 {
+				drop(self.gate.acquire().await?);
+			}
+			self.inner.tile_stream(bbox).await
+		}
+	}
+
+	/// An overview over a source whose four base tiles lie in four different
+	/// blocks, so that building zoom 0 takes four reads, one after another.
+	/// Returns the overview and a way to reach its source.
+	fn gated_core() -> Result<(Arc<OverviewCore>, Arc<GatedSource>)> {
+		let base = 5;
+		let pyramid = TilePyramid::from_geo_bbox(base, base, &GeoBBox::new(-1.0, -1.0, 1.0, 1.0)?)?;
+		assert_eq!(pyramid.count_tiles(), 4);
+		let source = Arc::new(GatedSource {
+			inner: Box::new(DummyImageSource::from_color(
+				&[200u8, 100, 50],
+				256,
+				TileFormat::PNG,
+				Some(pyramid),
+			)?),
+			gate: tokio::sync::Semaphore::new(0),
+			reads: AtomicU64::new(0),
+		});
+		let scale_fn: ScaleDownFn = Arc::new(|img| img.scaled_down(2));
+		let shared: Arc<dyn TileSource> = source.clone();
+		let core = OverviewCore::new(Box::new(shared), Some(base), scale_fn, TilesRuntime::new_silent())?;
+		Ok((Arc::new(core), source))
+	}
+
+	impl GatedSource {
+		async fn until_first_read(&self) {
+			while self.reads.load(Ordering::SeqCst) == 0 {
+				tokio::task::yield_now().await;
+			}
+		}
+
+		fn open(&self) {
+			self.gate.add_permits(1000);
+		}
+	}
+
+	/// Requests for zoom 0 from `core`, one per token, each on its own task.
+	fn requests(core: &Arc<OverviewCore>, tokens: &[CancelToken]) -> Vec<tokio::task::JoinHandle<Result<Option<Tile>>>> {
+		tokens
+			.iter()
+			.map(|token| {
+				let core = Arc::clone(core);
+				tokio::spawn(
+					token
+						.clone()
+						.scope(async move { core.tile_within(&TileCoord::new(0, 0, 0)?, None).await }),
+				)
+			})
+			.collect()
+	}
+
+	fn is_cancelled<T>(result: &Result<T>) -> bool {
+		result
+			.as_ref()
+			.err()
+			.is_some_and(versatiles_core::Cancelled::is_cause_of)
+	}
+
+	/// Without anyone cancelling, building zoom 0 reads all four base blocks.
+	#[tokio::test(flavor = "multi_thread")]
+	async fn race_baseline_reads_every_block() -> Result<()> {
+		let (core, source) = gated_core()?;
+		let [request] = requests(&core, &[CancelToken::new()]).try_into().unwrap();
+		source.until_first_read().await;
+		source.open();
+		assert!(request.await??.is_some());
+		assert_eq!(source.reads.load(Ordering::SeqCst), 4);
+		Ok(())
+	}
+
+	/// The risk the combined token exists for: cancelling the request that
+	/// started the shared build must not fail the other one waiting for it.
+	#[tokio::test(flavor = "multi_thread")]
+	async fn race_cancelling_the_starter_does_not_fail_the_other_waiter() -> Result<()> {
+		let (core, source) = gated_core()?;
+		let a = CancelToken::new();
+		let [first] = requests(&core, std::slice::from_ref(&a)).try_into().unwrap();
+		source.until_first_read().await;
+		let [second] = requests(&core, &[CancelToken::new()]).try_into().unwrap();
+
+		a.cancel();
+		source.open();
+
+		assert!(second.await??.is_some(), "the request nobody cancelled gets its tile");
+		let first = first.await?;
+		assert!(first.is_ok() || is_cancelled(&first), "{first:?}");
+		assert_eq!(source.reads.load(Ordering::SeqCst), 4);
+		Ok(())
+	}
+
+	/// Once every request waiting for the build is cancelled, the build stops
+	/// at its next block instead of reading the rest of the source.
+	#[tokio::test(flavor = "multi_thread")]
+	async fn race_shared_work_stops_once_everyone_cancelled() -> Result<()> {
+		let (core, source) = gated_core()?;
+		let tokens = [CancelToken::new(), CancelToken::new()];
+		let handles = requests(&core, &tokens);
+		source.until_first_read().await;
+
+		for token in &tokens {
+			token.cancel();
+		}
+		source.open();
+
+		for handle in handles {
+			let result = handle.await?;
+			assert!(is_cancelled(&result), "{result:?}");
+		}
+		assert_eq!(
+			source.reads.load(Ordering::SeqCst),
+			1,
+			"no block read after everyone gave up"
+		);
+		Ok(())
+	}
+
+	/// A request that arrives after everyone else gave up still gets its tile:
+	/// either it keeps the build going, or it starts it again.
+	#[tokio::test(flavor = "multi_thread")]
+	async fn race_a_late_request_gets_its_tile() -> Result<()> {
+		let (core, source) = gated_core()?;
+		let tokens = [CancelToken::new(), CancelToken::new()];
+		let early = requests(&core, &tokens);
+		source.until_first_read().await;
+		for token in &tokens {
+			token.cancel();
+		}
+
+		let [late] = requests(&core, &[CancelToken::new()]).try_into().unwrap();
+		source.open();
+
+		assert!(late.await??.is_some());
+		for handle in early {
+			let result = handle.await?;
+			assert!(result.is_ok() || is_cancelled(&result), "{result:?}");
+		}
 		Ok(())
 	}
 

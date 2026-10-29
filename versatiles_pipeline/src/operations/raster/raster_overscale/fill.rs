@@ -23,7 +23,7 @@ use futures::{StreamExt, TryStreamExt, stream};
 use moka::future::Cache;
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use versatiles_core::{
-	CancelToken, ConcurrencyLimits, GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover, TileFormat, TileJSON,
+	ConcurrencyLimits, GeoBBox, MAX_ZOOM_LEVEL, SharedWork, TileBBox, TileCoord, TileCover, TileFormat, TileJSON,
 	TilePyramid, TileSchema, TileStream,
 };
 use versatiles_image::DynamicImage;
@@ -65,6 +65,10 @@ pub struct FillOverscale {
 	images: Cache<TileCoord, Option<Arc<DynamicImage>>>,
 	/// Where source tiles have content. `None` is a tile the source lacks.
 	masks: Cache<TileCoord, Option<Arc<Mask>>>,
+	/// Which requests wait for which entry of `images` and `masks`, so that
+	/// reading one stops once all of them are cancelled, and only then (#265).
+	shared_images: Arc<SharedWork<TileCoord>>,
+	shared_masks: Arc<SharedWork<TileCoord>>,
 	/// Where a tile that could not be read or created inside a stream is
 	/// reported: a stream cannot carry the error, and a conversion has to fail
 	/// on it rather than write a container with holes.
@@ -115,6 +119,8 @@ impl FillOverscale {
 				.max_capacity(64 * 1024 * 1024)
 				.weigher(|_, mask: &Option<Arc<Mask>>| 256 + mask.as_ref().map_or(0, |mask| mask.weight()))
 				.build(),
+			shared_images: Arc::default(),
+			shared_masks: Arc::default(),
 		};
 
 		// Bounds the source declares are where its data is. Without them, the
@@ -276,20 +282,18 @@ impl FillOverscale {
 
 	/// The decoded tile of the source at `coord`, or `None` if it has none.
 	async fn image(&self, coord: TileCoord) -> Result<Option<Arc<DynamicImage>>> {
-		// Shared between every tile made from this one, so read under no
-		// request's token: under the token of the request that started the
-		// read, cancelling that request would fail all the others (#265).
+		// Shared between every tile made from this one, so read under the
+		// token of all requests waiting for it rather than that of the one
+		// that started the read (#265).
 		self
-			.images
-			.try_get_with(
-				coord,
-				CancelToken::never().scope(async {
+			.shared_images
+			.run(coord, || {
+				self.images.try_get_with(coord, async {
 					let tile = self.source.tile(&coord).await?;
 					tile.map(|tile| tile.into_image().map(Arc::new)).transpose()
-				}),
-			)
+				})
+			})
 			.await
-			.map_err(|error: Arc<anyhow::Error>| anyhow!("{error:#}"))
 	}
 
 	/// Where the tile of the source at `coord` has content, or `None` if the
@@ -299,25 +303,27 @@ impl FillOverscale {
 	/// promise a tile that then does not come. It is decoded only if its
 	/// header leaves the question open.
 	async fn mask(&self, coord: TileCoord) -> Result<Option<Arc<Mask>>> {
+		// Shared like `image`, and read under the same kind of token.
 		self
-			.masks
-			.try_get_with(coord, async {
-				if let Some(image) = self.images.get(&coord).await {
-					return Ok(image.map(|image| Arc::new(Mask::from_image(&image))));
-				}
-				let Some(mut tile) = self.source.tile(&coord).await? else {
-					return Ok(None);
-				};
-				if self.never_transparent() || tile.is_opaque()? {
-					return Ok(Some(Arc::new(Mask::Full)));
-				}
-				let image = Arc::new(tile.into_image()?);
-				let mask = Mask::from_image(&image);
-				self.images.insert(coord, Some(image)).await;
-				Ok(Some(Arc::new(mask)))
+			.shared_masks
+			.run(coord, || {
+				self.masks.try_get_with(coord, async {
+					if let Some(image) = self.images.get(&coord).await {
+						return Ok(image.map(|image| Arc::new(Mask::from_image(&image))));
+					}
+					let Some(mut tile) = self.source.tile(&coord).await? else {
+						return Ok(None);
+					};
+					if self.never_transparent() || tile.is_opaque()? {
+						return Ok(Some(Arc::new(Mask::Full)));
+					}
+					let image = Arc::new(tile.into_image()?);
+					let mask = Mask::from_image(&image);
+					self.images.insert(coord, Some(image)).await;
+					Ok(Some(Arc::new(mask)))
+				})
 			})
 			.await
-			.map_err(|error: Arc<anyhow::Error>| anyhow!("{error:#}"))
 	}
 
 	/// Cuts the area of `coord` out of the source tile at `source_coord` and
