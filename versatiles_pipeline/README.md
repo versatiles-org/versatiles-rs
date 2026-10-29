@@ -14,7 +14,7 @@ versatiles serve pipeline.vpl
 
 **Read:** [`from_color`](#from_color) · [`from_container`](#from_container) · [`from_csv`](#from_csv) · [`from_debug`](#from_debug) · [`from_gdal_dem`](#from_gdal_dem) · [`from_gdal_raster`](#from_gdal_raster) · [`from_geo`](#from_geo) · [`from_grid`](#from_grid) · [`from_h3`](#from_h3) · [`from_merged_vector`](#from_merged_vector) · [`from_stacked`](#from_stacked) · [`from_stacked_raster`](#from_stacked_raster) · [`from_tile`](#from_tile) · [`from_tilejson`](#from_tilejson)
 
-**Transform:** [`dem_hillshade`](#dem_hillshade) · [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_overzoom`](#vector_overzoom) · [`vector_reduce_to_style`](#vector_reduce_to_style) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
+**Transform:** [`dem_colorize`](#dem_colorize) · [`dem_hillshade`](#dem_hillshade) · [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_overzoom`](#vector_overzoom) · [`vector_reduce_to_style`](#vector_reduce_to_style) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
 
 ## Defining a pipeline
 
@@ -427,6 +427,23 @@ The TileJSON document is fetched once when the pipeline is built, and each tile 
 ---
 
 # TRANSFORM operations
+
+---
+
+## dem_colorize
+
+Colours DEM tiles by elevation, the way MapLibre's `color-relief` layer colours them.
+
+The ramp is a list of stops, `elevation:colour`, ascending by elevation in meters, such as `ramp="0:00a000,1000:c8b464,3000:ffffff"`. Between two stops the colour is interpolated linearly, and outside the ramp it is the colour of the nearest end. A colour is `RRGGBB` or, translucent, `RRGGBBAA`; a ramp with a translucent stop gives RGBA tiles, and one without gives RGB tiles. A JPEG source becomes PNG when the ramp is translucent.
+
+The default ramp is a hypsometric tint: shades of blue up to sea level, then green, yellow and brown up to white peaks. Sea level itself is blue, for DEMs that store the sea as 0 m, and so is land below it: `-11000:24507e,-200:8cb4d8,0:bcd8ec,0.01:a8c896,300:cad6a2,800:e4dcae,1500:d6bf98,2500:bea58a,4000:e4e0dc,6000:ffffff`.
+
+For a coloured relief, put a `dem_hillshade` on top with `from_stacked_raster`, which lays its first source over the others.
+
+### Parameters
+
+- _`ramp`: elevation:RRGGBB,... (optional)_ - Colour stops, as `elevation:colour,…`. Defaults to a hypsometric tint.
+- _`encoding`: DemEncoding (optional)_ - Values: `mapbox`, `terrarium`. DEM encoding of the source. Defaults to the encoding its tile schema implies.
 
 ---
 

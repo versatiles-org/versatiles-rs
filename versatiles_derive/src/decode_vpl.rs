@@ -786,6 +786,19 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
+	// Like `QualityByZoom`, a list in one string with a format of its own, so
+	// it is parsed whole and judged by its own parser.
+	TypeMapping {
+		pattern: "Option<ColorRamp>",
+		display_name: "elevation:RRGGBB,...",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("ColorRamp"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
 	TypeMapping {
 		pattern: "Option<CsvDelimiter>",
 		display_name: "ASCII char",

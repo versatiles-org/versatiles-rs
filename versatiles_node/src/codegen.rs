@@ -76,6 +76,7 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		| "Option<CsvDelimiter>"
 		| "Option<SeparatorChar>"
 		| "Option<QualityByZoom>"
+		| "Option<ColorRamp>"
 		| "Option<CrsExtent>"
 		| "Option<RasterTransform>"
 		| "Option<BandIndices>"
@@ -983,6 +984,7 @@ mod tests {
 		("from_csv", "point_reduction", &["none", "drop_rate", "min_distance"]),
 		("raster_format", "format", &["avif", "jpg", "png", "webp"]),
 		("raster_mask", "blur_function", &["linear", "cosine"]),
+		("dem_colorize", "encoding", &["mapbox", "terrarium"]),
 		("dem_hillshade", "encoding", &["mapbox", "terrarium"]),
 		("dem_quantize", "encoding", &["mapbox", "terrarium"]),
 	];
