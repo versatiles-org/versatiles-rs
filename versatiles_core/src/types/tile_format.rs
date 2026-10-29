@@ -213,6 +213,9 @@ impl TileFormat {
 	/// `vnd.mapbox-vector-tile` — the bare IANA name, which `as_mime_str` returned
 	/// for MVT until issue #246 — is still accepted. It is embedded in the TileJSON
 	/// of every container written before that fix, and those have to keep opening.
+	///
+	/// For MLT, `application/vnd.maplibre-vector-tile` is accepted as well: the
+	/// older type, which some tools still write (#111).
 	#[context("Failed to get TileFormat from MIME type '{mime}'")]
 	pub fn try_from_mime(mime: &str) -> Result<Self> {
 		Ok(match mime.to_lowercase().as_str() {
@@ -223,7 +226,7 @@ impl TileFormat {
 			"image/avif" => AVIF,
 			"image/svg+xml" => SVG,
 			"application/vnd.mapbox-vector-tile" | "vnd.mapbox-vector-tile" => MVT,
-			"application/vnd.maplibre-tile" => MLT,
+			"application/vnd.maplibre-tile" | "application/vnd.maplibre-vector-tile" => MLT,
 			"application/geo+json" => GEOJSON,
 			"application/topo+json" => TOPOJSON,
 			"application/json" => JSON,
@@ -606,6 +609,23 @@ mod tests {
 			TileFormat::try_from_mime("application/vnd.mapbox-vector-tile").unwrap(),
 			MVT
 		);
+	}
+
+	#[test]
+	fn mlt_parses_its_older_mime_string_too() {
+		assert_eq!(TileFormat::try_from_mime("application/vnd.maplibre-tile").unwrap(), MLT);
+		assert_eq!(
+			TileFormat::try_from_mime("application/vnd.maplibre-vector-tile").unwrap(),
+			MLT
+		);
+		// Written back, it is the current one.
+		assert_eq!(MLT.as_mime_str(), "application/vnd.maplibre-tile");
+
+		// Where it was dropped with a warning: the `tile_format` of a TileJSON.
+		let tilejson =
+			crate::TileJSON::try_from(r#"{"tilejson":"3.0.0","tile_format":"application/vnd.maplibre-vector-tile"}"#)
+				.unwrap();
+		assert_eq!(tilejson.tile_format, Some(MLT));
 	}
 
 	#[rstest]
