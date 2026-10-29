@@ -418,6 +418,8 @@ Reads tiles from a remote tile server described by a TileJSON endpoint.
 
 The TileJSON document is fetched once when the pipeline is built, and each tile is then requested individually through the URL template in its `tiles` array. A relative template is resolved against the TileJSON's own URL.
 
+A URL that points at something other than a TileJSON, such as a tile container, is refused after its first bytes, with what it appears to be; a container is read with `from_container`.
+
 ### Parameters
 
 - **`url`: URL (required)** - URL of the TileJSON endpoint.

@@ -13,7 +13,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use anyhow::{Result, anyhow, bail, ensure};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, stream};
 use tokio::time::sleep;
@@ -31,6 +31,10 @@ use crate::{PipelineFactory, helpers::location::HttpUrl, vpl::VPLNode};
 /// The TileJSON document is fetched once when the pipeline is built, and each
 /// tile is then requested individually through the URL template in its `tiles`
 /// array. A relative template is resolved against the TileJSON's own URL.
+///
+/// A URL that points at something other than a TileJSON, such as a tile
+/// container, is refused after its first bytes, with what it appears to be; a
+/// container is read with `from_container`.
 struct Args {
 	/// URL of the TileJSON endpoint.
 	url: HttpUrl,
@@ -84,17 +88,7 @@ impl Operation {
 			.use_rustls_tls()
 			.build()?;
 
-		// Fetch TileJSON
-		let response = client.get(args.url.as_str()).send().await?;
-		if !response.status().is_success() {
-			bail!(
-				"Failed to fetch TileJSON from '{}': HTTP {}",
-				args.url,
-				response.status()
-			);
-		}
-		let body = response.text().await?;
-		let tilejson = TileJSON::try_from(body.as_str())?;
+		let tilejson = fetch_tilejson(&client, args.url.as_str()).await?;
 
 		// Extract tile URL template, resolved against the TileJSON's own URL
 		let tile_url_template = resolve_tile_url(args.url.as_str(), &extract_tile_url(&tilejson)?)?;
@@ -132,6 +126,108 @@ impl Operation {
 			runtime: factory.runtime(),
 		}) as Box<dyn TileSource>)
 	}
+}
+
+/// The most a TileJSON is read up to. One is usually a few kilobytes, and even
+/// one listing many vector layers stays far below this.
+const MAX_TILEJSON_BYTES: usize = 16 * 1024 * 1024;
+
+/// How much of a body that is not JSON is read to say what it is instead: a
+/// tar file's signature ends at byte 262.
+const SNIFF_BYTES: usize = 264;
+
+/// Fetches and parses the TileJSON at `url`, failing as soon as the body shows
+/// it is not one.
+///
+/// A URL pointing at a tile container instead of its TileJSON is an easy
+/// mistake, and the container can be gigabytes. Reading the whole body before
+/// parsing it would download all of that only to report a syntax error, so
+/// the body is read chunk by chunk: anything that does not start with `{`, the
+/// start of every TileJSON, is refused after its first bytes, and so is
+/// anything that announces more than [`MAX_TILEJSON_BYTES`]; a body that
+/// announces nothing is refused once it gets there.
+async fn fetch_tilejson(client: &reqwest::Client, url: &str) -> Result<TileJSON> {
+	let mut response = client.get(url).send().await?;
+	if !response.status().is_success() {
+		bail!("Failed to fetch TileJSON from '{url}': HTTP {}", response.status());
+	}
+	// Refused once its first bytes are in, not before: they can say what it
+	// is, which is more use than only that it is too long.
+	let too_long = response
+		.content_length()
+		.filter(|&length| usize::try_from(length).map_or(true, |length| length > MAX_TILEJSON_BYTES));
+
+	let mut body: Vec<u8> = Vec::new();
+	let mut starts_like_json = false;
+	while let Some(chunk) = response.chunk().await? {
+		body.extend_from_slice(&chunk);
+		ensure!(
+			body.len() <= MAX_TILEJSON_BYTES,
+			"'{url}' is more than {MAX_TILEJSON_BYTES} bytes long, more than a TileJSON can be"
+		);
+		if starts_like_json {
+			continue;
+		}
+		let text = body.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&body);
+		match text.iter().find(|byte| !byte.is_ascii_whitespace()) {
+			Some(b'{') => {
+				if let Some(length) = too_long {
+					bail!(
+						"'{url}' is {length} bytes long, more than a TileJSON can be ({MAX_TILEJSON_BYTES} bytes at most)"
+					);
+				}
+				starts_like_json = true;
+			}
+			// Enough of it to tell what it is, then no more.
+			Some(_) if body.len() >= SNIFF_BYTES => break,
+			_ => {}
+		}
+	}
+	if !starts_like_json {
+		bail!("'{url}' is not a TileJSON: {}", describe_non_json(url, &body));
+	}
+
+	let text = String::from_utf8(body).map_err(|_| anyhow!("'{url}' is not a TileJSON: it is not UTF-8 text"))?;
+	// The byte order mark `response.text()` used to drop.
+	let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+	TileJSON::try_from(text).with_context(|| format!("parsing the TileJSON from '{url}'"))
+}
+
+/// What a body that is not a TileJSON appears to be, by the signature it
+/// starts with, and what to do with it.
+fn describe_non_json(url: &str, body: &[u8]) -> String {
+	let container = if body.starts_with(b"versatiles_v") {
+		Some("a VersaTiles container")
+	} else if body.starts_with(b"PMTiles") {
+		Some("a PMTiles container")
+	} else if body.starts_with(b"SQLite format 3\0") {
+		Some("an SQLite database, as an MBTiles container is")
+	} else if body.get(257..262) == Some(b"ustar") {
+		Some("a tar archive")
+	} else {
+		None
+	};
+	if let Some(container) = container {
+		return format!("it is {container}, which `from_container filename=\"{url}\"` reads");
+	}
+	let kind = if body.is_empty() {
+		"it is empty"
+	} else if body.starts_with(&[0x1f, 0x8b]) {
+		"it is gzip-compressed data"
+	} else if body.starts_with(b"\x89PNG") {
+		"it is a PNG image"
+	} else if body.starts_with(&[0xff, 0xd8, 0xff]) {
+		"it is a JPEG image"
+	} else if body.starts_with(b"RIFF") && body.get(8..12) == Some(b"WEBP") {
+		"it is a WebP image"
+	} else if body.starts_with(b"PK\x03\x04") {
+		"it is a ZIP archive"
+	} else if body.trim_ascii_start().starts_with(b"<") {
+		"it looks like an HTML or XML page"
+	} else {
+		"it does not start with `{`"
+	};
+	kind.to_string()
 }
 
 fn extract_tile_url(tilejson: &TileJSON) -> Result<String> {
@@ -958,5 +1054,99 @@ mod tests {
 			"only the tile inside the bounds is requested"
 		);
 		Ok(())
+	}
+
+	// ── fetch_tilejson: failing fast on what is not a TileJSON ──────────
+
+	/// A body that never ends, `head` then `filler` over and over, sent as it
+	/// is made, the way a large container download arrives. `length` is
+	/// announced as its `Content-Length`, if given.
+	async fn endless(head: &'static [u8], filler: &'static [u8], length: Option<u64>) -> String {
+		spawn_mock_server(move || {
+			axum::Router::new().fallback(axum::routing::get(move || async move {
+				let chunks = futures::stream::once(async move { Ok::<_, std::convert::Infallible>(head.to_vec()) })
+					.chain(futures::stream::repeat_with(move || Ok(filler.to_vec())));
+				let mut response = axum::response::Response::new(axum::body::Body::from_stream(chunks));
+				if let Some(length) = length {
+					response
+						.headers_mut()
+						.insert(axum::http::header::CONTENT_LENGTH, length.into());
+				}
+				response
+			}))
+		})
+		.await
+	}
+
+	async fn fetch_error(url: &str) -> String {
+		let fetched = tokio::time::timeout(Duration::from_secs(10), fetch_tilejson(&reqwest::Client::new(), url))
+			.await
+			.expect("refused in time, not read to the end");
+		format!("{:#}", fetched.unwrap_err())
+	}
+
+	/// The mistake this exists for: a container's URL instead of its
+	/// TileJSON's. Refused after its first bytes, of a body that never ends,
+	/// and the message says what to use instead, also when the server
+	/// announces the container's size, as a file server does.
+	#[rstest]
+	#[case::unannounced(None)]
+	#[case::announced(Some(66_636_533_284))]
+	#[tokio::test]
+	async fn a_container_is_refused_after_its_first_bytes(#[case] length: Option<u64>) {
+		let url = format!(
+			"{}/world.versatiles",
+			endless(b"versatiles_v02", &[0; 16384], length).await
+		);
+		let error = fetch_error(&url).await;
+		assert!(error.contains("a VersaTiles container"), "{error}");
+		assert!(error.contains(&format!("from_container filename=\"{url}\"")), "{error}");
+	}
+
+	/// A body that starts like JSON but goes on and on is refused once it
+	/// passes the limit.
+	#[tokio::test]
+	async fn a_body_past_the_limit_is_refused() {
+		let url = format!("{}/tiles.json", endless(b"{\"a\":\"", &[b'x'; 16384], None).await);
+		let error = fetch_error(&url).await;
+		assert!(error.contains("more than"), "{error}");
+	}
+
+	/// A `Content-Length` past the limit is refused before the body is read.
+	#[tokio::test]
+	async fn an_announced_length_past_the_limit_is_refused_unread() {
+		let url = format!("{}/tiles.json", endless(b"{", b" ", Some(1 << 40)).await);
+		let error = fetch_error(&url).await;
+		assert!(error.contains("1099511627776 bytes long"), "{error}");
+	}
+
+	/// Leading whitespace and a byte order mark are still a TileJSON.
+	#[tokio::test]
+	async fn a_tilejson_with_a_bom_and_whitespace_is_read() -> Result<()> {
+		let base = spawn_mock_server(|| {
+			axum::Router::new().fallback(axum::routing::get(|| async {
+				"\u{feff}\n  {\"tilejson\":\"3.0.0\",\"tiles\":[\"{z}/{x}/{y}.png\"]}"
+			}))
+		})
+		.await;
+		let tilejson = fetch_tilejson(&reqwest::Client::new(), &format!("{base}/tiles.json")).await?;
+		assert_eq!(extract_tile_url(&tilejson)?, "{z}/{x}/{y}.png");
+		Ok(())
+	}
+
+	#[rstest]
+	#[case::pmtiles(b"PMTiles\x03".to_vec(), "a PMTiles container")]
+	#[case::mbtiles(b"SQLite format 3\0".to_vec(), "MBTiles")]
+	#[case::tar([vec![b'a'; 257], b"ustar\0".to_vec()].concat(), "a tar archive")]
+	#[case::gzip(vec![0x1f, 0x8b, 8, 0], "gzip")]
+	#[case::png(b"\x89PNG\r\n".to_vec(), "PNG image")]
+	#[case::webp(b"RIFF\0\0\0\0WEBPVP8 ".to_vec(), "WebP image")]
+	#[case::html(b"\n<!DOCTYPE html>".to_vec(), "HTML")]
+	#[case::empty(Vec::new(), "empty")]
+	#[case::other(b"hello".to_vec(), "does not start with `{`")]
+	#[test]
+	fn what_is_not_json_is_named(#[case] body: Vec<u8>, #[case] expected: &str) {
+		let description = describe_non_json("https://example.org/x", &body);
+		assert!(description.contains(expected), "{description}");
 	}
 }
