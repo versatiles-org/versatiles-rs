@@ -163,6 +163,18 @@ impl TileJSON {
 		obj.set_optional("tile_format", &self.tile_format.map(|v| v.as_mime_str().to_string()));
 		obj.set_optional("tile_schema", &self.tile_schema.map(|v| v.to_string()));
 		obj.set_optional("tile_size", &self.tile_size.map(|v| v.size()));
+
+		// MapLibre takes a vector source's `encoding` from its TileJSON, and
+		// decodes the tiles as MLT only when it says "mlt" (#111). It follows
+		// from the tile format, so it is set from that, and a stale "mlt" kept
+		// from before a conversion to MVT is dropped.
+		match self.tile_format {
+			Some(TileFormat::MLT) => obj.set("encoding", "mlt"),
+			Some(TileFormat::MVT) if obj.string("encoding").ok().flatten().as_deref() == Some("mlt") => {
+				obj.0.remove("encoding");
+			}
+			_ => {}
+		}
 		obj
 	}
 
@@ -1012,6 +1024,33 @@ mod tests {
 		assert_eq!(tj.tile_schema, Some(TileSchema::RasterDEMTerrarium));
 		assert_eq!(tj.tile_size.map(|s| s.size()), Some(512));
 		assert!(tj.tile_type.is_some());
+	}
+
+	/// MapLibre decodes a vector source as MLT only when its TileJSON says
+	/// `"encoding":"mlt"`, so the format of the tiles decides it.
+	#[test]
+	fn the_encoding_maplibre_reads_follows_the_tile_format() {
+		let encoding = |format: Option<TileFormat>, stored: Option<&str>| {
+			let mut tj = TileJSON {
+				tile_format: format,
+				..Default::default()
+			};
+			if let Some(stored) = stored {
+				tj.set_string("encoding", stored).unwrap();
+			}
+			tj.as_object().string("encoding").unwrap()
+		};
+		assert_eq!(encoding(Some(TileFormat::MLT), None).as_deref(), Some("mlt"));
+		assert_eq!(encoding(Some(TileFormat::MLT), Some("mvt")).as_deref(), Some("mlt"));
+		// Left behind by a conversion from MLT, it would have MapLibre read MVT as MLT.
+		assert_eq!(encoding(Some(TileFormat::MVT), Some("mlt")), None);
+		// MVT is MapLibre's default, so nothing is added where nothing was.
+		assert_eq!(encoding(Some(TileFormat::MVT), None), None);
+		// Raster DEMs use `encoding` for the elevation encoding.
+		assert_eq!(
+			encoding(Some(TileFormat::WEBP), Some("terrarium")).as_deref(),
+			Some("terrarium")
+		);
 	}
 
 	#[test]
