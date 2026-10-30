@@ -941,15 +941,15 @@ jobs:
           for name in $specs; do
             spec="$name@$TAG_VERSION"
             found=false
-            # ~5 minutes: 10 tries, 30s apart. Propagation has taken over a
-            # minute in practice, and waiting is far cheaper than a false alarm.
-            for attempt in $(seq 1 10); do
+            # ~30 minutes: 60 tries, 30s apart. Propagation took 18 minutes for
+            # one package of v5.5.0, and waiting is far cheaper than a false alarm.
+            for attempt in $(seq 1 60); do
               if npm view "$spec" version >/dev/null 2>&1; then
                 echo "✓ $spec"
                 found=true
                 break
               fi
-              echo "  … $spec not visible yet (attempt $attempt/10)"
+              echo "  … $spec not visible yet (attempt $attempt/60)"
               sleep 30
             done
             [ "$found" = true ] || missing="$missing $spec"
