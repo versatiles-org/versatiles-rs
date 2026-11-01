@@ -161,7 +161,7 @@ impl TileJSON {
 		obj.set_optional("vector_layers", &self.vector_layers.as_json_value_option());
 		obj.set_optional("tile_type", &self.tile_type.map(|v| v.to_string()));
 		obj.set_optional("tile_format", &self.tile_format.map(|v| v.as_mime_str().to_string()));
-		obj.set_optional("tile_schema", &self.tile_schema.map(|v| v.to_string()));
+		obj.set_optional("tile_schema", &self.tile_schema.as_ref().map(ToString::to_string));
 		obj.set_optional("tile_size", &self.tile_size.map(|v| v.size()));
 
 		// MapLibre takes a vector source's `encoding` from its TileJSON, and
@@ -1001,8 +1001,8 @@ mod tests {
 		for (key, value) in [
 			("tile_type", r#""hologram""#),
 			("tile_format", r#""image/x-unknown""#),
-			("tile_schema", r#""shortbread@9.9""#),
-			("tile_schema", r#""dem/unknown""#),
+			("tile_schema", r#""not a schema""#),
+			("tile_schema", r#""Shortbread@9.9""#),
 			("tile_size", "300"),
 			("tile_size", r#""large""#),
 		] {
@@ -1011,6 +1011,20 @@ mod tests {
 			assert_eq!(tj.zoom_min(), Some(2), "{key}={value}");
 			assert!(tj.tile_type.is_none() && tj.tile_format.is_none(), "{key}={value}");
 			assert!(tj.tile_schema.is_none() && tj.tile_size.is_none(), "{key}={value}");
+		}
+	}
+
+	/// A newer version or another tool may declare a schema this one has never
+	/// heard of. Serving or converting the tileset must not change what it says.
+	#[test]
+	fn should_keep_a_well_formed_schema_it_does_not_know() {
+		for schema in ["shortbread@9.9", "dem/future", "versatiles/landcover@1.0"] {
+			let json = format!(r#"{{"tilejson":"3.0.0","tile_schema":"{schema}"}}"#);
+			let tj = TileJSON::try_from(json.as_str()).unwrap();
+			assert_eq!(tj.tile_schema.as_ref().map(TileSchema::as_str), Some(schema));
+
+			let written = String::from(tj);
+			assert!(written.contains(&format!(r#""tile_schema":"{schema}""#)), "{written}");
 		}
 	}
 

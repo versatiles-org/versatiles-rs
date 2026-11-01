@@ -211,7 +211,7 @@ impl TilesWriter for MBTilesWriter {
 		// pixels of a tile mean. Without it, elevation tiles read back from
 		// an MBTiles file are an image like any other, and nothing downstream
 		// knows to keep their heights intact.
-		if let Some(tile_schema) = tilejson.tile_schema {
+		if let Some(tile_schema) = &tilejson.tile_schema {
 			writer.set_metadata("tile_schema", tile_schema.as_str())?;
 		}
 
@@ -310,6 +310,28 @@ mod tests {
 
 		let written = MBTilesReader::open(file.path(), TilesRuntime::default())?;
 		assert_eq!(written.tilejson().tile_schema, Some(TileSchema::RasterDEMMapbox));
+		Ok(())
+	}
+
+	/// A schema this version does not know comes back as it went in.
+	#[tokio::test]
+	async fn a_schema_this_version_does_not_know_is_stored_and_read_back() -> Result<()> {
+		use versatiles_core::TileSchema;
+
+		let file = NamedTempFile::new("custom.mbtiles")?;
+		let mut reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(2),
+			TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
+		)?;
+		reader.tilejson_mut().tile_schema = Some(TileSchema::try_from("acme/imagery@2")?);
+
+		MBTilesWriter::write_to_path(&reader, file.path(), TilesRuntime::default()).await?;
+
+		let written = MBTilesReader::open(file.path(), TilesRuntime::default())?;
+		assert_eq!(
+			written.tilejson().tile_schema.as_ref().map(TileSchema::as_str),
+			Some("acme/imagery@2")
+		);
 		Ok(())
 	}
 

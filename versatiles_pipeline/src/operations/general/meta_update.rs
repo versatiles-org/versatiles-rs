@@ -28,6 +28,10 @@ use crate::{PipelineFactory, helpers::location::FileLocation, vpl::VPLNode};
 /// mention are left as they were. `vector_layers` named in the update replace
 /// the ones below; layers it does not name are kept.
 ///
+/// A `schema` need not be one of the listed values. Any other written as
+/// `<family>[/<subtype>][@<version>]` in lowercase is kept as it is, with a
+/// warning in case it is a typo, as it is when it comes from a TileJSON document.
+///
 /// The fields and their meaning follow the TileJSON 3.0.0 specification:
 /// <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
 struct Args {
@@ -92,6 +96,20 @@ impl Operation {
 		.await?;
 		let vector_layers_arg =
 			load_json_arg(args.vector_layers, args.vector_layers_file, factory, "vector_layers").await?;
+
+		// Only what this operation is told to set: a schema the source already
+		// declares is not this pipeline's typo.
+		for schema in [
+			args.schema.as_ref(),
+			tilejson_arg.as_ref().and_then(|t| t.tile_schema.as_ref()),
+		] {
+			if let Some(schema) = schema.filter(|schema| !schema.is_known()) {
+				log::warn!(
+					"meta_update sets the tile schema '{schema}', which this version does not know. It is kept as it is. Known schemas are: {}",
+					TileSchema::variants().join(", ")
+				);
+			}
+		}
 
 		let mut tilejson = match tilejson_arg {
 			Some(tilejson) => tilejson,
@@ -326,6 +344,58 @@ mod tests {
 		assert_relative_eq!(tj.as_object().number("minzoom")?.unwrap(), 2.0);
 		assert_relative_eq!(tj.as_object().number("maxzoom")?.unwrap(), 7.0);
 		Ok(())
+	}
+
+	/// Both ways of naming a schema take one this version does not know, which
+	/// lets a dataset declare it before versatiles has heard of it.
+	#[rstest::rstest]
+	#[case(r#"schema="versatiles/landcover@1.0""#)]
+	#[case(r#"tilejson="{\"tilejson\":\"3.0.0\",\"tile_schema\":\"versatiles/landcover@1.0\"}""#)]
+	#[tokio::test]
+	async fn a_schema_this_version_does_not_know_is_set(#[case] args: &str) -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(&format!("from_debug format=mvt | meta_update {args}"))
+			.await?;
+		assert_eq!(
+			op.tilejson().tile_schema.as_ref().map(TileSchema::as_str),
+			Some("versatiles/landcover@1.0")
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn a_malformed_schema_is_refused_by_check_and_build_alike() {
+		let factory = PipelineFactory::new_dummy();
+		let vpl = r#"from_debug format=mvt | meta_update schema="Not A Schema""#;
+		let error = factory.operation_from_vpl(vpl).await.unwrap_err();
+		assert!(format!("{error:#}").contains("Invalid tile schema"), "{error:#}");
+
+		let problems = factory.check(&crate::vpl::parse_vpl(vpl).unwrap());
+		assert_eq!(problems.len(), 1, "{problems:?}");
+		assert!(problems[0].message.contains("does not accept"), "{problems:?}");
+
+		// `check` goes by the parser and not by the list of values it shows.
+		let well_formed = r#"from_debug format=mvt | meta_update schema="versatiles/landcover@1.0""#;
+		let problems = factory.check(&crate::vpl::parse_vpl(well_formed).unwrap());
+		assert!(problems.is_empty(), "{problems:?}");
+	}
+
+	/// Heights stay heights under a name this version does not know: what goes
+	/// by the schema still refuses to treat them as colours or encode them
+	/// with loss.
+	#[rstest::rstest]
+	#[case("raster_overscale", "cannot upscale tiles of the schema 'dem/future'")]
+	#[case("raster_format format=jpg", "cannot encode elevation tiles ('dem/future')")]
+	#[tokio::test]
+	async fn an_elevation_schema_this_version_does_not_know_keeps_its_protection(
+		#[case] operation: &str,
+		#[case] reason: &str,
+	) {
+		let factory = PipelineFactory::new_dummy();
+		let vpl = format!(r#"from_debug format=png | meta_update schema="dem/future" | {operation}"#);
+		let error = factory.operation_from_vpl(&vpl).await.unwrap_err();
+		assert!(format!("{error:#}").contains(reason), "{error:#}");
 	}
 
 	#[tokio::test]

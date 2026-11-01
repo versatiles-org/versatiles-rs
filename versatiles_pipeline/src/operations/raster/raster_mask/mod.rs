@@ -114,7 +114,8 @@ impl Operation {
 			elevation: source
 				.tilejson()
 				.tile_schema
-				.is_some_and(|schema| schema.is_elevation()),
+				.as_ref()
+				.is_some_and(versatiles_core::TileSchema::is_elevation),
 		};
 		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}

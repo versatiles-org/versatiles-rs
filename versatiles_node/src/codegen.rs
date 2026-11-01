@@ -50,8 +50,10 @@ fn to_pascal_case(s: &str) -> String {
 /// Map a VPL field's Rust type to a TypeScript type expression.
 ///
 /// Enum-typed fields (carrying a non-empty `enum_variants`) become a TS
-/// string-literal union (`"a" | "b" | "c"`). Everything else falls back to
-/// the static type-string match below.
+/// string-literal union (`"a" | "b" | "c"`), of the values a form should offer
+/// rather than all the parser accepts: `TileSchema` also takes names it does
+/// not know, which TS callers can reach through a TileJSON document. Everything
+/// else falls back to the static type-string match below.
 fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 	// A closed set of numbers rather than of words. `tile_size=512` is written
 	// unquoted in VPL and is a number in TS, so its variants render as `256 |

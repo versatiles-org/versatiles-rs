@@ -31,7 +31,7 @@ pub enum FieldReference {
 
 /// Which files an argument that names a file will take.
 ///
-/// The third describing field, beside `enum_variants` for a closed set and
+/// The third describing field, beside `enum_variants` for a list of values and
 /// `bounds` for a range. `FilePath` says an argument names a file and stops
 /// there, so a consumer offering a file dialog had a picker and no filter, and
 /// the only per-field answer available was the doc comment's prose — "GeoJSON

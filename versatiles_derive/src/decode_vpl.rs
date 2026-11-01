@@ -38,7 +38,7 @@ struct TypeMapping {
 	/// True if `generic_param` names a type exposing `fn bounds() -> Bounds`.
 	///
 	/// The describing half of a range, and the counterpart of `is_enum`: a
-	/// closed set is described by its `variants()`, a range by its `bounds()`.
+	/// list of values is described by its `variants()`, a range by its `bounds()`.
 	/// Emitted into `VPLFieldMeta::bounds` so a form can offer a spinner or a
 	/// slider before anyone types, which `validate` — a predicate — cannot say
 	/// (#260).

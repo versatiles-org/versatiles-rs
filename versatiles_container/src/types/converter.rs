@@ -334,8 +334,8 @@ impl TilesConvertReader {
 			// of a channel, and with it a height. Whoever wants that has to
 			// ask for it. Only where the format really changes: tiles already
 			// in the target format are passed on as they are, and should be.
-			let schema = reader.tilejson().tile_schema;
-			let elevation = schema.is_some_and(|schema| schema.is_elevation());
+			let schema = reader.tilejson().tile_schema.clone();
+			let elevation = schema.as_ref().is_some_and(versatiles_core::TileSchema::is_elevation);
 			if elevation && tile_format != source_format && cp.format_quality.is_none() {
 				// Where "without loss" is not on offer, the choice is the
 				// user's to make, not ours to make silently — and not the

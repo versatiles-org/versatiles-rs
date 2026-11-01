@@ -29,10 +29,11 @@ impl Scaling {
 	/// Both elevation schemas store the height as the same 24-bit number and
 	/// differ only in what one step of it is worth, so they scale alike.
 	pub fn for_source(tilejson: &TileJSON) -> Result<Scaling> {
-		match tilejson.tile_schema {
+		match &tilejson.tile_schema {
 			Some(TileSchema::RasterDEMMapbox | TileSchema::RasterDEMTerrarium) => Ok(Scaling::Elevation),
-			Some(TileSchema::RasterDEMVersatiles) => bail!(
-				"cannot upscale tiles of the schema 'dem/versatiles': only 'dem/mapbox' and 'dem/terrarium' elevation tiles are supported"
+			// Scaling these as colors would interpolate encoded heights.
+			Some(schema) if schema.is_elevation() => bail!(
+				"cannot upscale tiles of the schema '{schema}': only 'dem/mapbox' and 'dem/terrarium' elevation tiles are supported"
 			),
 			_ => Ok(Scaling::Color),
 		}
@@ -322,6 +323,8 @@ mod tests {
 	#[case("rgb", Some(Scaling::Color))]
 	#[case("rgba", Some(Scaling::Color))]
 	#[case("dem/versatiles", None)]
+	#[case("dem/future", None)]
+	#[case("acme/imagery", Some(Scaling::Color))]
 	fn the_schema_decides_how_tiles_are_scaled(#[case] schema: &str, #[case] expected: Option<Scaling>) {
 		let tilejson = TileJSON {
 			tile_schema: Some(TileSchema::try_from(schema).unwrap()),

@@ -148,7 +148,7 @@ impl MBTilesTileSink {
 		}
 		// Not in the MBTiles spec; see the writer. Without it, DEM tiles
 		// assembled into an MBTiles file read back as an ordinary image.
-		if let Some(tile_schema) = tilejson.tile_schema {
+		if let Some(tile_schema) = &tilejson.tile_schema {
 			self.set_metadata("tile_schema", tile_schema.as_str())?;
 		}
 

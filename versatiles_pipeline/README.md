@@ -563,6 +563,8 @@ Each of those pairs is mutually exclusive: `tilejson` with `tilejson_file`, `til
 
 Every field the update carries replaces the one below it, including `bounds` and the zoom range — an update that could only widen them would not be able to narrow a tileset's declared extent. Fields the update does not mention are left as they were. `vector_layers` named in the update replace the ones below; layers it does not name are kept.
 
+A `schema` need not be one of the listed values. Any other written as `<family>[/<subtype>][@<version>]` in lowercase is kept as it is, with a warning in case it is a typo, as it is when it comes from a TileJSON document.
+
 The fields and their meaning follow the TileJSON 3.0.0 specification: <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
 
 ### Parameters

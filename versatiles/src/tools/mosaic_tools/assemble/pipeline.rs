@@ -236,7 +236,7 @@ pub(super) async fn scan_sources(
 			tilejson = Some(TileJSON {
 				tile_format: Some(cfg.tile_format),
 				tile_type: Some(cfg.tile_format.to_type()),
-				tile_schema: reader_tilejson.tile_schema,
+				tile_schema: reader_tilejson.tile_schema.clone(),
 				tile_size,
 				..TileJSON::default()
 			});

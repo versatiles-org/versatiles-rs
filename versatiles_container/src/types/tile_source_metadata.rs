@@ -100,7 +100,7 @@ impl TileSourceMetadata {
 	///
 	/// - Applies [`TileJSON::update_from_pyramid`] to intersect/set bounds and min/max zoom.
 	/// - Sets `tile_format` from the reader parameters and derives `tile_type` from it.
-	/// - If `tile_schema` is absent or mismatched with `tile_type`, infers a suitable schema:
+	/// - If `tile_schema` is absent or does not [fit](TileSchema::fits) `tile_type`, infers a suitable schema:
 	///   for rasters `RasterRGB` if the format cannot store transparency (JPEG) and
 	///   `RasterRGBA` if it can; for vectors, derived from `vector_layers`.
 	pub fn update_tilejson(&self, tile_json: &mut TileJSON) {
@@ -113,7 +113,7 @@ impl TileSourceMetadata {
 		tile_json.tile_type = tile_json.tile_format.map(|f| f.to_type());
 
 		if let Some(tile_type) = tile_json.tile_type
-			&& tile_json.tile_schema.map(|s| s.tile_type()) != tile_json.tile_type
+			&& !tile_json.tile_schema.as_ref().is_some_and(|s| s.fits(tile_type))
 		{
 			tile_json.tile_schema = Some(match tile_type {
 				// What the tiles can hold, not what they do hold: nobody has
@@ -380,5 +380,28 @@ mod tests {
 		};
 		metadata.update_tilejson(&mut tilejson);
 		assert_eq!(tilejson.tile_schema, Some(expected));
+	}
+
+	/// A schema this version does not know stays what the source says it is. It
+	/// used to be replaced with a guess, so that converting a tileset changed
+	/// what it declared, and `dem/…` tiles lost the protection of their heights.
+	#[rstest::rstest]
+	#[case(TileFormat::MVT, "versatiles/landcover@1.0", "versatiles/landcover@1.0")]
+	#[case(TileFormat::PNG, "acme/imagery@2", "acme/imagery@2")]
+	#[case(TileFormat::PNG, "dem/future", "dem/future")]
+	// Heights in vector tiles cannot be what the source means.
+	#[case(TileFormat::MVT, "dem/future", "other")]
+	fn a_schema_this_version_does_not_know_is_kept(
+		#[case] format: TileFormat,
+		#[case] declared: &str,
+		#[case] expected: &str,
+	) {
+		let metadata = TileSourceMetadata::new(format, TileCompression::Uncompressed, Traversal::ANY, None);
+		let mut tilejson = TileJSON {
+			tile_schema: Some(TileSchema::try_from(declared).unwrap()),
+			..TileJSON::default()
+		};
+		metadata.update_tilejson(&mut tilejson);
+		assert_eq!(tilejson.tile_schema.as_ref().map(TileSchema::as_str), Some(expected));
 	}
 }

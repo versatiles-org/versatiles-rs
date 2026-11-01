@@ -59,7 +59,7 @@ impl TileJSON {
 			},
 			tile_type: tj.tile_type.map(|t| t.to_string()),
 			tile_format: tj.tile_format.map(|f| f.to_string()),
-			tile_schema: tj.tile_schema.map(|s| s.to_string()),
+			tile_schema: tj.tile_schema.as_ref().map(ToString::to_string),
 			tile_size: tj.tile_size.map(|s| f64::from(s.size())),
 			minzoom: tj
 				.integer("minzoom")

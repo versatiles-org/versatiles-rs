@@ -325,15 +325,22 @@ impl Operation {
 		// without loss — goes by the schema. So a stack of elevation sources
 		// says that it is one. Heights blended with colors, or with heights
 		// in another encoding, are neither; that is refused.
-		let schemas: Vec<Option<TileSchema>> = original_sources.iter().map(|s| s.tilejson().tile_schema).collect();
-		let elevation = schemas.iter().flatten().find(|schema| schema.is_elevation()).copied();
-		if let Some(elevation) = elevation {
+		let schemas: Vec<Option<TileSchema>> = original_sources
+			.iter()
+			.map(|s| s.tilejson().tile_schema.clone())
+			.collect();
+		let elevation = schemas.iter().flatten().find(|schema| schema.is_elevation()).cloned();
+		if let Some(elevation) = &elevation {
 			ensure!(
-				schemas.iter().all(|schema| *schema == Some(elevation)),
+				schemas.iter().all(|schema| schema.as_ref() == Some(elevation)),
 				"cannot stack elevation tiles ('{elevation}') with tiles of another schema: the sources have {}",
 				schemas
 					.iter()
-					.map(|schema| schema.map_or_else(|| "none".to_string(), |schema| format!("'{schema}'")))
+					.map(|schema| {
+						schema
+							.as_ref()
+							.map_or_else(|| "none".to_string(), |schema| format!("'{schema}'"))
+					})
 					.collect::<Vec<_>>()
 					.join(", ")
 			);
@@ -341,7 +348,7 @@ impl Operation {
 				tile_format.can_be_lossless(),
 				"cannot stack elevation tiles ('{elevation}') as '{tile_format}': '{tile_format}' has no lossless encoding. Use format=webp or format=png"
 			);
-			tilejson.tile_schema = Some(elevation);
+			tilejson.tile_schema = Some(elevation.clone());
 		}
 
 		let level_max = pyramid
@@ -2058,6 +2065,28 @@ mod tests {
 		let message = format!("{error:#}");
 		assert!(message.contains(reason), "{message}");
 		assert!(message.contains("dem/mapbox"), "{message}");
+	}
+
+	/// An elevation schema this version does not know is treated like any other.
+	#[tokio::test]
+	async fn a_stack_keeps_an_elevation_schema_this_version_does_not_know() -> Result<()> {
+		let future = "from_color color=10203080 format=webp tile_size=256 | meta_update schema=\"dem/future\"";
+		let factory = PipelineFactory::new_dummy();
+
+		let op = factory
+			.operation_from_vpl(&format!("from_stacked_raster [ {future}, {future} ]"))
+			.await?;
+		assert_eq!(op.tilejson().tile_schema, Some(TileSchema::try_from("dem/future")?));
+
+		let error = factory
+			.operation_from_vpl(&format!("from_stacked_raster [ {future}, {HEIGHTS} ]"))
+			.await
+			.unwrap_err();
+		assert!(
+			format!("{error:#}").contains("with tiles of another schema"),
+			"{error:#}"
+		);
+		Ok(())
 	}
 
 	/// Images of different kinds still stack: an opaque format under one with
