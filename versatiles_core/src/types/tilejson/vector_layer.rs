@@ -180,6 +180,15 @@ impl VectorLayers {
 			} else {
 				TileSchema::VectorShortbread1_0
 			}
+		} else if self.0.len() == 1
+			&& self
+				.0
+				.get("landcover")
+				.is_some_and(|layer| layer.fields.len() == 1 && layer.fields.contains_key("kind"))
+		{
+			// The name alone is too common to go by: this is VersaTiles' own
+			// schema, not a statement about every tileset with such a layer.
+			TileSchema::VectorVersatilesLandcover1_0
 		} else {
 			TileSchema::VectorOther
 		}
@@ -806,6 +815,47 @@ mod tests {
 			.fields
 			.insert("motorcar".to_string(), "Boolean".to_string());
 		assert_eq!(vl.tile_schema(), VectorShortbread1_1);
+	}
+
+	/// Only the exact layout counts, so that a tileset of someone else's with a
+	/// layer of that name isn't given VersaTiles' schema.
+	#[test]
+	fn test_tile_schema_versatiles_landcover() {
+		use TileSchema::*;
+		let layers = |entries: &[(&str, &[&str])]| {
+			VectorLayers(
+				entries
+					.iter()
+					.map(|(id, fields)| {
+						let fields = fields.iter().map(|f| (f.to_string(), "String".to_string())).collect();
+						let layer = VectorLayer {
+							fields,
+							description: None,
+							minzoom: None,
+							maxzoom: None,
+						};
+						(id.to_string(), layer)
+					})
+					.collect(),
+			)
+		};
+
+		assert_eq!(
+			layers(&[("landcover", &["kind"])]).tile_schema(),
+			VectorVersatilesLandcover1_0
+		);
+		for (entries, what) in [
+			(vec![("landcover", &[][..])], "no attributes"),
+			(vec![("landcover", &["class"][..])], "another attribute"),
+			(vec![("landcover", &["kind", "name"][..])], "a further attribute"),
+			(
+				vec![("landcover", &["kind"][..]), ("roads", &["kind"][..])],
+				"a further layer",
+			),
+			(vec![("land", &["kind"][..])], "another layer"),
+		] {
+			assert_eq!(layers(&entries).tile_schema(), VectorOther, "{what}");
+		}
 	}
 
 	#[test]

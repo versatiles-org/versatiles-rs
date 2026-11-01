@@ -1018,7 +1018,7 @@ mod tests {
 	/// heard of. Serving or converting the tileset must not change what it says.
 	#[test]
 	fn should_keep_a_well_formed_schema_it_does_not_know() {
-		for schema in ["shortbread@9.9", "dem/future", "versatiles/landcover@1.0"] {
+		for schema in ["shortbread@9.9", "dem/future", "versatiles/hillshade@1.0"] {
 			let json = format!(r#"{{"tilejson":"3.0.0","tile_schema":"{schema}"}}"#);
 			let tj = TileJSON::try_from(json.as_str()).unwrap();
 			assert_eq!(tj.tile_schema.as_ref().map(TileSchema::as_str), Some(schema));

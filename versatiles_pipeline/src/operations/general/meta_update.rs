@@ -349,8 +349,8 @@ mod tests {
 	/// Both ways of naming a schema take one this version does not know, which
 	/// lets a dataset declare it before versatiles has heard of it.
 	#[rstest::rstest]
-	#[case(r#"schema="versatiles/landcover@1.0""#)]
-	#[case(r#"tilejson="{\"tilejson\":\"3.0.0\",\"tile_schema\":\"versatiles/landcover@1.0\"}""#)]
+	#[case(r#"schema="versatiles/hillshade@1.0""#)]
+	#[case(r#"tilejson="{\"tilejson\":\"3.0.0\",\"tile_schema\":\"versatiles/hillshade@1.0\"}""#)]
 	#[tokio::test]
 	async fn a_schema_this_version_does_not_know_is_set(#[case] args: &str) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
@@ -359,7 +359,7 @@ mod tests {
 			.await?;
 		assert_eq!(
 			op.tilejson().tile_schema.as_ref().map(TileSchema::as_str),
-			Some("versatiles/landcover@1.0")
+			Some("versatiles/hillshade@1.0")
 		);
 		Ok(())
 	}
@@ -376,7 +376,7 @@ mod tests {
 		assert!(problems[0].message.contains("does not accept"), "{problems:?}");
 
 		// `check` goes by the parser and not by the list of values it shows.
-		let well_formed = r#"from_debug format=mvt | meta_update schema="versatiles/landcover@1.0""#;
+		let well_formed = r#"from_debug format=mvt | meta_update schema="versatiles/hillshade@1.0""#;
 		let problems = factory.check(&crate::vpl::parse_vpl(well_formed).unwrap());
 		assert!(problems.is_empty(), "{problems:?}");
 	}

@@ -25,6 +25,8 @@ use super::TileType;
 ///   schema.
 /// * **`VectorShortbread1_0`** – *Shortbread* schema version 1.0.
 /// * **`VectorShortbread1_1`** – *Shortbread* schema version 1.1.
+/// * **`VectorVersatilesLandcover1_0`** – The layout of VersaTiles' land cover
+///   dataset, version 1.0.
 /// * **`VectorOther`** – Any other vector schema not listed above.
 ///
 /// ## Others
@@ -48,6 +50,8 @@ pub enum TileSchema {
 	VectorShortbread1_0,
 	/// Vector tiles conforming to the Shortbread 1.1 schema (<https://shortbread-tiles.org/schema/1.1/>).
 	VectorShortbread1_1,
+	/// Vector tiles with the layout of VersaTiles' land cover dataset: one layer, `landcover`, with one attribute, `kind` (<https://github.com/versatiles-org/landcover-vectors#whats-in-the-tiles>).
+	VectorVersatilesLandcover1_0,
 	/// Any other vector schema not listed above.
 	VectorOther,
 	/// A well-formed identifier this version does not know, kept verbatim.
@@ -77,7 +81,7 @@ impl TileSchema {
 	pub fn as_str(&self) -> &str {
 		use TileSchema::{
 			Custom, RasterDEMMapbox, RasterDEMTerrarium, RasterDEMVersatiles, RasterRGB, RasterRGBA, Unknown,
-			VectorOpenMapTiles, VectorOther, VectorShortbread1_0, VectorShortbread1_1,
+			VectorOpenMapTiles, VectorOther, VectorShortbread1_0, VectorShortbread1_1, VectorVersatilesLandcover1_0,
 		};
 		match self {
 			RasterRGB => "rgb",
@@ -88,6 +92,7 @@ impl TileSchema {
 			VectorOpenMapTiles => "openmaptiles",
 			VectorShortbread1_0 => "shortbread@1.0",
 			VectorShortbread1_1 => "shortbread@1.1",
+			VectorVersatilesLandcover1_0 => "versatiles/landcover@1.0",
 			VectorOther => "other",
 			Custom(identifier) => identifier,
 			Unknown => "unknown",
@@ -118,6 +123,7 @@ impl TileSchema {
 			"openmaptiles",
 			"shortbread@1.0",
 			"shortbread@1.1",
+			"versatiles/landcover@1.0",
 			"other",
 		]
 	}
@@ -141,11 +147,15 @@ impl TileSchema {
 	pub fn tile_type(&self) -> TileType {
 		use TileSchema::{
 			Custom, RasterDEMMapbox, RasterDEMTerrarium, RasterDEMVersatiles, RasterRGB, RasterRGBA, Unknown,
-			VectorOpenMapTiles, VectorOther, VectorShortbread1_0, VectorShortbread1_1,
+			VectorOpenMapTiles, VectorOther, VectorShortbread1_0, VectorShortbread1_1, VectorVersatilesLandcover1_0,
 		};
 		match self {
 			RasterRGB | RasterRGBA | RasterDEMMapbox | RasterDEMTerrarium | RasterDEMVersatiles => TileType::Raster,
-			VectorOpenMapTiles | VectorShortbread1_0 | VectorShortbread1_1 | VectorOther => TileType::Vector,
+			VectorOpenMapTiles
+			| VectorShortbread1_0
+			| VectorShortbread1_1
+			| VectorVersatilesLandcover1_0
+			| VectorOther => TileType::Vector,
 			Custom(_) if self.is_elevation() => TileType::Raster,
 			Custom(_) | Unknown => TileType::Unknown,
 		}
@@ -232,7 +242,7 @@ impl TryFrom<&str> for TileSchema {
 	fn try_from(value: &str) -> Result<Self, Self::Error> {
 		use TileSchema::{
 			RasterDEMMapbox, RasterDEMTerrarium, RasterDEMVersatiles, RasterRGB, RasterRGBA, Unknown, VectorOpenMapTiles,
-			VectorOther, VectorShortbread1_0, VectorShortbread1_1,
+			VectorOther, VectorShortbread1_0, VectorShortbread1_1, VectorVersatilesLandcover1_0,
 		};
 		Ok(match value.to_lowercase().as_str() {
 			"rgb" => RasterRGB,
@@ -243,6 +253,7 @@ impl TryFrom<&str> for TileSchema {
 			"openmaptiles" => VectorOpenMapTiles,
 			"shortbread@1.0" => VectorShortbread1_0,
 			"shortbread@1.1" => VectorShortbread1_1,
+			"versatiles/landcover@1.0" => VectorVersatilesLandcover1_0,
 			"other" => VectorOther,
 			// What `as_str` writes for `Unknown`, so a schema that was written
 			// out reads back; not offered in `variants`, nor in the list below.
@@ -272,6 +283,7 @@ mod tests {
 			(VectorOpenMapTiles, "openmaptiles"),
 			(VectorShortbread1_0, "shortbread@1.0"),
 			(VectorShortbread1_1, "shortbread@1.1"),
+			(VectorVersatilesLandcover1_0, "versatiles/landcover@1.0"),
 			(VectorOther, "other"),
 			(Unknown, "unknown"),
 		] {
@@ -294,6 +306,7 @@ mod tests {
 			(VectorOpenMapTiles, Vector),
 			(VectorShortbread1_0, Vector),
 			(VectorShortbread1_1, Vector),
+			(VectorVersatilesLandcover1_0, Vector),
 			(VectorOther, Vector),
 			(TileSchema::Unknown, TileType::Unknown),
 		] {
@@ -314,6 +327,7 @@ mod tests {
 			("openmaptiles", VectorOpenMapTiles),
 			("shortbread@1.0", VectorShortbread1_0),
 			("shortbread@1.1", VectorShortbread1_1),
+			("versatiles/landcover@1.0", VectorVersatilesLandcover1_0),
 			("other", VectorOther),
 		] {
 			assert_eq!(TileSchema::try_from(text).unwrap(), schema);
@@ -336,8 +350,9 @@ mod tests {
 			TileSchema::VectorOpenMapTiles,
 			TileSchema::VectorShortbread1_0,
 			TileSchema::VectorShortbread1_1,
+			TileSchema::VectorVersatilesLandcover1_0,
 			TileSchema::VectorOther,
-			TileSchema::Custom("versatiles/landcover@1.0".to_string()),
+			TileSchema::Custom("versatiles/hillshade@1.0".to_string()),
 			TileSchema::Unknown,
 		] {
 			assert_eq!(TileSchema::try_from(schema.as_str()).unwrap(), schema);
@@ -352,7 +367,7 @@ mod tests {
 			"acme",
 			"acme@2",
 			"acme/roads",
-			"versatiles/landcover@1.0",
+			"versatiles/landcover@2.0",
 			"shortbread@9.9",
 			"dem/future",
 			"my-org_1/a.b@1.0-rc.1",

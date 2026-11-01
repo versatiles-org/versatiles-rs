@@ -386,7 +386,7 @@ mod tests {
 	/// used to be replaced with a guess, so that converting a tileset changed
 	/// what it declared, and `dem/…` tiles lost the protection of their heights.
 	#[rstest::rstest]
-	#[case(TileFormat::MVT, "versatiles/landcover@1.0", "versatiles/landcover@1.0")]
+	#[case(TileFormat::MVT, "versatiles/hillshade@1.0", "versatiles/hillshade@1.0")]
 	#[case(TileFormat::PNG, "acme/imagery@2", "acme/imagery@2")]
 	#[case(TileFormat::PNG, "dem/future", "dem/future")]
 	// Heights in vector tiles cannot be what the source means.
