@@ -184,7 +184,7 @@ byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
 enumset = { version = "1.1.15", default-features = false }
 futures = { version = "0.3.34", features = ["default"] }
 itertools = { version = "0.15.0", default-features = false }
-log = { version = "0.4.34", default-features = false }
+log = { version = "0.4.35", default-features = false }
 num_cpus = { version = "1.17.0", default-features = false }
 regex = { version = "1.13.1", default-features = false, features = [
 	"std",
@@ -228,7 +228,7 @@ imageproc = { version = "0.27.0", default-features = false }
 geo = { version = "0.33.1", default-features = false }
 geo-types = { version = "0.7.20" }
 mlt-core = { version = "0.22.1", default-features = false }
-rstar = { version = "0.13.0", default-features = false }
+rstar = { version = "0.14.0", default-features = false }
 
 # Utility dependencies
 wildmatch = { version = "2.7.0", default-features = false }
