@@ -1,7 +1,15 @@
 use anyhow::{Result, anyhow, bail, ensure};
 use versatiles_image::color::HexColor;
 
-/// Colours for elevations, as a list of `elevation:colour` stops.
+/// The ramp `ramp=default` stands for: a hypsometric tint, light and muted so
+/// that a hillshade on top of it stays legible. The coast lies just above 0,
+/// because DEMs without bathymetry, such as Mapterhorn's, store the sea as
+/// exactly 0 m.
+pub const DEFAULT_RAMP: &str = "-11000:24507e,-200:8cb4d8,0:bcd8ec,\
+	0.01:a8c896,300:cad6a2,800:e4dcae,1500:d6bf98,2500:bea58a,4000:e4e0dc,6000:ffffff";
+
+/// Colours for elevations, as a list of `elevation:colour` stops, or `default`
+/// for [`DEFAULT_RAMP`].
 ///
 /// Carries the format of `ramp=` in its type, so that a bad stop is judged
 /// where a value is decoded, including by `check` (#257).
@@ -34,16 +42,22 @@ impl ColorRamp {
 	/// The colour for `meters`, as straight RGBA8.
 	#[must_use]
 	pub fn color_at(&self, meters: f64) -> [u8; 4] {
+		unpremultiply(self.premultiplied_at(meters))
+	}
+
+	/// The colour for `meters`, as premultiplied RGBA in 0..=1, for drawing
+	/// something over it before it is rounded to 8 bits.
+	#[must_use]
+	pub fn premultiplied_at(&self, meters: f64) -> [f64; 4] {
 		let after = self.stops.partition_point(|stop| stop.meters <= meters);
-		let color = match (after.checked_sub(1).map(|i| &self.stops[i]), self.stops.get(after)) {
+		match (after.checked_sub(1).map(|i| &self.stops[i]), self.stops.get(after)) {
 			(Some(below), Some(above)) => {
 				let t = (meters - below.meters) / (above.meters - below.meters);
 				[0, 1, 2, 3].map(|k| below.color[k] + (above.color[k] - below.color[k]) * t)
 			}
 			(Some(end), None) | (None, Some(end)) => end.color,
 			(None, None) => unreachable!("a ramp has at least one stop"),
-		};
-		unpremultiply(color)
+		}
 	}
 }
 
@@ -65,6 +79,9 @@ impl TryFrom<&str> for ColorRamp {
 	type Error = anyhow::Error;
 
 	fn try_from(text: &str) -> Result<Self> {
+		if text.trim() == "default" {
+			return ColorRamp::try_from(DEFAULT_RAMP);
+		}
 		let mut stops: Vec<Stop> = Vec::new();
 		for part in text.split(',').map(str::trim).filter(|part| !part.is_empty()) {
 			let (meters, color) = part
@@ -146,8 +163,15 @@ mod tests {
 	}
 
 	#[test]
+	fn default_stands_for_the_default_ramp() {
+		assert_eq!(ramp("default"), ramp(DEFAULT_RAMP));
+		assert!(ramp("default").is_opaque());
+	}
+
+	#[test]
 	fn bad_ramps_are_refused_with_a_reason() {
 		for (text, reason) in [
+			("Default", "elevation:colour"),
 			("", "at least one"),
 			(" , ", "at least one"),
 			("100", "elevation:colour"),

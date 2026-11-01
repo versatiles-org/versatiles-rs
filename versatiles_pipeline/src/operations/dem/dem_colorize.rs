@@ -6,7 +6,7 @@ use versatiles_derive::context;
 use versatiles_image::DynamicImage;
 
 use super::{
-	color_ramp::ColorRamp,
+	color_ramp::{ColorRamp, DEFAULT_RAMP},
 	encoding::{DemEncoding, decode_elevation, resolve_encoding},
 };
 use crate::{
@@ -14,13 +14,6 @@ use crate::{
 	operations::transform::{TileTransform, TransformOp},
 	vpl::VPLNode,
 };
-
-/// The ramp `dem_colorize` uses without `ramp=`: a hypsometric tint, light
-/// and muted so that a hillshade on top of it stays legible. The coast lies
-/// just above 0, because DEMs without bathymetry, such as Mapterhorn's, store
-/// the sea as exactly 0 m.
-const DEFAULT_RAMP: &str = "-11000:24507e,-200:8cb4d8,0:bcd8ec,\
-	0.01:a8c896,300:cad6a2,800:e4dcae,1500:d6bf98,2500:bea58a,4000:e4e0dc,6000:ffffff";
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Colours DEM tiles by elevation, the way MapLibre's `color-relief` layer colours them.
@@ -32,13 +25,16 @@ const DEFAULT_RAMP: &str = "-11000:24507e,-200:8cb4d8,0:bcd8ec,\
 /// `RRGGBBAA`; a ramp with a translucent stop gives RGBA tiles, and one without
 /// gives RGB tiles. A JPEG source becomes PNG when the ramp is translucent.
 ///
-/// The default ramp is a hypsometric tint: shades of blue up to sea level,
-/// then green, yellow and brown up to white peaks. Sea level itself is blue,
-/// for DEMs that store the sea as 0 m, and so is land below it:
+/// The default ramp, which `ramp=default` also names, is a hypsometric tint:
+/// shades of blue up to sea level, then green, yellow and brown up to white
+/// peaks. Sea level itself is blue, for DEMs that store the sea as 0 m, and so
+/// is land below it:
 /// `-11000:24507e,-200:8cb4d8,0:bcd8ec,0.01:a8c896,300:cad6a2,800:e4dcae,1500:d6bf98,2500:bea58a,4000:e4e0dc,6000:ffffff`.
 ///
-/// For a coloured relief, put a `dem_hillshade` on top with `from_stacked_raster`,
-/// which lays its first source over the others.
+/// For a coloured relief, give `dem_hillshade` a `ramp`, which reads and decodes
+/// the source once. To draw something between the colours and the shading, stack
+/// this under a `dem_hillshade` with `from_stacked_raster`, which lays its first
+/// source over the others.
 struct Args {
 	/// Colour stops, as `elevation:colour,…`. Defaults to a hypsometric tint.
 	ramp: Option<ColorRamp>,

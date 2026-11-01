@@ -13,6 +13,7 @@ use versatiles_derive::context;
 use versatiles_image::color::HexColor;
 
 use super::{
+	color_ramp::ColorRamp,
 	encoding::{DemEncoding, decode_elevation, resolve_encoding},
 	slope::maplibre_slope_exaggeration,
 };
@@ -38,6 +39,12 @@ bounded_number! {
 /// are given as `RRGGBB`, `RRGGBBAA` or `[r,g,b,a]`, and an alpha below `FF`
 /// makes that part of the shading lighter.
 ///
+/// With a `ramp`, each pixel is the colour for its elevation with the shading
+/// drawn over it, which gives a coloured relief in one step. The ramp is written
+/// as in `dem_colorize`, and `ramp=default` is its hypsometric tint. A ramp with
+/// only opaque stops gives RGB tiles, and a JPEG source stays JPEG; one with a
+/// translucent stop gives RGBA tiles, and a JPEG source becomes PNG.
+///
 /// The slopes at a tile's edge are computed with the pixels of the adjacent
 /// tiles, so there are no seams; the tiles are read in chunks with a one-tile
 /// ring around them, and decoded heights are cached for the neighbours that
@@ -59,6 +66,8 @@ struct Args {
 	/// Colour that accentuates steep terrain, such as cliffs and gorges. Defaults to `000000`.
 	#[vpl(default = "000000")]
 	accent_color: Option<HexColor>,
+	/// Colours under the shading, as `elevation:colour,…` or `default`. Defaults to none.
+	ramp: Option<ColorRamp>,
 	/// DEM encoding of the source. Defaults to the encoding its tile schema implies.
 	encoding: Option<DemEncoding>,
 }
@@ -172,12 +181,14 @@ impl Heights {
 ///
 /// Follows `hillshade_prepare.fragment.glsl` for the slope, including the
 /// clamp that storing it in 8 bits imposes there, and `standard_hillshade` in
-/// `hillshade.fragment.glsl` for the colour.
+/// `hillshade.fragment.glsl` for the colour. With a `ramp`, the shading is drawn
+/// over the ramp's colour, exactly as if it were a layer on top of that colour,
+/// but before either is rounded to 8 bits.
 #[expect(
 	clippy::many_single_char_names,
 	reason = "`a` to `i` are the 3×3 window as MapLibre's shader names it, which makes the two easy to compare"
 )]
-fn shade(grid: &[f32], size: u32, coord: &TileCoord, style: &Style) -> RgbaImage {
+fn shade(grid: &[f32], size: u32, coord: &TileCoord, style: &Style, ramp: Option<&ColorRamp>) -> RgbaImage {
 	let side = size as usize + 2;
 	let at = |x: usize, y: usize| f64::from(grid[y * side + x]);
 
@@ -222,7 +233,13 @@ fn shade(grid: &[f32], size: u32, coord: &TileCoord, style: &Style) -> RgbaImage
 			let shade_color: [f64; 4] =
 				[0, 1, 2, 3].map(|k| (style.shadow[k] + (style.highlight[k] - style.shadow[k]) * facing) * weight);
 			let color: [f64; 4] = [0, 1, 2, 3].map(|k| style.accent[k] * accent * (1.0 - shade_color[3]) + shade_color[k]);
-			*pixel = unpremultiply(color);
+			*pixel = unpremultiply(match ramp {
+				Some(ramp) => {
+					let under = ramp.premultiplied_at(at(x, y));
+					[0, 1, 2, 3].map(|k| color[k] + under[k] * (1.0 - color[3]))
+				}
+				None => color,
+			});
 		}
 	}
 	image
@@ -269,6 +286,8 @@ struct Inner {
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 	style: Style,
+	/// The colours under the shading, if any.
+	ramp: Option<ColorRamp>,
 	encoding: DemEncoding,
 	/// Decoded source tiles; `None` is a tile the source lacks.
 	heights: Cache<TileCoord, Option<Arc<Heights>>>,
@@ -281,6 +300,7 @@ impl std::fmt::Debug for Operation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("dem_hillshade")
 			.field("style", &self.inner.style)
+			.field("ramp", &self.inner.ramp)
 			.field("encoding", &self.inner.encoding)
 			.finish_non_exhaustive()
 	}
@@ -300,13 +320,19 @@ impl Operation {
 			accent: Style::premultiplied(args.accent_color.as_ref(), [0, 0, 0, 255]),
 		};
 
+		// The shading alone is translucent, and so is what it covers unless a
+		// ramp makes every pixel opaque. A JPEG holds only the opaque.
+		let opaque = args.ramp.as_ref().is_some_and(ColorRamp::is_opaque);
 		let mut metadata = source.metadata().clone();
-		// The shading is translucent, which a JPEG cannot hold.
-		if *metadata.tile_format() == TileFormat::JPG {
+		if *metadata.tile_format() == TileFormat::JPG && !opaque {
 			metadata.set_tile_format(TileFormat::PNG);
 		}
 		let mut tilejson = source.tilejson().clone();
-		tilejson.tile_schema = Some(TileSchema::RasterRGBA);
+		tilejson.tile_schema = Some(if opaque {
+			TileSchema::RasterRGB
+		} else {
+			TileSchema::RasterRGBA
+		});
 		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Operation {
@@ -315,6 +341,7 @@ impl Operation {
 				metadata,
 				tilejson,
 				style,
+				ramp: args.ramp,
 				encoding,
 				heights: Cache::builder()
 					.max_capacity(CACHE_BYTES)
@@ -371,15 +398,22 @@ impl Operation {
 			neighbours[i / 3][i % 3] = heights;
 		}
 
-		let style = self.inner.style;
-		let format = *self.inner.metadata.tile_format();
+		let inner = Arc::clone(&self.inner);
+		let opaque = inner.ramp.as_ref().is_some_and(ColorRamp::is_opaque);
+		let format = *inner.metadata.tile_format();
 		let image = tokio::task::spawn_blocking(move || {
 			let grid = center.with_border(&neighbours);
-			shade(&grid, center.size, &coord, &style)
+			shade(&grid, center.size, &coord, &inner.style, inner.ramp.as_ref())
 		})
 		.await
 		.map_err(|e| anyhow!("shading task failed: {e}"))?;
-		Ok(Some(Tile::from_image(DynamicImage::ImageRgba8(image), format)?))
+		let image = DynamicImage::ImageRgba8(image);
+		let image = if opaque {
+			DynamicImage::ImageRgb8(image.into_rgb8())
+		} else {
+			image
+		};
+		Ok(Some(Tile::from_image(image, format)?))
 	}
 
 	/// Reads `chunk` and the ring of tiles around it with one request to the
@@ -561,6 +595,7 @@ mod tests {
 			"shadow_color",
 			"highlight_color",
 			"accent_color",
+			"ramp",
 			"encoding",
 		] {
 			assert!(docs.contains(name), "{name} missing from {docs}");
@@ -750,6 +785,124 @@ mod tests {
 		.await?;
 		assert_eq!(*op.metadata().tile_format(), TileFormat::PNG);
 		Ok(())
+	}
+
+	/// Flat ground has no shading, so what is left is the ramp's own colour,
+	/// the same `dem_colorize` gives.
+	#[rstest::rstest]
+	#[case("0:000000,1000:FF8000")]
+	#[case("0:FF000000,1000:0000FF")]
+	#[tokio::test]
+	async fn on_flat_ground_a_ramp_gives_the_colours_of_dem_colorize(#[case] ramp: &str) -> Result<()> {
+		let op = hillshade(
+			surface(DemEncoding::Mapbox, |_, _| 500.0),
+			&format!("dem_hillshade ramp=\"{ramp}\""),
+		)
+		.await?;
+		let expected = ColorRamp::try_from(ramp)?.color_at(500.0);
+		let image = shaded_image(&op, ORIGIN, ORIGIN).await?;
+		assert!(image.pixels().all(|p| p.0 == expected), "expected {expected:?}");
+		Ok(())
+	}
+
+	/// One step gives what the two-step form gives, the shading in a layer over
+	/// the colours in another, except that this one rounds only once.
+	#[rstest::rstest]
+	#[case::opaque("-1000:204060,1000:c8b464,50000:ffffff")]
+	#[case::translucent("-1000:20406080,1000:c8b46440,50000:ffffffc0")]
+	#[tokio::test]
+	async fn a_ramp_matches_a_hillshade_stacked_over_the_colours(#[case] ramp: &str) -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let dem = "from_debug format=png | meta_update schema=\"dem/mapbox\"";
+		let single = factory
+			.operation_from_vpl(&format!("{dem} | dem_hillshade ramp=\"{ramp}\""))
+			.await?;
+		let stacked = factory
+			.operation_from_vpl(&format!(
+				"from_stacked_raster [ {dem} | dem_hillshade, {dem} | dem_colorize ramp=\"{ramp}\" ]"
+			))
+			.await?;
+
+		let coord = TileCoord::new(3, 2, 1)?;
+		let image = |tile: Option<Tile>| -> Result<RgbaImage> { Ok(tile.expect("a tile").into_image()?.to_rgba8()) };
+		let single = image(single.tile(&coord).await?)?;
+		let stacked = image(stacked.tile(&coord).await?)?;
+
+		// Worth comparing only if the shading changes the picture.
+		let colours = factory
+			.operation_from_vpl(&format!("{dem} | dem_colorize ramp=\"{ramp}\""))
+			.await?;
+		let colours = image(colours.tile(&coord).await?)?;
+		let shaded = single.pixels().zip(colours.pixels()).filter(|(a, b)| a != b).count();
+		assert!(shaded > 1000, "only {shaded} pixels are shaded");
+
+		let worst = single
+			.pixels()
+			.zip(stacked.pixels())
+			.flat_map(|(a, b)| (0..4).map(move |k| a.0[k].abs_diff(b.0[k])))
+			.max();
+		assert!(worst.is_some_and(|worst| worst <= 2), "off by {worst:?}");
+		Ok(())
+	}
+
+	/// The stream takes the same path as a single tile, ramp included.
+	#[tokio::test]
+	async fn with_a_ramp_the_stream_gives_the_tiles_one_at_a_time_would() -> Result<()> {
+		let vpl = "dem_hillshade ramp=default";
+		let meters = |x: f64, y: f64| (x * 0.05).sin() * 300.0 + y;
+		let op = hillshade(surface(DemEncoding::Mapbox, meters), vpl).await?;
+		let fresh = hillshade(surface(DemEncoding::Mapbox, meters), vpl).await?;
+		let bbox = TileBBox::from_min_and_max(LEVEL, ORIGIN - 1, ORIGIN - 1, ORIGIN + 1, ORIGIN + 1)?;
+		let streamed = op.tile_stream(bbox).await?.to_vec().await;
+		assert_eq!(streamed.len(), 9);
+		for (coord, tile) in streamed {
+			let single = fresh.tile(&coord).await?.expect("a tile").into_image()?;
+			assert_eq!(tile.into_image()?.as_bytes(), single.as_bytes(), "tile {coord:?}");
+		}
+		Ok(())
+	}
+
+	/// The ramp decides RGB or RGBA and whether a JPEG source stays JPEG, as in
+	/// `dem_colorize`; without one, nothing changes.
+	#[rstest::rstest]
+	#[case("dem_hillshade", TileSchema::RasterRGBA, TileFormat::PNG, false)]
+	#[case("dem_hillshade ramp=default", TileSchema::RasterRGB, TileFormat::JPG, true)]
+	#[case("dem_hillshade ramp=\"0:204060\"", TileSchema::RasterRGB, TileFormat::JPG, true)]
+	#[case("dem_hillshade ramp=\"0:20406080\"", TileSchema::RasterRGBA, TileFormat::PNG, false)]
+	#[tokio::test]
+	async fn the_ramp_decides_rgb_or_rgba_and_whether_jpeg_stays(
+		#[case] vpl: &str,
+		#[case] schema: TileSchema,
+		#[case] format: TileFormat,
+		#[case] rgb: bool,
+	) -> Result<()> {
+		let source = DummyImageSource::from_color(&[1, 134, 160], 256, TileFormat::JPG, None)?;
+		let vpl = format!("{vpl} encoding=mapbox");
+		let op = Operation::build(
+			VPLNode::try_from_str(&vpl)?,
+			Box::new(source),
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+		assert_eq!(op.tilejson().tile_schema, Some(schema));
+		assert_eq!(*op.metadata().tile_format(), format);
+
+		let tile = op.tile(&TileCoord::new(3, 2, 1)?).await?.expect("a tile");
+		assert_eq!(matches!(tile.into_image()?, DynamicImage::ImageRgb8(_)), rgb);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn a_bad_ramp_is_refused_by_check_and_build_alike() {
+		let factory = PipelineFactory::new_dummy();
+		let vpl =
+			"from_debug format=png | meta_update schema=\"dem/mapbox\" | dem_hillshade ramp=\"100:000000,0:FFFFFF\"";
+		let error = factory.operation_from_vpl(vpl).await.unwrap_err();
+		assert!(format!("{error:#}").contains("ascend"), "{error:#}");
+
+		let problems = factory.check(&crate::vpl::parse_vpl(vpl).unwrap());
+		assert_eq!(problems.len(), 1, "{problems:?}");
+		assert!(problems[0].message.contains("ascend"), "{problems:?}");
 	}
 
 	/// Refused where the value is decoded, so `check` says so too, without

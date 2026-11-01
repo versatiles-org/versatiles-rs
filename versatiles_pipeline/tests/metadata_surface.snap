@@ -11,6 +11,7 @@ dem_hillshade.exaggeration: Option<Exaggeration> | optional | default=0.5 | boun
 dem_hillshade.shadow_color: Option<HexColor> | optional | default=000000
 dem_hillshade.highlight_color: Option<HexColor> | optional | default=FFFFFF
 dem_hillshade.accent_color: Option<HexColor> | optional | default=000000
+dem_hillshade.ramp: Option<ColorRamp> | optional
 dem_hillshade.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium]
 
 dem_overscale [transform]
