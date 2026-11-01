@@ -462,7 +462,7 @@ The slopes at a tile's edge are computed with the pixels of the adjacent tiles, 
 ### Parameters
 
 - _`azimuth`: f64 (optional)_ - Direction the light comes from, in degrees clockwise from north. Defaults to `335`.
-- _`exaggeration`: f64 (optional)_ - Intensity of the shading, from 0 to 1. Defaults to `0.5`.
+- _`exaggeration`: 0..1 (optional)_ - Intensity of the shading, from 0 to 1. Defaults to `0.5`.
 - _`shadow_color`: RRGGBB | [r,g,b] (optional)_ - Colour of slopes facing away from the light. Defaults to `000000`.
 - _`highlight_color`: RRGGBB | [r,g,b] (optional)_ - Colour of slopes facing the light. Defaults to `FFFFFF`.
 - _`accent_color`: RRGGBB | [r,g,b] (optional)_ - Colour that accentuates steep terrain, such as cliffs and gorges. Defaults to `000000`.

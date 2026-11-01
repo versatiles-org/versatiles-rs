@@ -7,7 +7,7 @@ dem_colorize.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium
 
 dem_hillshade [transform]
 dem_hillshade.azimuth: Option<f64> | optional | default=335 | bounds=(-inf,inf) float
-dem_hillshade.exaggeration: Option<f64> | optional | default=0.5 | bounds=(-inf,inf) float
+dem_hillshade.exaggeration: Option<Exaggeration> | optional | default=0.5 | bounds=[0,1] float
 dem_hillshade.shadow_color: Option<HexColor> | optional | default=000000
 dem_hillshade.highlight_color: Option<HexColor> | optional | default=FFFFFF
 dem_hillshade.accent_color: Option<HexColor> | optional | default=000000

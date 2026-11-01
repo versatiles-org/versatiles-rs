@@ -130,7 +130,7 @@ impl NumberBounds for f64 {
 /// type as `MIN`, `MAX` and `MIN_INCLUSIVE`.
 ///
 /// Works for any number `f64` can hold exactly — `u8` through `u32`, `i8`
-/// through `i32`, and `f32`.
+/// through `i32`, `f32` and `f64`.
 ///
 /// ```
 /// use versatiles_core::bounded_number;

@@ -7,7 +7,7 @@ use imageproc::image::{DynamicImage, Rgba, RgbaImage};
 use moka::future::Cache;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use versatiles_core::{
-	ConcurrencyLimits, SharedWork, TileBBox, TileCoord, TileFormat, TileJSON, TileSchema, TileStream,
+	ConcurrencyLimits, SharedWork, TileBBox, TileCoord, TileFormat, TileJSON, TileSchema, TileStream, bounded_number,
 };
 use versatiles_derive::context;
 use versatiles_image::color::HexColor;
@@ -17,6 +17,11 @@ use super::{
 	slope::maplibre_slope_exaggeration,
 };
 use crate::{PipelineFactory, vpl::VPLNode};
+
+bounded_number! {
+	/// The intensity of the shading, over the range MapLibre accepts.
+	Exaggeration: f64, 0.0..=1.0;
+}
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Renders DEM tiles as hillshading, the way MapLibre's `hillshade` layer shades them.
@@ -44,7 +49,7 @@ struct Args {
 	azimuth: Option<f64>,
 	/// Intensity of the shading, from 0 to 1. Defaults to `0.5`.
 	#[vpl(default = "0.5")]
-	exaggeration: Option<f64>,
+	exaggeration: Option<Exaggeration>,
 	/// Colour of slopes facing away from the light. Defaults to `000000`.
 	#[vpl(default = "000000")]
 	shadow_color: Option<HexColor>,
@@ -286,15 +291,10 @@ impl Operation {
 	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let encoding = resolve_encoding(args.encoding, source.tilejson().tile_schema.as_ref())?;
-		let intensity = args.exaggeration.unwrap_or(0.5);
-		ensure!(
-			(0.0..=1.0).contains(&intensity),
-			"exaggeration must be between 0 and 1, as in MapLibre, not {intensity}"
-		);
 
 		let style = Style {
 			azimuth: args.azimuth.unwrap_or(335.0).to_radians() + PI,
-			intensity,
+			intensity: args.exaggeration.map_or(0.5, Exaggeration::get),
 			shadow: Style::premultiplied(args.shadow_color.as_ref(), [0, 0, 0, 255]),
 			highlight: Style::premultiplied(args.highlight_color.as_ref(), [255, 255, 255, 255]),
 			accent: Style::premultiplied(args.accent_color.as_ref(), [0, 0, 0, 255]),
@@ -752,16 +752,31 @@ mod tests {
 		Ok(())
 	}
 
+	/// Refused where the value is decoded, so `check` says so too, without
+	/// building anything, and the range a form offers is the one enforced.
 	#[tokio::test]
-	async fn an_exaggeration_outside_0_to_1_is_refused() {
-		for value in ["-0.1", "1.5"] {
-			let error = hillshade(
-				surface(DemEncoding::Mapbox, |_, _| 0.0),
-				&format!("dem_hillshade exaggeration={value}"),
-			)
-			.await
-			.unwrap_err();
-			assert!(format!("{error:#}").contains("between 0 and 1"), "{error:#}");
+	async fn an_exaggeration_outside_0_to_1_is_refused_by_check_and_build_alike() {
+		let factory = PipelineFactory::new_dummy();
+		for value in ["-0.1", "1.5", "NaN"] {
+			let vpl =
+				format!("from_debug format=png | meta_update schema=\"dem/mapbox\" | dem_hillshade exaggeration={value}");
+			let error = factory.operation_from_vpl(&vpl).await.unwrap_err();
+			assert!(format!("{error:#}").contains("between 0.0 and 1.0"), "{error:#}");
+
+			let problems = factory.check(&crate::vpl::parse_vpl(&vpl).unwrap());
+			assert_eq!(problems.len(), 1, "{problems:?}");
+			assert!(problems[0].message.contains("between 0.0 and 1.0"), "{problems:?}");
+		}
+	}
+
+	#[test]
+	fn exaggeration_describes_the_range_it_enforces() {
+		let bounds = Exaggeration::bounds();
+		assert_eq!((bounds.min, bounds.max), (Some(0.0), Some(1.0)));
+		assert!(bounds.min_inclusive && bounds.max_inclusive);
+		assert!(!bounds.integer);
+		for value in ["0", "1"] {
+			assert!(Exaggeration::try_from(value).is_ok(), "{value}");
 		}
 	}
 

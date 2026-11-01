@@ -100,9 +100,25 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		"bool" | "Option<bool>" => "boolean",
 		// `ZoomLevel` is a range, not a closed set, so TS says `number` and the
 		// bound stays with `check` — the same split as the separators above.
-		"u8" | "u16" | "u32" | "f32" | "f64" | "Option<u8>" | "Option<u16>" | "Option<u32>" | "Option<f32>"
-		| "Option<f64>" | "Option<ZoomLevel>" | "Option<Effort>" | "Option<Brightness>" | "Option<Contrast>"
-		| "Option<Gamma>" | "H3Resolution" | "EpsgCode" | "Option<EpsgCode>" => "number",
+		"u8"
+		| "u16"
+		| "u32"
+		| "f32"
+		| "f64"
+		| "Option<u8>"
+		| "Option<u16>"
+		| "Option<u32>"
+		| "Option<f32>"
+		| "Option<f64>"
+		| "Option<ZoomLevel>"
+		| "Option<Effort>"
+		| "Option<Brightness>"
+		| "Option<Contrast>"
+		| "Option<Gamma>"
+		| "Option<Exaggeration>"
+		| "H3Resolution"
+		| "EpsgCode"
+		| "Option<EpsgCode>" => "number",
 		"[f64;4]" | "Option<[f64;4]>" | "GeoBBox" | "Option<GeoBBox>" => "[number, number, number, number]",
 		"[f64;2]" | "Option<[f64;2]>" => "[number, number]",
 		// A list of names — layers to act on, properties to keep or drop. VPL
