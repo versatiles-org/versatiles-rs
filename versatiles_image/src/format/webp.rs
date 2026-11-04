@@ -5,8 +5,8 @@
 //!
 //! Highlights:
 //! - Only **8‑bit** images are supported.
-//! - Accepted layouts for encoding: **RGB8** and **RGBA8**. Greyscale variants are rejected by
-//!   design to keep code paths explicit.
+//! - Encoding accepts **L8, LA8, RGB8 and RGBA8**. WebP has no greyscale mode, so greyscale is
+//!   expanded to RGB(A) first, and decodes as RGB(A).
 //! - When an image has an alpha channel but is **fully opaque**, the encoder **drops alpha** before
 //!   encoding to reduce size.
 //! - Quality boundary: `< 100` = lossy, `>= 100` = lossless, `None` defaults to 95. Lossy
@@ -23,7 +23,7 @@ use versatiles_core::Blob;
 use versatiles_derive::context;
 
 use super::all::ensure_decodable;
-use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
+use crate::traits::DynamicImageTraitInfo;
 
 #[context("encoding {}x{} {:?} as WebP (q={:?}, e={:?})", image.width(), image.height(), image.color(), quality, effort)]
 /// Encode a `DynamicImage` into a WebP [`Blob`].
@@ -33,30 +33,25 @@ use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 ///   too, so only quality 100 keeps transparency exact.
 /// * `effort` — optional 0..=100 hint (default **80**). Higher → better compression; lower → faster.
 ///   Internally mapped to libwebp's `method` 0..=6 (0 = fastest, 6 = slowest/best).
-/// * Only 8‑bit `Rgb8`/`Rgba8` are accepted. If the input has an alpha channel but is fully opaque,
-///   alpha is removed first.
+/// * Only 8‑bit images are accepted. Greyscale is expanded to RGB first, since WebP has no
+///   greyscale mode. If the input has an alpha channel but is fully opaque, alpha is removed.
 ///
-/// Returns an error for unsupported bit depth or color type.
+/// Returns an error for an unsupported bit depth.
 pub fn encode(image: &DynamicImage, quality: Option<u8>, effort: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("webp only supports 8-bit images");
 	}
 
-	if (image.channel_count() != 3) && (image.channel_count() != 4) {
-		bail!("webp only supports RGB or RGBA images");
-	}
-
-	let mut image_ref = image;
-	#[expect(
-		unused_assignments,
-		reason = "the None is replaced in the branch below; the binding must outlive `image_ref`"
-	)]
-	let mut optional_image: Option<DynamicImage> = None;
-	if image.has_alpha() && image.is_opaque() {
-		let i = image.to_no_alpha()?;
-		optional_image = Some(i);
-		image_ref = optional_image.as_ref().expect("just assigned Some above");
-	}
+	// libwebp takes RGB or RGBA only. WebP has no greyscale mode, so a grey
+	// image is stored as RGB whatever we do, and expanding it here loses
+	// nothing. An alpha channel that is fully opaque is dropped to save bytes.
+	let keep_alpha = image.has_alpha() && !image.is_opaque();
+	let converted = match (image, keep_alpha) {
+		(DynamicImage::ImageRgb8(_), false) | (DynamicImage::ImageRgba8(_), true) => None,
+		(_, true) => Some(DynamicImage::ImageRgba8(image.to_rgba8())),
+		(_, false) => Some(DynamicImage::ImageRgb8(image.to_rgb8())),
+	};
+	let image_ref = converted.as_ref().unwrap_or(image);
 
 	let quality = quality.unwrap_or(95);
 	#[expect(
@@ -299,7 +294,7 @@ mod tests {
 	/// WebP tests: lossy & lossless success cases, rejection of grey/greya inputs,
 	/// and verification that fully opaque RGBA is stored without alpha.
 	use super::*;
-	use crate::traits::{DynamicImageTraitConvert, DynamicImageTraitTest};
+	use crate::traits::{DynamicImageTraitConvert, DynamicImageTraitOperation, DynamicImageTraitTest};
 
 	/// An effort above 100 is the best setting, as in the lossy encoder; it
 	/// used to fall through to the second best.
@@ -375,22 +370,23 @@ mod tests {
 		Ok(())
 	}
 
+	/// Greyscale used to be refused. WebP has no greyscale mode, so it is
+	/// stored as RGB(A): lossless keeps every value, in each colour channel.
 	#[rstest]
-	#[case::grey(DynamicImage::new_test_grey(), false, "webp only supports RGB or RGBA images")]
-	#[case::greya(DynamicImage::new_test_greya(), false, "webp only supports RGB or RGBA images")]
-	#[case::lossless_grey(DynamicImage::new_test_grey(), true, "webp only supports RGB or RGBA images")]
-	#[case::lossless_greya(DynamicImage::new_test_greya(), true, "webp only supports RGB or RGBA images")]
-	fn webp_errors(#[case] img: DynamicImage, #[case] lossless: bool, #[case] expected_msg: &str) {
-		let res = if lossless {
-			image2blob_lossless(&img)
-		} else {
-			image2blob(&img, None)
-		};
-		assert_eq!(res.unwrap_err().chain().last().unwrap().to_string(), expected_msg);
+	#[case::grey(DynamicImage::new_test_grey(), DynamicImage::new_test_grey().to_rgb8().into())]
+	#[case::greya(DynamicImage::new_test_greya(), DynamicImage::new_test_greya().to_rgba8().into())]
+	fn greyscale_is_stored_as_rgb(#[case] img: DynamicImage, #[case] expected: DynamicImage) -> Result<()> {
+		let decoded = blob2image(&image2blob_lossless(&img)?)?;
+		assert_eq!(decoded.color(), expected.color());
+		assert_eq!(decoded.as_bytes(), expected.as_bytes());
+
+		// Lossy works too.
+		assert_eq!(blob2image(&image2blob(&img, Some(80))?)?.color(), expected.color());
+		Ok(())
 	}
 
 	#[rstest]
-	//#[case::greya(DynamicImage::new_test_greya())]
+	#[case::greya(DynamicImage::new_test_greya())]
 	#[case::rgba(DynamicImage::new_test_rgba())]
 	#[test]
 	fn opaque_is_saved_without_alpha(#[case] mut img: DynamicImage) -> Result<()> {
