@@ -5,7 +5,7 @@
 //!
 //! - Pipeline readers registered for advanced tile processing
 //! - Silent mode enabled (no stderr output)
-//! - Default in-memory cache
+//! - An in-memory cache, or a disk cache if a directory was given or is in the environment
 //! - An SSH identity for SFTP, if one was given or is in the environment
 
 use std::path::PathBuf;
@@ -16,12 +16,16 @@ use versatiles_container::TilesRuntime;
 /// Environment variable naming the SSH identity file, as the CLI reads it.
 const SSH_IDENTITY_ENV: &str = "VERSATILES_SSH_IDENTITY";
 
+/// Environment variable naming the disk cache directory, as the CLI reads it.
+const CACHE_DIR_ENV: &str = "VERSATILES_CACHE_DIR";
+
 /// Create a configured TilesRuntime for Node.js usage
 ///
 /// The runtime is preconfigured with:
 /// - Custom pipeline readers for advanced processing capabilities
 /// - Silent mode (no stderr output, suitable for Node.js environment)
-/// - Default in-memory cache
+/// - A disk cache in `VERSATILES_CACHE_DIR` if that is set, an in-memory cache otherwise
+/// - The SSH identity in `VERSATILES_SSH_IDENTITY`, if that is set
 ///
 /// # Returns
 ///
@@ -34,38 +38,46 @@ const SSH_IDENTITY_ENV: &str = "VERSATILES_SSH_IDENTITY";
 /// let reader = runtime.reader_from_str("tiles.versatiles").await?;
 /// ```
 pub fn create_runtime() -> TilesRuntime {
-	create_runtime_with_ssh_identity(None)
+	create_runtime_with(None, None)
 }
 
-/// Create a configured TilesRuntime that authenticates SFTP with `ssh_identity`
+/// Create a configured TilesRuntime with an SSH identity and a cache directory
 ///
 /// `ssh_identity` is a path to a private key file on disk. Without one, the
 /// `VERSATILES_SSH_IDENTITY` environment variable is used — the same variable
 /// the CLI reads — and without that, the SSH client falls back to any password in the
 /// URL, the SSH agent, and the usual `~/.ssh` defaults.
 ///
+/// `cache_dir` is a directory for the disk cache, which a large conversion
+/// needs when its cache outgrows memory. Without one, `VERSATILES_CACHE_DIR` is
+/// used, as by the CLI, and without that the cache stays in memory (#307).
+///
 /// # Returns
 ///
-/// A [`TilesRuntime`] configured as [`create_runtime`] describes, plus the
-/// identity.
-pub fn create_runtime_with_ssh_identity(ssh_identity: Option<&str>) -> TilesRuntime {
+/// A [`TilesRuntime`] configured as [`create_runtime`] describes, with the
+/// identity and the cache directory given here taking precedence.
+pub fn create_runtime_with(ssh_identity: Option<&str>, cache_dir: Option<&str>) -> TilesRuntime {
 	let mut builder = TilesRuntime::builder()
 		.customize_registry(register_pipeline_readers)
 		.silent_progress(true);
 
-	if let Some(path) = pick_ssh_identity(ssh_identity, std::env::var(SSH_IDENTITY_ENV).ok()) {
+	if let Some(path) = explicit_or_env(ssh_identity, std::env::var(SSH_IDENTITY_ENV).ok()) {
 		builder = builder.ssh_identity(path);
+	}
+
+	if let Some(path) = explicit_or_env(cache_dir, std::env::var(CACHE_DIR_ENV).ok()) {
+		builder = builder.with_disk_cache(&path);
 	}
 
 	builder.build()
 }
 
-/// Decide which SSH identity to use, if any.
+/// Decide which path to use, if any: an SSH identity or a cache directory.
 ///
 /// An explicit path wins over the environment, so one call can use a different
-/// key than the rest of the process. A blank value counts as unset rather than
-/// as a path to a file named "", which would fail with a confusing error.
-fn pick_ssh_identity(explicit: Option<&str>, from_env: Option<String>) -> Option<PathBuf> {
+/// one than the rest of the process. A blank value counts as unset rather than
+/// as a path named "", which would fail with a confusing error.
+fn explicit_or_env(explicit: Option<&str>, from_env: Option<String>) -> Option<PathBuf> {
 	let explicit = explicit.map(str::to_string).filter(|value| !value.trim().is_empty());
 	let from_env = from_env.filter(|value| !value.trim().is_empty());
 	explicit.or(from_env).map(PathBuf::from)
@@ -78,7 +90,7 @@ mod tests {
 	#[test]
 	fn explicit_ssh_identity_wins_over_the_environment() {
 		assert_eq!(
-			pick_ssh_identity(Some("/keys/explicit"), Some("/keys/from-env".to_string())),
+			explicit_or_env(Some("/keys/explicit"), Some("/keys/from-env".to_string())),
 			Some(PathBuf::from("/keys/explicit"))
 		);
 	}
@@ -86,7 +98,7 @@ mod tests {
 	#[test]
 	fn ssh_identity_falls_back_to_the_environment() {
 		assert_eq!(
-			pick_ssh_identity(None, Some("/keys/from-env".to_string())),
+			explicit_or_env(None, Some("/keys/from-env".to_string())),
 			Some(PathBuf::from("/keys/from-env"))
 		);
 	}
@@ -96,18 +108,29 @@ mod tests {
 		// An empty explicit value must not shadow the environment, and an empty
 		// environment value must not become a path to a file named "".
 		assert_eq!(
-			pick_ssh_identity(Some("  "), Some("/keys/from-env".to_string())),
+			explicit_or_env(Some("  "), Some("/keys/from-env".to_string())),
 			Some(PathBuf::from("/keys/from-env"))
 		);
-		assert_eq!(pick_ssh_identity(Some(""), None), None);
-		assert_eq!(pick_ssh_identity(None, Some(String::new())), None);
-		assert_eq!(pick_ssh_identity(None, None), None);
+		assert_eq!(explicit_or_env(Some(""), None), None);
+		assert_eq!(explicit_or_env(None, Some(String::new())), None);
+		assert_eq!(explicit_or_env(None, None), None);
 	}
 
 	#[test]
 	fn runtime_carries_the_explicit_ssh_identity() {
-		let runtime = create_runtime_with_ssh_identity(Some("/keys/explicit"));
+		let runtime = create_runtime_with(Some("/keys/explicit"), None);
 		assert_eq!(runtime.ssh_identity(), Some(std::path::Path::new("/keys/explicit")));
+	}
+
+	/// The binding used to build every runtime with the in-memory cache, so a
+	/// large conversion had no way to put it on disk (#307).
+	#[test]
+	fn runtime_uses_a_disk_cache_in_the_explicit_cache_dir() {
+		let runtime = create_runtime_with(None, Some("/tmp/versatiles-cache"));
+		assert_eq!(
+			runtime.cache_type(),
+			&versatiles_container::CacheType::Disk(PathBuf::from("/tmp/versatiles-cache"))
+		);
 	}
 
 	#[test]

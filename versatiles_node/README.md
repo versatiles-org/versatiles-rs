@@ -138,6 +138,7 @@ Convert tiles from one format to another.
   - `swapXy` (boolean): Swap x and y coordinates
   - `writerOptions` (object): Format-specific settings for the writer, see below
   - `sshIdentity` (string): Private key file for an `sftp://` input, see below
+  - `cacheDir` (string): Directory for a disk cache instead of the in-memory one, see below
 - `onProgress` (function, optional): Progress callback `(data: ProgressData) => void`
 - `onMessage` (function, optional): Message callback `(data: MessageData) => void`
 
@@ -203,6 +204,23 @@ await convert('local.mbtiles', 'sftp://host/tiles/berlin.pmtiles', {
 Uploading needs a format that can be written as a stream, which today means `.versatiles` and
 `.pmtiles`. `.mbtiles` is a local SQLite file, and is refused with a message saying so.
 
+#### Disk cache
+
+A conversion caches tiles when the source's tile order differs from the one the output needs. For a
+large source that cache can outgrow memory. `cacheDir` puts it on disk, as the CLI's `--cache-dir`
+does. The directory is created if needed, and each conversion uses a subdirectory of its own that is
+removed when it is done.
+
+The cache directory is resolved in this order, first match wins:
+
+1. `cacheDir` in the options passed to the call
+2. The `VERSATILES_CACHE_DIR` environment variable, the same one the CLI reads
+3. Nothing — the cache stays in memory
+
+```javascript
+await convert('planet.pmtiles', 'planet.versatiles', { cacheDir: '/var/tmp/versatiles' });
+```
+
 ### `class TileSource`
 
 #### `TileSource.fromPath(path, options?)`
@@ -214,6 +232,7 @@ Open a tile container.
 - `path` (string): File path or URL
 - `options` (SourceOptions, optional):
   - `sshIdentity` (string): Private key file for an `sftp://` path, see [SSH authentication](#ssh-authentication)
+  - `cacheDir` (string): Directory for a disk cache instead of the in-memory one, see [Disk cache](#disk-cache)
 
 **Returns:** `Promise<TileSource>`
 

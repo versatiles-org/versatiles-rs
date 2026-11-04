@@ -4,7 +4,7 @@ use anyhow::Context;
 use napi::{bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
 use versatiles::pipeline::PipelineReader;
-use versatiles_container::{SourceType as RustSourceType, TileSource as RustTileSource};
+use versatiles_container::{SourceType as RustSourceType, TileSource as RustTileSource, TilesRuntime};
 use versatiles_core::TileCoord as RustTileCoord;
 
 /// Tile container reader
@@ -24,14 +24,17 @@ use crate::{
 	macros::NapiResultExt,
 	napi_result,
 	progress::{MessageData, ProgressData},
-	runtime::create_runtime_with_ssh_identity,
+	runtime::create_runtime_with,
 	types::{ConvertOptions, SourceMetadata, SourceOptions, TileJSON, z_to_u8},
 	vpl::{PipelineStep, steps_to_pipeline},
 };
 
-/// The identity from optional source options, if one was given.
-fn ssh_identity_of(options: Option<&SourceOptions>) -> Option<&str> {
-	options.and_then(|o| o.ssh_identity.as_deref())
+/// A runtime with the SSH identity and cache directory from optional source options.
+fn runtime_for(options: Option<&SourceOptions>) -> TilesRuntime {
+	create_runtime_with(
+		options.and_then(|o| o.ssh_identity.as_deref()),
+		options.and_then(|o| o.cache_dir.as_deref()),
+	)
 }
 
 /// Container reader for accessing tile data from various formats
@@ -97,7 +100,7 @@ impl TileSource {
 	/// ```
 	#[napi(factory)]
 	pub async fn from_path(path: String, options: Option<SourceOptions>) -> Result<Self> {
-		let runtime = create_runtime_with_ssh_identity(ssh_identity_of(options.as_ref()));
+		let runtime = runtime_for(options.as_ref());
 		let source = napi_result!(runtime.reader_from_str(&path).await)?;
 		Ok(Self::new(source))
 	}
@@ -176,7 +179,7 @@ impl TileSource {
 	/// The conversion will process the pipeline and write the output tiles to the target format.
 	#[napi(factory)]
 	pub async fn from_vpl(vpl: String, dir: Option<String>, options: Option<SourceOptions>) -> Result<Self> {
-		let runtime = create_runtime_with_ssh_identity(ssh_identity_of(options.as_ref()));
+		let runtime = runtime_for(options.as_ref());
 		let path = if let Some(d) = dir {
 			PathBuf::from(&d)
 		} else {
@@ -204,7 +207,7 @@ impl TileSource {
 			.context("Invalid pipeline JSON")
 			.to_napi()?;
 		let pipeline = steps_to_pipeline(steps);
-		let runtime = create_runtime_with_ssh_identity(ssh_identity_of(options.as_ref()));
+		let runtime = runtime_for(options.as_ref());
 		let path = if let Some(d) = dir {
 			PathBuf::from(&d)
 		} else {
@@ -1067,6 +1070,7 @@ mod tests {
 			swap_xy: None,
 			writer_options: None,
 			ssh_identity: None,
+			cache_dir: None,
 		};
 
 		let result = source

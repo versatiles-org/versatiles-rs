@@ -143,6 +143,7 @@ mod tests {
 			swap_xy: None,
 			writer_options: None,
 			ssh_identity: None,
+			cache_dir: None,
 		};
 		assert!(opts.min_zoom.is_none());
 	}

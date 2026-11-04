@@ -21,6 +21,21 @@ pub struct SourceOptions {
 	///
 	/// **Default:** `VERSATILES_SSH_IDENTITY`, if set
 	pub ssh_identity: Option<String>,
+
+	/// Directory for the disk cache
+	///
+	/// Puts the cache of this source on disk instead of in memory — the same
+	/// thing the CLI's `--cache-dir` does. It matters for a source whose tiles
+	/// are cached on the way, such as a large pipeline or a conversion from it.
+	/// The directory is created if it does not exist.
+	///
+	/// Without it, the `VERSATILES_CACHE_DIR` environment variable is used;
+	/// without that, the cache stays in memory.
+	///
+	/// **Example:** `'/var/tmp/versatiles'`
+	///
+	/// **Default:** `VERSATILES_CACHE_DIR`, if set, otherwise in memory
+	pub cache_dir: Option<String>,
 }
 
 #[cfg(test)]
@@ -36,6 +51,7 @@ mod tests {
 	fn source_options_clone() {
 		let options = SourceOptions {
 			ssh_identity: Some("/keys/deploy".to_string()),
+			cache_dir: Some("/var/tmp/versatiles".to_string()),
 		};
 		assert_eq!(options.clone().ssh_identity, options.ssh_identity);
 	}

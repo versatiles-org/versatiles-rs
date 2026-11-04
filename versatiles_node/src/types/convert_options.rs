@@ -121,6 +121,22 @@ pub struct ConvertOptions {
 	///
 	/// **Default:** `VERSATILES_SSH_IDENTITY`, if set
 	pub ssh_identity: Option<String>,
+
+	/// Directory for the disk cache
+	///
+	/// Puts the cache on disk instead of in memory — the same thing the CLI's
+	/// `--cache-dir` does. A conversion caches tiles when the source's tile
+	/// order differs from the one the output needs, and for a large source that
+	/// cache can outgrow memory. Each conversion uses a subdirectory of its own
+	/// and removes it when done; the directory is created if it does not exist.
+	///
+	/// Without it, the `VERSATILES_CACHE_DIR` environment variable is used;
+	/// without that, the cache stays in memory.
+	///
+	/// **Example:** `'/var/tmp/versatiles'`
+	///
+	/// **Default:** `VERSATILES_CACHE_DIR`, if set, otherwise in memory
+	pub cache_dir: Option<String>,
 }
 
 #[cfg(test)]
@@ -141,6 +157,7 @@ mod tests {
 			swap_xy: Some(false),
 			writer_options: None,
 			ssh_identity: None,
+			cache_dir: None,
 		};
 
 		let cloned = options.clone();
@@ -165,6 +182,7 @@ mod tests {
 			swap_xy: None,
 			writer_options: None,
 			ssh_identity: None,
+			cache_dir: None,
 		};
 
 		assert!(options.min_zoom.is_none());
@@ -188,6 +206,7 @@ mod tests {
 			swap_xy: None,
 			writer_options: None,
 			ssh_identity: None,
+			cache_dir: None,
 		};
 
 		assert_eq!(options.min_zoom, Some(0));
@@ -207,6 +226,7 @@ mod tests {
 			swap_xy: None,
 			writer_options: None,
 			ssh_identity: None,
+			cache_dir: None,
 		};
 
 		assert_eq!(options.bbox, Some(bbox));
@@ -225,6 +245,7 @@ mod tests {
 			swap_xy: None,
 			writer_options: None,
 			ssh_identity: None,
+			cache_dir: None,
 		};
 
 		assert_eq!(options.compress, Some("gzip".to_string()));
@@ -242,6 +263,7 @@ mod tests {
 			swap_xy: Some(true),
 			writer_options: None,
 			ssh_identity: None,
+			cache_dir: None,
 		};
 
 		assert_eq!(options.flip_y, Some(true));
@@ -260,6 +282,7 @@ mod tests {
 			swap_xy: Some(true),
 			writer_options: None,
 			ssh_identity: None,
+			cache_dir: None,
 		};
 
 		assert_eq!(options.min_zoom, Some(5));
@@ -284,6 +307,7 @@ mod tests {
 			swap_xy: None,
 			writer_options: None,
 			ssh_identity: None,
+			cache_dir: None,
 		};
 
 		if let Some(bbox) = &options.bbox {
@@ -309,6 +333,7 @@ mod tests {
 			swap_xy: None,
 			writer_options: None,
 			ssh_identity: None,
+			cache_dir: None,
 		};
 
 		assert_eq!(options.bbox_border, Some(0));
@@ -326,6 +351,7 @@ mod tests {
 			swap_xy: None,
 			writer_options: None,
 			ssh_identity: None,
+			cache_dir: None,
 		};
 
 		assert_eq!(options.bbox_border, Some(100));

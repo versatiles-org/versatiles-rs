@@ -135,6 +135,23 @@ describe('convertTo()', () => {
 		fs.unlinkSync(outputPath);
 	});
 
+	// The binding used to keep every cache in memory, with no way to move it
+	// to disk for a large conversion (#307).
+	it('should put the cache in cacheDir', async () => {
+		const outputPath = getTempOutputPath();
+		const cacheDir = path.join(tmpdir(), `cache-test-${randomUUID()}`);
+		try {
+			await convert(MBTILES_PATH, outputPath, { cacheDir });
+			expect(fs.existsSync(outputPath)).toBeTruthy();
+			// The directory is created for the cache, and the conversion's own
+			// subdirectory in it is removed again once it is done.
+			expect(fs.readdirSync(cacheDir)).toEqual([]);
+		} finally {
+			fs.rmSync(outputPath, { force: true });
+			fs.rmSync(cacheDir, { force: true, recursive: true });
+		}
+	});
+
 	it('should treat an sftp:// destination as a remote upload', async () => {
 		// Without this, PathBuf::from() turned the URL into a local directory that
 		// does not exist, and the error never mentioned SFTP at all. No host here,
