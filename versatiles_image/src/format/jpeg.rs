@@ -1,13 +1,13 @@
 //! JPEG (Joint Photographic Experts Group) encoder and decoder utilities for `DynamicImage`.
 //!
 //! This module implements encoding and decoding bridges between the [`image`] crate and the
-//! internal [`Blob`] type used by VersaTiles. It intentionally supports **only 8‑bit Grey and
-//! RGB images**—alpha channels are not allowed since the JPEG format does not include transparency.
+//! internal [`Blob`] type used by VersaTiles. It supports **only 8‑bit Grey and RGB images**,
+//! since the JPEG format does not include transparency.
 //!
 //! Key characteristics:
 //! - Supports configurable lossy quality via [`encode`].
 //! - Rejects `quality >= 100` (JPEG cannot produce true lossless output).
-//! - Rejects any input with an alpha channel (`LA8`, `RGBA8`, etc.).
+//! - Drops an alpha channel that is fully opaque, and rejects images with translucent pixels.
 //! - Uses the standard `image::codecs::jpeg::JpegEncoder` backend for compression.
 //!
 //! Example usage:
@@ -20,19 +20,20 @@
 //! let blob = encode(&img, Some(90)).expect("encode ok");
 //! let decoded = blob2image(&blob).expect("decode ok");
 //! ```
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow, bail, ensure};
 use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::jpeg::JpegEncoder};
 use versatiles_core::Blob;
 use versatiles_derive::context;
 
-use crate::traits::DynamicImageTraitInfo;
+use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
 /// Encode a `DynamicImage` into a JPEG [`Blob`].
 ///
 /// * `quality` — 0..=99; higher means better visual quality but larger output. Defaults to **95**.
-/// * Returns an error if the image is not 8‑bit, has an alpha channel, or if `quality >= 100`.
+/// * An alpha channel that is fully opaque is dropped first.
+/// * Returns an error if the image is not 8‑bit, has translucent pixels, or if `quality >= 100`.
 ///
-/// Supported color types: **L8 (Grey)** and **Rgb8**.
+/// Supported color types: **L8 (Grey)** and **Rgb8**, and `La8`/`Rgba8` when fully opaque.
 #[context("encoding {}x{} {:?} as JPEG (q={:?})", image.width(), image.height(), image.color(), quality)]
 pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
@@ -44,9 +45,21 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 		bail!("JPEG does not support lossless compression, use a quality < 100");
 	}
 
-	match image.channel_count() {
-		1 | 3 => image,
-		_ => bail!("JPEG only supports Grey or RGB images without alpha channel"),
+	// An alpha channel that is fully opaque says nothing, and is dropped as
+	// PNG and WebP drop it. Translucent pixels are another matter: JPEG cannot
+	// store them, and which background to put behind them is the caller's
+	// choice, not ours.
+	let opaque;
+	let image = if image.has_alpha() {
+		ensure!(
+			image.is_opaque(),
+			"JPEG cannot store transparency, and this image has translucent pixels. \
+			 Flatten it onto a background colour first, e.g. with raster_flatten"
+		);
+		opaque = image.to_no_alpha()?;
+		&opaque
+	} else {
+		image
 	};
 
 	let mut buffer: Vec<u8> = Vec::new();
@@ -106,14 +119,28 @@ mod tests {
 		Ok(())
 	}
 
-	/* ---------- Error cases (alpha not supported) ---------- */
+	/// An alpha channel with nothing transparent in it used to be refused, so
+	/// an opaque RGBA tileset could not be converted to JPEG at all.
 	#[rstest]
 	#[case::greya(DynamicImage::new_test_greya())]
 	#[case::rgba(DynamicImage::new_test_rgba())]
-	fn jpeg_rejects_alpha_images(#[case] img: DynamicImage) {
+	fn jpeg_drops_an_opaque_alpha_channel(#[case] mut img: DynamicImage) -> Result<()> {
+		img.make_opaque()?;
+		let decoded = blob2image(&image2blob(&img, None)?)?;
+		assert!(!decoded.has_alpha());
+		assert_eq!(decoded.color(), img.to_no_alpha()?.color());
+		Ok(())
+	}
+
+	/* ---------- Error cases (translucency not supported) ---------- */
+	#[rstest]
+	#[case::greya(DynamicImage::new_test_greya())]
+	#[case::rgba(DynamicImage::new_test_rgba())]
+	fn jpeg_rejects_translucent_images(#[case] img: DynamicImage) {
 		assert_eq!(
 			image2blob(&img, None).unwrap_err().chain().last().unwrap().to_string(),
-			"JPEG only supports Grey or RGB images without alpha channel"
+			"JPEG cannot store transparency, and this image has translucent pixels. \
+			 Flatten it onto a background colour first, e.g. with raster_flatten"
 		);
 	}
 }
