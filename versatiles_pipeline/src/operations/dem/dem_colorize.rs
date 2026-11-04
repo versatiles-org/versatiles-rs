@@ -36,7 +36,8 @@ use crate::{
 /// this under a `dem_hillshade` with `from_stacked_raster`, which lays its first
 /// source over the others.
 struct Args {
-	/// Colour stops, as `elevation:colour,…`. Defaults to a hypsometric tint.
+	/// Colour stops, as `elevation:colour,…`, or `default` for a hypsometric tint. Defaults to `default`.
+	#[vpl(default = "default")]
 	ramp: Option<ColorRamp>,
 	/// DEM encoding of the source. Defaults to the encoding its tile schema implies.
 	encoding: Option<DemEncoding>,
@@ -180,6 +181,20 @@ mod tests {
 		assert!(
 			Args::docs().contains(DEFAULT_RAMP),
 			"the documented default ramp has drifted from the one in use"
+		);
+	}
+
+	/// The default declared for forms (#306) is the ramp an unset `ramp` gets.
+	#[test]
+	fn the_declared_default_is_the_ramp_in_use() {
+		let declared = Args::field_metadata()
+			.into_iter()
+			.find(|field| field.name == "ramp")
+			.and_then(|field| field.default)
+			.expect("ramp declares a default");
+		assert_eq!(
+			ColorRamp::try_from(declared.as_str()).unwrap(),
+			ColorRamp::try_from(DEFAULT_RAMP).unwrap()
 		);
 	}
 

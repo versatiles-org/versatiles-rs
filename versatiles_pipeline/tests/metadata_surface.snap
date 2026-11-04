@@ -2,7 +2,7 @@
 # A diff in this file is a change other people's software can see.
 
 dem_colorize [transform]
-dem_colorize.ramp: Option<ColorRamp> | optional
+dem_colorize.ramp: Option<ColorRamp> | optional | default=default
 dem_colorize.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium]
 
 dem_hillshade [transform]

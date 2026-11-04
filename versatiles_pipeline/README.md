@@ -444,7 +444,7 @@ For a coloured relief, give `dem_hillshade` a `ramp`, which reads and decodes th
 
 ### Parameters
 
-- _`ramp`: elevation:RRGGBB,... (optional)_ - Colour stops, as `elevation:colour,…`. Defaults to a hypsometric tint.
+- _`ramp`: elevation:RRGGBB,... (optional)_ - Colour stops, as `elevation:colour,…`, or `default` for a hypsometric tint. Defaults to `default`.
 - _`encoding`: DemEncoding (optional)_ - Values: `mapbox`, `terrarium`. DEM encoding of the source. Defaults to the encoding its tile schema implies.
 
 ---
