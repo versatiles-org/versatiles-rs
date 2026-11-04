@@ -15,9 +15,9 @@
 use anyhow::{Context, Result, bail, ensure};
 use image::{DynamicImage, ImageBuffer};
 use libwebp_sys::{
-	VP8StatusCode, WebPBitstreamFeatures, WebPConfig, WebPDecodeRGB, WebPDecodeRGBA, WebPEncode, WebPFree,
-	WebPGetFeatures, WebPMemoryWrite, WebPMemoryWriter, WebPMemoryWriterClear, WebPMemoryWriterInit, WebPPicture,
-	WebPPictureFree, WebPPictureImportRGB, WebPPictureImportRGBA,
+	VP8StatusCode, WebPBitstreamFeatures, WebPConfig, WebPDecodeRGB, WebPDecodeRGBA, WebPEncode, WebPEncodingError,
+	WebPFree, WebPGetFeatures, WebPMemoryWrite, WebPMemoryWriter, WebPMemoryWriterClear, WebPMemoryWriterInit,
+	WebPPicture, WebPPictureFree, WebPPictureImportRGB, WebPPictureImportRGBA,
 };
 use versatiles_core::Blob;
 use versatiles_derive::context;
@@ -100,16 +100,41 @@ fn webp_encode_advanced(data: &[u8], width: i32, height: i32, has_alpha: bool, c
 		picture.custom_ptr = (&raw mut writer).cast::<std::ffi::c_void>();
 
 		let ok = WebPEncode(config, &raw mut picture);
+		let error = picture.error_code;
 		WebPPictureFree(&raw mut picture);
 
 		if ok == 0 {
 			WebPMemoryWriterClear(&raw mut writer);
-			bail!("WebP encoding failed");
+			bail!("WebP encoding failed: {}", encoding_error_reason(error));
 		}
 
 		let result = std::slice::from_raw_parts(writer.mem, writer.size).to_vec();
 		WebPFree(writer.mem.cast::<std::ffi::c_void>());
 		Ok(Blob::from(result))
+	}
+}
+
+/// What libwebp's error code means, for the error message. Without it, an
+/// image too large for WebP failed with nothing but "WebP encoding failed".
+fn encoding_error_reason(error: WebPEncodingError) -> &'static str {
+	use WebPEncodingError::{
+		VP8_ENC_ERROR_BAD_DIMENSION, VP8_ENC_ERROR_BAD_WRITE, VP8_ENC_ERROR_BITSTREAM_OUT_OF_MEMORY,
+		VP8_ENC_ERROR_FILE_TOO_BIG, VP8_ENC_ERROR_INVALID_CONFIGURATION, VP8_ENC_ERROR_NULL_PARAMETER,
+		VP8_ENC_ERROR_OUT_OF_MEMORY, VP8_ENC_ERROR_PARTITION_OVERFLOW, VP8_ENC_ERROR_PARTITION0_OVERFLOW,
+		VP8_ENC_ERROR_USER_ABORT,
+	};
+	match error {
+		VP8_ENC_ERROR_OUT_OF_MEMORY | VP8_ENC_ERROR_BITSTREAM_OUT_OF_MEMORY => "out of memory",
+		VP8_ENC_ERROR_NULL_PARAMETER => "a required parameter was missing",
+		VP8_ENC_ERROR_INVALID_CONFIGURATION => "the encoder settings are invalid",
+		VP8_ENC_ERROR_BAD_DIMENSION => "WebP stores images of 1 to 16383 pixels per side only",
+		VP8_ENC_ERROR_PARTITION0_OVERFLOW | VP8_ENC_ERROR_PARTITION_OVERFLOW => {
+			"the compressed image is larger than a WebP partition can hold; try a lower quality"
+		}
+		VP8_ENC_ERROR_BAD_WRITE => "writing the output failed",
+		VP8_ENC_ERROR_FILE_TOO_BIG => "the output would exceed WebP's 4 GiB file size limit",
+		VP8_ENC_ERROR_USER_ABORT => "encoding was aborted",
+		_ => "libwebp reported no reason",
 	}
 }
 
@@ -410,6 +435,20 @@ mod tests {
 		// Lower quality should generally produce smaller files
 		assert!(blob_q50.len() < blob_q95.len());
 		Ok(())
+	}
+
+	/// A failed encode says why. An image one pixel wider than WebP allows
+	/// used to fail with "WebP encoding failed" and nothing more.
+	#[rstest]
+	#[case::lossy(Some(80))]
+	#[case::lossless(Some(100))]
+	fn a_failed_encode_names_the_reason(#[case] quality: Option<u8>) {
+		let img = DynamicImage::new_rgb8(16_384, 1);
+		let message = format!("{:#}", encode(&img, quality, None).unwrap_err());
+		assert!(
+			message.contains("1 to 16383 pixels per side"),
+			"expected the dimension limit, got: {message}"
+		);
 	}
 
 	/// A tile whose detail is all in the alpha channel, as `dem_hillshade`
