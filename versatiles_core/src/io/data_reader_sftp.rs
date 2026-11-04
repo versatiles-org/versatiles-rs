@@ -132,8 +132,11 @@ impl DataReaderSftp {
 
 #[async_trait]
 impl NetworkReader for DataReaderSftp {
-	async fn try_read_range(&self, range: &ByteRange) -> Result<Blob> {
-		self.try_read_range_impl(range).await
+	/// Reads the range in one call, so it is reported once it has all arrived.
+	async fn try_read_range(&self, range: &ByteRange, on_bytes: &(dyn Fn(u64) + Sync)) -> Result<Blob> {
+		let blob = self.try_read_range_impl(range).await?;
+		on_bytes(blob.len());
+		Ok(blob)
 	}
 
 	fn max_request_bytes(&self) -> &AtomicU64 {
@@ -157,7 +160,7 @@ impl DataReaderTrait for DataReaderSftp {
 			self.name,
 			self.size
 		);
-		self.network_read_range(range).await
+		self.network_read_range(range, &|_| {}).await
 	}
 
 	async fn read_all(&self) -> Result<Blob> {

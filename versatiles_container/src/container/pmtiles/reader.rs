@@ -188,11 +188,18 @@ impl PMTilesReader {
 		// that read so we don't issue a no-op HTTP request.
 		let metadata_fut = data_reader.read_range(&header.metadata);
 		let root_dir_fut = data_reader.read_range(&header.root_dir);
+		// The leaf directories are most of what opening a large remote file
+		// waits for, so they report how much has arrived (#304).
 		let leaf_dirs_fut = async {
 			if header.leaf_dirs.length == 0 {
 				Ok::<Blob, anyhow::Error>(Blob::default())
 			} else {
-				data_reader.read_range(&header.leaf_dirs).await
+				let progress = runtime.create_progress("reading the tile index", header.leaf_dirs.length);
+				let leaves = data_reader
+					.read_range_with_progress(&header.leaf_dirs, &|bytes| progress.inc(bytes))
+					.await;
+				progress.finish();
+				leaves
 			}
 		};
 		let (meta, root_bytes, leaves_bytes) =

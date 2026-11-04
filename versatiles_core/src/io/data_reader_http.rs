@@ -77,8 +77,12 @@ const MAX_PREALLOCATED_BODY: u64 = 16 * 1024 * 1024;
 /// 64 KiB range request with ten gigabytes is answered by allocating ten
 /// gigabytes, and `Content-Length` is the peer's claim rather than a
 /// constraint. Reading the stream chunk by chunk with a running total stops at
-/// the limit instead of after it.
-async fn read_body_limited(response: reqwest::Response, limit: u64) -> std::result::Result<Vec<u8>, BodyError> {
+/// the limit instead of after it. Each chunk's size goes to `on_bytes`.
+async fn read_body_limited(
+	response: reqwest::Response,
+	limit: u64,
+	on_bytes: &(dyn Fn(u64) + Sync),
+) -> std::result::Result<Vec<u8>, BodyError> {
 	use futures::StreamExt;
 
 	// Only as a starting size, and only when the peer's claim is plausible —
@@ -98,6 +102,7 @@ async fn read_body_limited(response: reqwest::Response, limit: u64) -> std::resu
 			return Err(BodyError::TooLarge { limit });
 		}
 		body.extend_from_slice(&chunk);
+		on_bytes(chunk.len() as u64);
 	}
 
 	Ok(body)
@@ -321,8 +326,8 @@ fn describe_error(err: &reqwest::Error) -> String {
 }
 
 impl DataReaderHttp {
-	/// Single-range read with retry/backoff.
-	async fn try_read_range_impl(&self, range: &ByteRange) -> Result<Blob> {
+	/// Single-range read with retry/backoff, reporting each received chunk to `on_bytes`.
+	async fn try_read_range_impl(&self, range: &ByteRange, on_bytes: &(dyn Fn(u64) + Sync)) -> Result<Blob> {
 		// `last()` is checked: the range comes from a container header, and an
 		// unchecked sum here panics in a debug build and asks for a wrapped byte
 		// range in a release one. An empty range, which has no last byte, never
@@ -391,7 +396,7 @@ impl DataReaderHttp {
 			// Bounded by the range that was asked for. `Content-Range` was checked
 			// above, but that is only the header: nothing so far constrains how
 			// many bytes actually follow it.
-			let bytes = match read_body_limited(response, range.length).await {
+			let bytes = match read_body_limited(response, range.length, on_bytes).await {
 				Ok(b) => b,
 				Err(BodyError::Transport(e)) if is_retryable_error(&e) && attempt < max_retries => {
 					log::warn!(
@@ -444,8 +449,8 @@ impl DataReaderHttp {
 
 #[async_trait]
 impl NetworkReader for DataReaderHttp {
-	async fn try_read_range(&self, range: &ByteRange) -> Result<Blob> {
-		self.try_read_range_impl(range).await
+	async fn try_read_range(&self, range: &ByteRange, on_bytes: &(dyn Fn(u64) + Sync)) -> Result<Blob> {
+		self.try_read_range_impl(range, on_bytes).await
 	}
 
 	fn max_request_bytes(&self) -> &AtomicU64 {
@@ -456,7 +461,12 @@ impl NetworkReader for DataReaderHttp {
 #[async_trait]
 impl DataReaderTrait for DataReaderHttp {
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
-		self.network_read_range(range).await
+		self.network_read_range(range, &|_| {}).await
+	}
+
+	/// Reports each chunk of the response body as it arrives.
+	async fn read_range_with_progress(&self, range: &ByteRange, on_bytes: &(dyn Fn(u64) + Sync)) -> Result<Blob> {
+		self.network_read_range(range, on_bytes).await
 	}
 
 	/// Reads all the data from the HTTP(S) endpoint.
@@ -515,7 +525,7 @@ impl DataReaderTrait for DataReaderHttp {
 			}
 
 			let limit = env_u64("VERSATILES_MAX_HTTP_BODY_BYTES", DEFAULT_MAX_BODY_BYTES);
-			let bytes = match read_body_limited(response, limit).await {
+			let bytes = match read_body_limited(response, limit, &|_| {}).await {
 				Ok(b) => b,
 				Err(BodyError::Transport(e)) if is_retryable_error(&e) && attempt < max_retries => {
 					log::warn!(
@@ -764,6 +774,29 @@ mod body_limit_tests {
 		.into_bytes();
 		out.extend_from_slice(body);
 		out
+	}
+
+	/// A large read reports the bytes as they arrive (#304), and together they
+	/// add up to the range.
+	#[tokio::test]
+	async fn read_range_with_progress_reports_the_received_bytes() {
+		let body: Vec<u8> = (0..100_000u32).map(|i| i.to_le_bytes()[0]).collect();
+		let url = serve_once(partial_response("bytes 0-99999/200000", &body)).await;
+		let reader = DataReaderHttp::try_from(&url).unwrap();
+
+		let received = std::sync::atomic::AtomicU64::new(0);
+		let reports = std::sync::atomic::AtomicU64::new(0);
+		let blob = reader
+			.read_range_with_progress(&ByteRange::new(0, 100_000), &|bytes| {
+				received.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
+				reports.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+			})
+			.await
+			.unwrap();
+
+		assert_eq!(blob.as_slice(), body.as_slice());
+		assert_eq!(received.load(std::sync::atomic::Ordering::Relaxed), 100_000);
+		assert!(reports.load(std::sync::atomic::Ordering::Relaxed) >= 1);
 	}
 
 	/// The `Content-Range` header was checked, but nothing constrained how many

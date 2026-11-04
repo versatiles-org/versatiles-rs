@@ -82,6 +82,20 @@ pub trait DataReaderTrait: Debug + Send + Sync {
 	/// * A Result containing a Blob with the read data or an error.
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob>;
 
+	/// Reads a range like [`read_range`](Self::read_range), and reports to
+	/// `on_bytes` how many bytes have arrived, as they arrive.
+	///
+	/// For a progress bar on a large read, such as the index of a remote
+	/// container (#304). A reader that receives the range in pieces reports each
+	/// piece; the default reports the whole range once it has been read. A
+	/// retried or split request can report the same bytes again, so a consumer
+	/// should cap the sum at `range.length`.
+	async fn read_range_with_progress(&self, range: &ByteRange, on_bytes: &(dyn Fn(u64) + Sync)) -> Result<Blob> {
+		let blob = self.read_range(range).await?;
+		on_bytes(blob.len());
+		Ok(blob)
+	}
+
 	/// Reads all the data from the data source.
 	///
 	/// # Returns

@@ -47,8 +47,10 @@ fn splitting_could_help(error: &anyhow::Error) -> bool {
 /// handles proactive splitting and learning from failures.
 #[async_trait]
 pub(crate) trait NetworkReader: DataReaderTrait {
-	/// Attempt to read the given range, with internal retry/backoff logic.
-	async fn try_read_range(&self, range: &ByteRange) -> Result<Blob>;
+	/// Attempt to read the given range, with internal retry/backoff logic,
+	/// reporting received bytes to `on_bytes` as
+	/// [`DataReaderTrait::read_range_with_progress`] describes.
+	async fn try_read_range(&self, range: &ByteRange, on_bytes: &(dyn Fn(u64) + Sync)) -> Result<Blob>;
 
 	/// Returns the adaptive maximum request size.
 	fn max_request_bytes(&self) -> &AtomicU64;
@@ -58,7 +60,8 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 	/// Proactively splits ranges that exceed a learned size limit.
 	/// On failure, splits the range in half and reads each half separately,
 	/// recording the failure so future large ranges split proactively.
-	async fn network_read_range(&self, range: &ByteRange) -> Result<Blob> {
+	/// Received bytes are reported to `on_bytes`.
+	async fn network_read_range(&self, range: &ByteRange, on_bytes: &(dyn Fn(u64) + Sync)) -> Result<Blob> {
 		log::trace!("network_read_range {range} ({} bytes)", range.length);
 		// Short-circuit zero-length reads. HTTP `Range: bytes=N-(N-1)` is malformed
 		// and conforming servers reject it with 400; SFTP would also reject. Empty
@@ -73,10 +76,10 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 				"proactively splitting range {range} ({} bytes) based on previous failures",
 				range.length
 			);
-			return self.split_and_read(range).await;
+			return self.split_and_read(range, on_bytes).await;
 		}
 
-		match self.try_read_range(range).await {
+		match self.try_read_range(range, on_bytes).await {
 			Ok(blob) => Ok(blob),
 			Err(e) if range.length <= 1 || !splitting_could_help(&e) => Err(e),
 			Err(e) => {
@@ -86,20 +89,20 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 					"splitting failed range {range} ({} bytes) into two halves: {e}",
 					range.length
 				);
-				self.split_and_read(range).await
+				self.split_and_read(range, on_bytes).await
 			}
 		}
 	}
 
-	/// Splits a range in half and reads each half via `read_range` (which
-	/// may recurse back into `network_read_range`). The two halves are
+	/// Splits a range in half and reads each half via `read_range_with_progress`
+	/// (which may recurse back into `network_read_range`). The two halves are
 	/// fetched concurrently so wall-clock stays near max(left, right)
 	/// instead of left + right.
 	#[expect(
 		clippy::arithmetic_side_effects,
 		reason = "checked once by `range.end()`: everything here stays at or under the end of the range"
 	)]
-	async fn split_and_read(&self, range: &ByteRange) -> Result<Blob> {
+	async fn split_and_read(&self, range: &ByteRange, on_bytes: &(dyn Fn(u64) + Sync)) -> Result<Blob> {
 		// One checked question up front: everything below stays at or under the
 		// end of the range, so nothing else here can overflow.
 		range.end()?;
@@ -107,7 +110,11 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 		let left = ByteRange::new(range.offset, mid - range.offset);
 		let right = ByteRange::new(mid, range.offset + range.length - mid);
 		log::trace!("split_and_read {range} -> [{left}] + [{right}]");
-		let (blob_left, blob_right) = futures::future::try_join(self.read_range(&left), self.read_range(&right)).await?;
+		let (blob_left, blob_right) = futures::future::try_join(
+			self.read_range_with_progress(&left, on_bytes),
+			self.read_range_with_progress(&right, on_bytes),
+		)
+		.await?;
 		let mut data = blob_left.into_vec();
 		data.extend_from_slice(blob_right.as_slice());
 		Ok(Blob::from(data))
@@ -148,7 +155,7 @@ mod tests {
 	#[async_trait]
 	impl DataReaderTrait for PeakNetReader {
 		async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
-			self.network_read_range(range).await
+			self.network_read_range(range, &|_| {}).await
 		}
 		async fn read_all(&self) -> Result<Blob> {
 			unreachable!("PeakNetReader only used for read_range")
@@ -160,7 +167,7 @@ mod tests {
 
 	#[async_trait]
 	impl NetworkReader for PeakNetReader {
-		async fn try_read_range(&self, range: &ByteRange) -> Result<Blob> {
+		async fn try_read_range(&self, range: &ByteRange, _on_bytes: &(dyn Fn(u64) + Sync)) -> Result<Blob> {
 			let n = self.state.in_flight.fetch_add(1, AtomicOrdering::SeqCst) + 1;
 			self.state.max_in_flight.fetch_max(n, AtomicOrdering::SeqCst);
 			tokio::time::sleep(self.delay).await;
@@ -183,7 +190,10 @@ mod tests {
 			state: Arc::clone(&state),
 			delay: Duration::from_millis(10),
 		};
-		let blob = reader.network_read_range(&ByteRange::new(4117, 0)).await.unwrap();
+		let blob = reader
+			.network_read_range(&ByteRange::new(4117, 0), &|_| {})
+			.await
+			.unwrap();
 		assert_eq!(blob.len(), 0);
 		// No call should have reached try_read_range — no malformed HTTP range sent.
 		assert_eq!(state.max_in_flight.load(AtomicOrdering::SeqCst), 0);
@@ -205,7 +215,7 @@ mod tests {
 	#[async_trait]
 	impl DataReaderTrait for FailingReader {
 		async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
-			self.network_read_range(range).await
+			self.network_read_range(range, &|_| {}).await
 		}
 		async fn read_all(&self) -> Result<Blob> {
 			unreachable!("FailingReader only used for read_range")
@@ -217,7 +227,7 @@ mod tests {
 
 	#[async_trait]
 	impl NetworkReader for FailingReader {
-		async fn try_read_range(&self, _range: &ByteRange) -> Result<Blob> {
+		async fn try_read_range(&self, _range: &ByteRange, _on_bytes: &(dyn Fn(u64) + Sync)) -> Result<Blob> {
 			self.calls.fetch_add(1, AtomicOrdering::SeqCst);
 			let error = anyhow::anyhow!("nope");
 			Err(if self.splittable {
@@ -242,7 +252,7 @@ mod tests {
 			splittable: false,
 		};
 
-		let result = reader.network_read_range(&ByteRange::new(0, 1 << 20)).await;
+		let result = reader.network_read_range(&ByteRange::new(0, 1 << 20), &|_| {}).await;
 
 		assert!(result.is_err());
 		assert_eq!(
@@ -261,7 +271,7 @@ mod tests {
 			splittable: true,
 		};
 
-		let result = reader.network_read_range(&ByteRange::new(0, 64)).await;
+		let result = reader.network_read_range(&ByteRange::new(0, 64), &|_| {}).await;
 
 		assert!(result.is_err());
 		assert!(
@@ -283,7 +293,10 @@ mod tests {
 			delay: Duration::from_millis(40),
 		};
 
-		let blob = reader.network_read_range(&ByteRange::new(0, 100)).await.unwrap();
+		let blob = reader
+			.network_read_range(&ByteRange::new(0, 100), &|_| {})
+			.await
+			.unwrap();
 
 		assert_eq!(blob.len(), 100);
 		let peak = state.max_in_flight.load(AtomicOrdering::SeqCst);

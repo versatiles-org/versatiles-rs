@@ -152,10 +152,13 @@ impl VersaTilesReader {
 		let block_index = if header.blocks_range.length == 0 {
 			BlockIndex::new_empty()
 		} else {
+			// Reported as it arrives, for a remote container (#304).
+			let progress = runtime.create_progress("reading the tile index", header.blocks_range.length);
 			let block_index_blob = reader
-				.read_range(&header.blocks_range)
-				.await
-				.context("Failed reading the block index")?;
+				.read_range_with_progress(&header.blocks_range, &|bytes| progress.inc(bytes))
+				.await;
+			progress.finish();
+			let block_index_blob = block_index_blob.context("Failed reading the block index")?;
 			BlockIndex::from_brotli_blob(&block_index_blob).context("Failed decompressing the block index")?
 		};
 		log::trace!(
@@ -530,6 +533,28 @@ mod tests {
 		let runtime = TilesRuntime::default();
 		let reader = VersaTilesReader::open(&temp_file, runtime).await?;
 		Ok((temp_file, reader))
+	}
+
+	/// Reading the block index reports its bytes, up to the index's length (#304).
+	#[tokio::test]
+	async fn reading_the_block_index_reports_progress() -> Result<()> {
+		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "versatiles").await?;
+		let runtime = TilesRuntime::new_silent();
+		let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let sink = Arc::clone(&seen);
+		runtime.events().subscribe(move |event| {
+			if let crate::Event::Progress { data } = event
+				&& data.message == "reading the tile index"
+			{
+				sink.lock().unwrap().push((data.position, data.total, data.finished));
+			}
+		});
+
+		VersaTilesReader::open(&temp_file, runtime).await?;
+		let last = *seen.lock().unwrap().last().expect("progress was reported");
+		assert!(last.1 > 0, "the total is the length of the block index");
+		assert_eq!(last, (last.1, last.1, true));
+		Ok(())
 	}
 
 	/// A source without tiles (a filter matching nothing) must still give a
