@@ -407,10 +407,17 @@ impl TileSource for MBTilesReader {
 	/// The first call scans the `tiles` table to derive the exact per-level
 	/// coverage; the result is cached in [`TileSourceMetadata`] and reused by
 	/// subsequent calls.
+	///
+	/// The scan is reported as a progress handle without a total (#305):
+	/// counting the rows first would scan the table as well, so a consumer
+	/// learns that the computation runs and when it ends, but not how far it is.
 	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.metadata
-			.get_or_compute_tile_pyramid(|| self.compute_tile_pyramid())
+		self.metadata.get_or_compute_tile_pyramid(|| {
+			let progress = self.runtime.create_progress("computing the tile pyramid", 0);
+			let pyramid = self.compute_tile_pyramid();
+			progress.finish();
+			pyramid
+		})
 	}
 
 	#[cfg(feature = "cli")]
@@ -659,6 +666,29 @@ pub mod tests {
 	use crate::MockWriter;
 
 	static PATH: LazyLock<PathBuf> = LazyLock::new(|| env::current_dir().unwrap().join("../testdata/berlin.mbtiles"));
+
+	/// The table scan used to say nothing. It now reports that it runs and
+	/// when it ends, without a total, which a count would cost a scan for (#305).
+	#[tokio::test]
+	async fn computing_the_pyramid_reports_progress() -> Result<()> {
+		let runtime = TilesRuntime::new_silent();
+		let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let sink = Arc::clone(&seen);
+		runtime.events().subscribe(move |event| {
+			if let crate::Event::Progress { data } = event
+				&& data.message == "computing the tile pyramid"
+			{
+				sink.lock().unwrap().push((data.total, data.finished));
+			}
+		});
+
+		let reader = MBTilesReader::open(&PATH, runtime)?;
+		reader.tile_pyramid().await?;
+		let seen = seen.lock().unwrap();
+		assert_eq!(seen.first(), Some(&(0, false)), "announced when it starts");
+		assert_eq!(seen.last(), Some(&(0, true)), "and when it ends");
+		Ok(())
+	}
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {

@@ -64,7 +64,7 @@ use versatiles_derive::context;
 use super::types::{EntriesV3, HeaderV3};
 use crate::{
 	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal,
-	TraversalOrder, TraversalSize, container::tile_chunking::Chunks,
+	TraversalOrder, TraversalSize, container::tile_chunking::Chunks, progress::ProgressHandle,
 };
 
 /// How many directory levels a lookup or a pyramid walk may descend.
@@ -413,6 +413,7 @@ impl PMTilesReader {
 /// - `addressed_tiles_count`: the header's own count of addressed tiles, used as
 ///   the ceiling on how many the walk may expand. `0` means the writer left it
 ///   unset, in which case [`MAX_UNDECLARED_ADDRESSED_TILES`] applies instead.
+/// - `progress`: advanced to the number of tiles walked after each directory.
 ///
 /// ### Errors
 /// Returns an error when directory blobs cannot be parsed or decompressed, or
@@ -423,6 +424,7 @@ fn calc_tile_pyramid(
 	leaves_bytes: &Blob,
 	compression: TileCompression,
 	addressed_tiles_count: u64,
+	progress: Option<&ProgressHandle>,
 ) -> Result<TilePyramid> {
 	calc_tile_pyramid_capped(
 		root_bytes_uncompressed,
@@ -430,6 +432,7 @@ fn calc_tile_pyramid(
 		compression,
 		addressed_tiles_count,
 		MAX_UNDECLARED_ADDRESSED_TILES,
+		progress,
 	)
 }
 
@@ -441,6 +444,7 @@ fn calc_tile_pyramid_capped(
 	compression: TileCompression,
 	addressed_tiles_count: u64,
 	cap: u64,
+	progress: Option<&ProgressHandle>,
 ) -> Result<TilePyramid> {
 	// The header's count is itself untrusted, so it bounds the walk rather than
 	// being believed: a file may declare fewer tiles than it addresses and be
@@ -466,19 +470,15 @@ fn calc_tile_pyramid_capped(
 		)
 	};
 
-	let mut pyramid = TilePyramid::new_empty();
-	let mut total_entries = 0u64;
-
-	parse_directories(
-		&mut pyramid,
-		&mut total_entries,
+	let mut walk = DirectoryWalk {
+		pyramid: TilePyramid::new_empty(),
+		total_entries: 0,
 		limit,
-		root_bytes_uncompressed,
 		leaves_bytes,
 		compression,
-		0,
-	)
-	.map_err(|e| {
+		progress,
+	};
+	walk.parse(root_bytes_uncompressed, 0).map_err(|e| {
 		if e.is::<TooManyTiles>() {
 			anyhow::anyhow!("PMTiles directories address more than {limit} tiles: {reason}")
 		} else {
@@ -486,15 +486,22 @@ fn calc_tile_pyramid_capped(
 		}
 	})?;
 
-	fn parse_directories(
-		pyramid: &mut TilePyramid,
-		total_entries: &mut u64,
-		limit: u64,
-		dir: &Blob,
-		leaves_bytes: &Blob,
-		compression: TileCompression,
-		depth: usize,
-	) -> Result<()> {
+	Ok(walk.pyramid)
+}
+
+/// The state of [`calc_tile_pyramid_capped`]'s walk, which stays the same
+/// through every level of the recursion.
+struct DirectoryWalk<'a> {
+	pyramid: TilePyramid,
+	total_entries: u64,
+	limit: u64,
+	leaves_bytes: &'a Blob,
+	compression: TileCompression,
+	progress: Option<&'a ProgressHandle>,
+}
+
+impl DirectoryWalk<'_> {
+	fn parse(&mut self, dir: &Blob, depth: usize) -> Result<()> {
 		log::trace!("parse_directories");
 
 		if depth >= MAX_DIRECTORY_DEPTH {
@@ -511,8 +518,8 @@ fn calc_tile_pyramid_capped(
 					// each coordinate straight into the pyramid keeps that
 					// bounded in memory; the running total keeps it bounded in
 					// time.
-					*total_entries = total_entries.saturating_add(u64::from(entry.run_length));
-					if *total_entries > limit {
+					self.total_entries = self.total_entries.saturating_add(u64::from(entry.run_length));
+					if self.total_entries > self.limit {
 						return Err(TooManyTiles.into());
 					}
 
@@ -520,33 +527,29 @@ fn calc_tile_pyramid_capped(
 						let tile_id = i
 							.checked_add(entry.tile_id)
 							.context("tile ids in the PMTiles directory overflow u64")?;
-						pyramid.insert_coord(&TileCoord::from_hilbert_index(tile_id)?);
+						self.pyramid.insert_coord(&TileCoord::from_hilbert_index(tile_id)?);
 					}
 				} else {
 					let range = entry.range;
-					let mut blob = leaves_bytes.read_range(&range)?;
-					blob = decompress(blob, &compression)?;
+					let mut blob = self.leaves_bytes.read_range(&range)?;
+					blob = decompress(blob, &self.compression)?;
 					#[expect(
 						clippy::arithmetic_side_effects,
 						reason = "`depth` is below MAX_DIRECTORY_DEPTH, checked above"
 					)]
-					parse_directories(
-						pyramid,
-						total_entries,
-						limit,
-						&blob,
-						leaves_bytes,
-						compression,
-						depth + 1,
-					)?;
+					self.parse(&blob, depth + 1)?;
 				}
 			}
 		}
 
+		// Once per directory rather than per tile: every update takes the
+		// progress handle's lock, and a directory holds thousands of entries.
+		if let Some(progress) = self.progress {
+			progress.set_position(self.total_entries);
+		}
+
 		Ok(())
 	}
-
-	Ok(pyramid)
 }
 
 #[async_trait]
@@ -572,14 +575,26 @@ impl TileSource for PMTilesReader {
 		&self.tilejson
 	}
 
+	/// Returns the coverage pyramid, computing it on first access.
+	///
+	/// The first call walks every directory entry and every tile it addresses,
+	/// which for a planet-sized file takes a while, and reports how far it has
+	/// got through a progress handle counting up to the header's tile count
+	/// (#305).
 	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
 		self.metadata.get_or_compute_tile_pyramid(|| {
-			calc_tile_pyramid(
+			let progress = self
+				.runtime
+				.create_progress("computing the tile pyramid", self.header.addressed_tiles_count);
+			let pyramid = calc_tile_pyramid(
 				&self.root_bytes_uncompressed,
 				&self.leaves_bytes,
 				self.internal_compression,
 				self.header.addressed_tiles_count,
-			)
+				Some(&progress),
+			);
+			progress.finish();
+			pyramid
 		})
 	}
 
@@ -696,6 +711,34 @@ mod tests {
 		entries.as_slice().serialize_entries()
 	}
 
+	/// Computing the pyramid walks every tile and used to say nothing while it
+	/// did. It now reports progress up to the header's tile count (#305).
+	#[tokio::test]
+	async fn computing_the_pyramid_reports_progress() -> Result<()> {
+		let runtime = TilesRuntime::new_silent();
+		let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let sink = Arc::clone(&seen);
+		runtime.events().subscribe(move |event| {
+			if let crate::Event::Progress { data } = event
+				&& data.message == "computing the tile pyramid"
+			{
+				sink.lock().unwrap().push((data.position, data.total, data.finished));
+			}
+		});
+
+		let reader = PMTilesReader::open(&PATH, runtime).await?;
+		let total = reader.header.addressed_tiles_count;
+		assert!(total > 0);
+		reader.tile_pyramid().await?;
+		assert_eq!(seen.lock().unwrap().last(), Some(&(total, total, true)));
+
+		// Only on the first call: the second returns the stored pyramid.
+		let events = seen.lock().unwrap().len();
+		reader.tile_pyramid().await?;
+		assert_eq!(seen.lock().unwrap().len(), events);
+		Ok(())
+	}
+
 	/// A leaf directory entry may name the very bytes it was parsed from. The
 	/// walk is recursive, so that is unbounded recursion: the stack goes, and a
 	/// stack overflow aborts the process rather than unwinding, so no caller can
@@ -716,7 +759,7 @@ mod tests {
 
 		// Root and leaves are the same bytes: following the entry re-reads the
 		// directory currently being parsed.
-		let error = calc_tile_pyramid(&blob, &blob, TileCompression::Uncompressed, 0)
+		let error = calc_tile_pyramid(&blob, &blob, TileCompression::Uncompressed, 0, None)
 			.expect_err("a self-referential leaf directory must be an error, not an abort");
 
 		let message = format!("{error:#}");
@@ -783,7 +826,7 @@ mod tests {
 		let blob = entries.as_slice().serialize_entries()?;
 
 		// The header declares eight addressed tiles; the directory asks for 50M.
-		let error = calc_tile_pyramid(&blob, &Blob::default(), TileCompression::Uncompressed, 8)
+		let error = calc_tile_pyramid(&blob, &Blob::default(), TileCompression::Uncompressed, 8, None)
 			.expect_err("a run length beyond the declared count must be an error");
 
 		let message = format!("{error:#}");
@@ -800,14 +843,14 @@ mod tests {
 		entries.push(super::super::types::EntryV3::new(0, ByteRange::new(0, 10), 50));
 		let blob = entries.as_slice().serialize_entries()?;
 
-		let error = calc_tile_pyramid_capped(&blob, &Blob::default(), TileCompression::Uncompressed, 0, 8)
+		let error = calc_tile_pyramid_capped(&blob, &Blob::default(), TileCompression::Uncompressed, 0, 8, None)
 			.expect_err("more than the cap must be an error");
 		assert!(
 			format!("{error:#}").contains("declares no count"),
 			"unhelpful: {error:#}"
 		);
 
-		let error = calc_tile_pyramid_capped(&blob, &Blob::default(), TileCompression::Uncompressed, 100, 8)
+		let error = calc_tile_pyramid_capped(&blob, &Blob::default(), TileCompression::Uncompressed, 100, 8, None)
 			.expect_err("more than the cap must be an error");
 		assert!(
 			format!("{error:#}").contains("declares 100, more than the 8"),
@@ -823,7 +866,7 @@ mod tests {
 		entries.push(super::super::types::EntryV3::new(0, ByteRange::new(0, 10), 4));
 		let blob = entries.as_slice().serialize_entries()?;
 
-		let pyramid = calc_tile_pyramid(&blob, &Blob::default(), TileCompression::Uncompressed, 4)?;
+		let pyramid = calc_tile_pyramid(&blob, &Blob::default(), TileCompression::Uncompressed, 4, None)?;
 		assert!(!pyramid.is_empty());
 
 		Ok(())
@@ -836,7 +879,7 @@ mod tests {
 		entries.push(super::super::types::EntryV3::new(0, ByteRange::new(0, 10), 1));
 		let blob = entries.as_slice().serialize_entries()?;
 
-		let pyramid = calc_tile_pyramid(&blob, &Blob::default(), TileCompression::Uncompressed, 0)?;
+		let pyramid = calc_tile_pyramid(&blob, &Blob::default(), TileCompression::Uncompressed, 0, None)?;
 		assert!(!pyramid.is_empty());
 
 		Ok(())
