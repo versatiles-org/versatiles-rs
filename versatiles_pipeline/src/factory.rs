@@ -28,6 +28,7 @@ use versatiles_core::{TileFormat, TileType, io::url_for_display};
 use versatiles_derive::context;
 
 use crate::{
+	build_error,
 	helpers::{dummy_image_source::DummyImageSource, dummy_vector_source::DummyVectorSource},
 	operations::{read_operation_factories, transform_operation_factories},
 	vpl::{VPLNode, VPLPipeline, parse_vpl},
@@ -415,8 +416,27 @@ impl PipelineFactory {
 	/// Builds an executable operation graph from a parsed `VPLPipeline`.
 	///
 	/// Takes the head node as a read operation and folds the remaining nodes as transforms.
+	///
+	/// # Errors
+	///
+	/// When a node fails to build, the error carries a [`NodeBuildError`](crate::NodeBuildError)
+	/// naming it, which [`anyhow::Error::downcast_ref`] gets back.
 	#[context("Failed to build pipeline from VPL")]
 	pub async fn build_pipeline(&self, pipeline: VPLPipeline) -> Result<Box<dyn TileSource>> {
+		self.build_nodes(pipeline).await.map_err(build_error::complete)
+	}
+
+	/// Builds the bracketed source at `index` of a node, such as one layer of
+	/// `from_stacked_raster`. A failure in it names its node by a path through
+	/// the enclosing node, which the enclosing pipeline then completes.
+	pub(crate) async fn build_source(&self, pipeline: VPLPipeline, index: usize) -> Result<Box<dyn TileSource>> {
+		self
+			.build_nodes(pipeline)
+			.await
+			.map_err(|err| build_error::in_source(err, index))
+	}
+
+	async fn build_nodes(&self, pipeline: VPLPipeline) -> Result<Box<dyn TileSource>> {
 		let pipeline_started = Instant::now();
 		let (head, tail) = pipeline.split()?;
 		log::trace!(
@@ -428,16 +448,22 @@ impl PipelineFactory {
 
 		let head_name = head.name.clone();
 		let node_started = Instant::now();
-		let mut vpl_operation = self.read_operation_from_node(head).await?;
+		let mut vpl_operation = self
+			.read_operation_from_node(head)
+			.await
+			.map_err(|err| build_error::at_node(err, 0, &head_name))?;
 		log::trace!(
 			"pipeline: read node '{head_name}' built in {:.2}s",
 			node_started.elapsed().as_secs_f32()
 		);
 
-		for node in tail {
+		for (index, node) in (1..).zip(tail) {
 			let node_name = node.name.clone();
 			let node_started = Instant::now();
-			vpl_operation = self.tran_operation_from_node(node, vpl_operation).await?;
+			vpl_operation = self
+				.tran_operation_from_node(node, vpl_operation)
+				.await
+				.map_err(|err| build_error::at_node(err, index, &node_name))?;
 			log::trace!(
 				"pipeline: transform node '{node_name}' built in {:.2}s",
 				node_started.elapsed().as_secs_f32()
@@ -724,6 +750,47 @@ mod tests {
 		assert_eq!(folded.metadata(), whole.metadata());
 		assert_eq!(folded.tilejson().stringify(), whole.tilejson().stringify());
 
+		Ok(())
+	}
+
+	/// A build error says which node failed, by the same path `check_pipeline`
+	/// uses, through the brackets of a composite too (#303).
+	#[tokio::test]
+	async fn a_build_error_names_the_node_it_failed_at() -> Result<()> {
+		const AVIF_LOSSLESS: &str = "raster_format format=avif quality=100";
+		let cases = [
+			(
+				format!("from_debug format=png | {AVIF_LOSSLESS}"),
+				vec![1],
+				"node 1 (raster_format)",
+			),
+			(
+				format!("from_debug format=png | raster_flatten | {AVIF_LOSSLESS}"),
+				vec![2],
+				"node 2 (raster_format)",
+			),
+			(
+				format!("from_stacked_raster [ from_debug format=png, from_debug format=png | {AVIF_LOSSLESS} ]"),
+				vec![0, 1, 1],
+				"node 0, source 1, node 1 (raster_format)",
+			),
+			(
+				format!(
+					"from_stacked_raster [ from_debug format=png, from_debug format=png | {AVIF_LOSSLESS} ] | raster_flatten"
+				),
+				vec![0, 1, 1],
+				"node 0, source 1, node 1 (raster_format)",
+			),
+		];
+
+		let factory = PipelineFactory::new_dummy();
+		for (vpl, path, display) in cases {
+			let error = factory.build_pipeline(parse_vpl(&vpl)?).await.unwrap_err();
+			let node = error.downcast_ref::<crate::NodeBuildError>().expect("a NodeBuildError");
+			assert_eq!(node.path, path, "{vpl}");
+			assert_eq!(node.name, "raster_format", "{vpl}");
+			assert!(format!("{error:#}").contains(display), "{vpl}: {error:#}");
+		}
 		Ok(())
 	}
 

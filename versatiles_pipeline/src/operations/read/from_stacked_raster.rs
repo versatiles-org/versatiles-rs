@@ -262,7 +262,7 @@ impl Operation {
 		// pre-tile-streaming time. `try_join_all` preserves input order, so the
 		// stacking order (first source = foreground) is unchanged.
 		let original_sources: Vec<Box<dyn TileSource>> =
-			try_join_all(args.sources.into_iter().map(|s| factory.build_pipeline(s))).await?;
+			try_join_all((0..).zip(args.sources).map(|(i, s)| factory.build_source(s, i))).await?;
 		let source_types: Vec<Arc<SourceType>> = original_sources.iter().map(|s| s.source_type()).collect();
 
 		ensure!(!original_sources.is_empty(), "must have at least one source");

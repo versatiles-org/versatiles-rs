@@ -18,7 +18,7 @@ use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream, io
 use versatiles_derive::context;
 
 use crate::{
-	PipelineFactory,
+	PipelineFactory, build_error,
 	vpl::{VPLNode, VPLPipeline, parse_vpl},
 };
 
@@ -117,8 +117,13 @@ impl<'a> PipelineReader {
 	) -> Result<PipelineReader> {
 		let factory = PipelineFactory::new_runtime_reader(dir, runtime);
 		let mut operation: Box<dyn TileSource> = Box::new(head);
-		for node in tail {
-			operation = factory.tran_operation_from_node(node, operation).await?;
+		// The head is node 0, so the tail counts from 1, as in the whole pipeline.
+		for (index, node) in (1..).zip(tail) {
+			let name = node.name.clone();
+			operation = factory
+				.tran_operation_from_node(node, operation)
+				.await
+				.map_err(|err| build_error::complete(build_error::at_node(err, index, &name)))?;
 		}
 		Ok(PipelineReader {
 			name: name.to_string(),
@@ -290,6 +295,25 @@ mod tests {
 			"expected an unknown-transform error, got: {error:?}"
 		);
 
+		Ok(())
+	}
+
+	/// The tail counts from 1, as it would in the whole pipeline, so a node
+	/// keeps its number whichever way an editor builds it (#303).
+	#[tokio::test]
+	async fn from_parts_names_the_failing_node_as_the_whole_pipeline_would() -> Result<()> {
+		let dir = Path::new("../testdata");
+		let factory = PipelineFactory::new_runtime_reader(dir, TilesRuntime::new_silent());
+		let (head, tail) =
+			parse_vpl("from_debug format=png | raster_flatten | raster_format format=avif quality=100")?.split()?;
+		let head: SharedTileSource = factory.read_operation_from_node(head).await?.into();
+
+		let error = PipelineReader::from_parts(head, tail, "parts", dir, TilesRuntime::new_silent())
+			.await
+			.unwrap_err();
+		let node = error.downcast_ref::<crate::NodeBuildError>().expect("a NodeBuildError");
+		assert_eq!(node.path, [2]);
+		assert_eq!(node.name, "raster_format");
 		Ok(())
 	}
 

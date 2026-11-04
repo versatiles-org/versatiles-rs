@@ -183,6 +183,7 @@ mod tests {
 			[
 				"Failed to create reader from VPL",
 				"Failed to build pipeline from VPL",
+				"node 1 (vector_filter_layers)",
 				"Failed to create transform operation from VPL node",
 				"Building vector_filter_layers operation in VPL node \"vector_filter_layers\"",
 				"Failed to get required property string list 'filter' from VPL node 'vector_filter_layers'",

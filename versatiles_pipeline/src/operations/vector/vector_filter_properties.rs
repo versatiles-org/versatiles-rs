@@ -218,6 +218,7 @@ mod tests {
 			[
 				"Failed to create reader from VPL",
 				"Failed to build pipeline from VPL",
+				"node 1 (vector_filter_properties)",
 				"Failed to create transform operation from VPL node",
 				"Building vector_filter_properties operation in VPL node \"vector_filter_properties\"",
 				"Failed to get required property enum 'regex' from VPL node 'vector_filter_properties'",

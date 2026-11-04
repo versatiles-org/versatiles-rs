@@ -122,7 +122,7 @@ impl Operation {
 	#[context("Failed to build from_merged_vector operation")]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
+		let sources = join_all((0..).zip(args.sources).map(|(i, c)| factory.build_source(c, i)))
 			.await
 			.into_iter()
 			.collect::<Result<Vec<_>>>()?;
@@ -398,6 +398,7 @@ mod tests {
 			[
 				"Failed to create reader from VPL",
 				"Failed to build pipeline from VPL",
+				"node 0 (from_merged_vector)",
 				"Failed to create read operation from VPL node",
 				"Failed to build from_merged_vector operation",
 				"The 'from_merged_vector' operation does not have a parameter 'color'.\nSupported parameters: 'sources'"

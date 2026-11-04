@@ -23,6 +23,8 @@
 //!
 //! This crate integrates tightly with [`versatiles_container`] and [`versatiles_core`] for tile I/O and metadata management.
 
+mod build_error;
+pub use build_error::NodeBuildError;
 mod check;
 pub use check::{VplProblem, check_pipeline};
 
