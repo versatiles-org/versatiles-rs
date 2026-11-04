@@ -31,8 +31,8 @@ pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 
 	/// Computes a quick **representative color** of the image.
 	///
-	/// This downsamples to 1×1 using a triangle filter and returns the resulting pixel bytes
-	/// (3 or 4 channels depending on the source color type).
+	/// This downsamples to 1×1 using a triangle filter and returns the resulting pixel bytes,
+	/// one per channel of the source (1 to 4).
 	fn average_color(&self) -> Vec<u8>;
 
 	/// Crops the source region `(x, y, w, h)` and resamples it into a destination image of
@@ -74,7 +74,12 @@ pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 
 	/// Applies a mapping function `f` to **color channels only**, leaving the alpha channel intact.
 	///
-	/// The function is called per component (`u8`). Errors on unsupported color types.
+	/// The function is called per component (`u8`).
+	///
+	/// # Panics
+	///
+	/// Panics for an image that is not 8-bit. Decoded images always are, since decoding narrows
+	/// them.
 	fn map_color_values<F>(&mut self, f: F)
 	where
 		F: Fn(u8) -> u8;
