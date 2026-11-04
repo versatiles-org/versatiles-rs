@@ -48,7 +48,7 @@ pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 
 	/// Flattens an image with alpha against a given **background color**.
 	///
-	/// For `Rgba8`: returns an `Rgb8` where each pixel is `alpha * src + (1-alpha) * bg`.
+	/// For `Rgba8` and `La8`: returns an `Rgb8` where each pixel is `alpha * src + (1-alpha) * bg`.
 	/// Non‑alpha images are returned unchanged. Errors on unsupported color types.
 	fn into_flattened(self, color: Rgb<u8>) -> Result<DynamicImage>;
 
@@ -144,7 +144,12 @@ where
 		if !self.has_alpha() {
 			return Ok(self);
 		}
-		match self {
+		// The background may be a colour, so grey with alpha becomes RGB.
+		let rgba = match self {
+			DynamicImage::ImageLumaA8(_) => DynamicImage::ImageRgba8(self.into_rgba8()),
+			other => other,
+		};
+		match rgba {
 			DynamicImage::ImageRgba8(img) => {
 				let c = [u16::from(color[0]), u16::from(color[1]), u16::from(color[2])];
 				Ok(DynamicImage::from(map_pixels(&img, |p| {
@@ -161,7 +166,7 @@ where
 					}
 				})))
 			}
-			_ => bail!("Unsupported image type {:?} for flattening", self.color()),
+			other => bail!("Unsupported image type {:?} for flattening", other.color()),
 		}
 	}
 
@@ -489,6 +494,26 @@ mod tests {
 		let (x, y) = (20u32, 255u32);
 		let p_dst = flat.get_pixel(x, y).0;
 		assert_eq!(p_dst, bg.0);
+	}
+
+	/// Grey with alpha is as ordinary a PNG as RGBA, and a GDAL source with
+	/// two bands builds one too. It used to be refused, which made
+	/// `raster_flatten` fail on such a tileset.
+	#[test]
+	fn into_flattened_handles_grey_with_alpha() {
+		let greya = DynamicImage::from_fn(2, 1, |x, _| if x == 0 { [200, 255] } else { [200, 0] });
+		let flat = greya.into_flattened(Rgb([255, 0, 0])).unwrap();
+		assert_eq!(flat.extended_color_type(), ECT::Rgb8);
+		assert_eq!(
+			flat.get_pixel(0, 0).0,
+			[200, 200, 200, 255],
+			"opaque pixel keeps its grey"
+		);
+		assert_eq!(
+			flat.get_pixel(1, 0).0,
+			[255, 0, 0, 255],
+			"transparent pixel takes the background"
+		);
 	}
 
 	#[rstest]
