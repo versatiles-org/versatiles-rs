@@ -2,6 +2,8 @@ import { beforeAll, afterAll } from 'vitest';
 import { TileServer } from '../index.js';
 import path from 'path';
 import http from 'http';
+import { spawn, type ChildProcess } from 'child_process';
+import { pathToFileURL } from 'url';
 
 const TESTDATA_DIR = path.join(__dirname, '../../testdata');
 const MBTILES_PATH = path.join(TESTDATA_DIR, 'berlin.mbtiles');
@@ -54,6 +56,78 @@ function httpGetBuffer(url: string): Promise<HttpBufferResponse> {
 			.on('error', reject);
 	});
 }
+
+const INDEX_URL = pathToFileURL(path.join(__dirname, '../index.js')).href;
+
+/**
+ * Runs `body` in a fresh Node.js process with a `server` on an ephemeral
+ * port, because whether a process exits can only be seen from outside it.
+ */
+function runServerScript(body: string): ChildProcess {
+	const script = [
+		`import { TileServer } from ${JSON.stringify(INDEX_URL)};`,
+		`const server = new TileServer({ ip: '127.0.0.1', port: 0 });`,
+		body,
+	].join('\n');
+	return spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
+}
+
+/** The exit code, or `'running'` if the process is still alive after `ms`. */
+function exitWithin(child: ChildProcess, ms: number): Promise<number | null | 'running'> {
+	return new Promise((resolve) => {
+		const timer = setTimeout(() => resolve('running'), ms);
+		child.once('exit', (code) => {
+			clearTimeout(timer);
+			resolve(code);
+		});
+	});
+}
+
+/** Resolves once the process has printed `line`. */
+function printed(child: ChildProcess, line: string): Promise<void> {
+	return new Promise((resolve, reject) => {
+		let output = '';
+		child.stdout!.on('data', (chunk) => {
+			output += chunk;
+			if (output.split('\n').includes(line)) resolve();
+		});
+		child.once('exit', (code) => reject(new Error(`exited with ${code} before printing '${line}'`)));
+	});
+}
+
+describe('TileServer process lifetime', () => {
+	// A script whose only work is serving used to exit with code 0 right after
+	// `start()`, taking the server with it (#309).
+	it('keeps the process alive while the server runs', async () => {
+		const child = runServerScript(`await server.start(); console.log('started');`);
+		try {
+			await printed(child, 'started');
+			expect(await exitWithin(child, 1000)).toBe('running');
+		} finally {
+			child.kill();
+		}
+	});
+
+	it('lets the process exit after stop()', async () => {
+		const child = runServerScript(`await server.start(); await server.stop();`);
+		expect(await exitWithin(child, 10_000)).toBe(0);
+	});
+
+	it('lets the process exit while running after unref()', async () => {
+		const child = runServerScript(`await server.start(); server.unref();`);
+		expect(await exitWithin(child, 10_000)).toBe(0);
+	});
+
+	it('keeps the process alive again after ref()', async () => {
+		const child = runServerScript(`server.unref(); server.ref(); await server.start(); console.log('started');`);
+		try {
+			await printed(child, 'started');
+			expect(await exitWithin(child, 1000)).toBe('running');
+		} finally {
+			child.kill();
+		}
+	});
+});
 
 describe('TileServer', () => {
 	describe('constructor', () => {

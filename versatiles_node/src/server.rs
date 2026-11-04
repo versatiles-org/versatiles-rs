@@ -24,7 +24,7 @@ use std::{
 };
 
 use anyhow::Context;
-use napi::bindgen_prelude::*;
+use napi::{bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
 use tokio::sync::Mutex;
 use versatiles::{
@@ -40,6 +40,72 @@ use crate::{
 // Type aliases for complex types
 type TileSourceList = Mutex<HashMap<String, Arc<dyn RustTileSource>>>; // Map of name -> TileSource
 type StaticSourceList = Mutex<Vec<(String, Option<String>)>>; // Vec of (path, url_prefix)
+
+/// A threadsafe function that is never called. Holding one keeps Node's event
+/// loop alive, and dropping it lets the loop end; dropping is allowed on any
+/// thread, while creating one needs the JavaScript thread.
+type LoopHandle = ThreadsafeFunction<(), (), (), Status, false, false>;
+
+/// Whether the server keeps the process alive, as `http.Server` does (#309).
+///
+/// The server runs on tokio's threads, which Node does not wait for, so
+/// without this a script that only serves exits as soon as `start()` resolves.
+#[derive(Default)]
+struct EventLoopHold {
+	/// Set by `start()`, cleared by `stop()`.
+	running: bool,
+	/// Cleared by `unref()`, set again by `ref()`.
+	unreferenced: bool,
+	handle: Option<LoopHandle>,
+}
+
+impl EventLoopHold {
+	/// Hold the event loop if the server runs and nobody asked not to.
+	/// Must be called on the JavaScript thread.
+	fn update(&mut self, env: &Env) -> Result<()> {
+		if !self.running || self.unreferenced {
+			self.handle = None;
+		} else if self.handle.is_none() {
+			let noop = env.create_function_from_closure::<(), (), _>("versatilesTileServer", |_| Ok(()))?;
+			self.handle = Some(
+				noop
+					.build_threadsafe_function::<()>()
+					.callee_handled::<false>()
+					.weak::<false>()
+					.build()?,
+			);
+		}
+		Ok(())
+	}
+}
+
+type SharedHold = Arc<std::sync::Mutex<EventLoopHold>>;
+
+fn lock_hold(hold: &SharedHold) -> Result<std::sync::MutexGuard<'_, EventLoopHold>> {
+	hold
+		.lock()
+		.map_err(|_| Error::from_reason("event loop hold Mutex poisoned"))
+}
+
+/// What `start()` resolves to, `undefined` in JavaScript.
+///
+/// Converting it to JavaScript happens on the JavaScript thread, which is
+/// where the event loop can be held: the body of an async method runs on a
+/// tokio thread instead.
+pub struct Started(SharedHold);
+
+impl std::fmt::Debug for Started {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("Started")
+	}
+}
+
+impl ToNapiValue for Started {
+	unsafe fn to_napi_value(env: napi::sys::napi_env, val: Self) -> Result<napi::sys::napi_value> {
+		lock_hold(&val.0)?.update(&Env::from_raw(env))?;
+		unsafe { <()>::to_napi_value(env, ()) }
+	}
+}
 
 /// HTTP tile server for serving tiles and static content
 ///
@@ -89,6 +155,7 @@ pub struct TileServer {
 	// Track accumulated sources to rebuild config on start
 	tile_sources: TileSourceList,     // Map of name -> TileSource
 	static_sources: StaticSourceList, // Vec of (path, url_prefix)
+	event_loop: SharedHold,
 }
 
 #[napi]
@@ -148,6 +215,7 @@ impl TileServer {
 			cache_control,
 			tile_sources: Mutex::new(HashMap::new()),
 			static_sources: Mutex::new(Vec::new()),
+			event_loop: SharedHold::default(),
 		})
 	}
 
@@ -287,6 +355,10 @@ impl TileServer {
 	///
 	/// Returns `Ok(())` if the server started successfully
 	///
+	/// From then on the server keeps the Node.js process alive until `stop()`
+	/// is called, as an `http.Server` does. Call `unref()` to let the process
+	/// exit while the server is still running.
+	///
 	/// # Errors
 	///
 	/// Returns an error if:
@@ -303,8 +375,8 @@ impl TileServer {
 	/// await server.start();
 	/// console.log('Server started successfully');
 	/// ```
-	#[napi]
-	pub async fn start(&self) -> Result<()> {
+	#[napi(ts_return_type = "Promise<void>")]
+	pub async fn start(&self) -> Result<Started> {
 		let mut server_lock = self.inner.lock().await;
 
 		if server_lock.is_some() {
@@ -352,7 +424,11 @@ impl TileServer {
 
 		*server_lock = Some(server);
 
-		Ok(())
+		// Marked here, under the server lock, and acted on when the promise
+		// resolves. A `stop()` that runs in between clears the mark first, so
+		// the loop is not held for a server that is gone.
+		lock_hold(&self.event_loop)?.running = true;
+		Ok(Started(Arc::clone(&self.event_loop)))
 	}
 
 	/// Stop the HTTP server gracefully
@@ -384,6 +460,13 @@ impl TileServer {
 			server.stop().await;
 		}
 
+		// Lets the process exit again. Dropping the handle is allowed here, off
+		// the JavaScript thread.
+		let mut hold = lock_hold(&self.event_loop)?;
+		hold.running = false;
+		hold.handle = None;
+		drop(hold);
+
 		// Clear cached port when server stops
 		*self
 			.actual_port
@@ -392,6 +475,37 @@ impl TileServer {
 			.to_napi()? = None;
 
 		Ok(())
+	}
+
+	/// Let the process exit while the server is running
+	///
+	/// Like `net.Server.unref()`: a running server no longer keeps the Node.js
+	/// process alive, so the process ends when nothing else is left to do. This
+	/// is for scripts and test suites that start a server alongside other work.
+	/// It lasts across `stop()` and `start()` until `ref()` is called.
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// await server.start();
+	/// server.unref(); // the process may now exit with the server running
+	/// ```
+	#[napi]
+	pub fn unref(&self, env: Env) -> Result<()> {
+		let mut hold = lock_hold(&self.event_loop)?;
+		hold.unreferenced = true;
+		hold.update(&env)
+	}
+
+	/// Keep the process alive while the server is running
+	///
+	/// Like `net.Server.ref()`, this undoes `unref()`. It is the default, so it
+	/// is only needed after `unref()`.
+	#[napi(js_name = "ref")]
+	pub fn refer(&self, env: Env) -> Result<()> {
+		let mut hold = lock_hold(&self.event_loop)?;
+		hold.unreferenced = false;
+		hold.update(&env)
 	}
 
 	/// Get the server port

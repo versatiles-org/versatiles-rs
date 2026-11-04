@@ -363,7 +363,8 @@ Add static file source.
 
 #### `server.start()`
 
-Start the HTTP server.
+Start the HTTP server. Like an `http.Server`, a running server keeps the
+Node.js process alive until `stop()` is called.
 
 **Returns:** `Promise<void>`
 
@@ -374,6 +375,14 @@ requests it is answering, for up to 5 seconds. A request that takes longer is
 answered in the background after `stop()` has returned.
 
 **Returns:** `Promise<void>`
+
+#### `server.unref()` and `server.ref()`
+
+Like `net.Server.unref()` and `ref()`: after `unref()`, a running server no
+longer keeps the process alive, and `ref()` undoes that. Useful for scripts and
+test suites that start a server alongside other work.
+
+**Returns:** `void`
 
 #### `server.port`
 
