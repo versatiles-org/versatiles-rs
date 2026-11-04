@@ -453,7 +453,7 @@ For a coloured relief, give `dem_hillshade` a `ramp`, which reads and decodes th
 
 Renders DEM tiles as hillshading, the way MapLibre's `hillshade` layer shades them.
 
-The result is RGBA tiles that are transparent on flat ground and shade slopes by their steepness and the direction they face. They are an ordinary raster source for any map client, and much smaller than the elevation tiles, since they can be encoded lossily with a following `raster_format format=webp quality=70`.
+The result is RGBA tiles that are transparent on flat ground and shade slopes by their steepness and the direction they face. They are an ordinary raster source for any map client. Unlike elevation tiles, they can be encoded lossily: with a following `raster_format format=webp quality=70`, a mountain tile at zoom 8 comes out about a quarter smaller than the elevation tile it is computed from, and with `format=avif quality=50` about 60 % smaller. versatiles cannot decode AVIF, though, so AVIF only fits the last step: no operation after it, and no later pipeline that reads the result, can process the tiles any further.
 
 The shading is MapLibre's default `standard` method, including the slope exaggeration it applies below zoom 15 and its correction for latitude, so a tile looks as a live `hillshade` layer would at the same zoom. The colours are given as `RRGGBB`, `RRGGBBAA` or `[r,g,b,a]`, and an alpha below `FF` makes that part of the shading lighter.
 
