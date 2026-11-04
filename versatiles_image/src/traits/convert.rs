@@ -14,8 +14,6 @@ use image::{DynamicImage, EncodableLayout, ImageBuffer};
 use versatiles_core::{Blob, TileFormat};
 use versatiles_derive::context;
 
-use crate::format::{avif, jpeg, png, webp};
-
 /// Trait for converting between `DynamicImage` and raw/encoded formats, and for constructing images from functions.
 pub trait DynamicImageTraitConvert {
 	/// Constructs a `DynamicImage` by applying a function to each pixel coordinate.
@@ -97,28 +95,13 @@ impl DynamicImageTraitConvert for DynamicImage {
 		})
 	}
 
-	#[context("encoding {}x{} {:?} as {:?} (q={:?}, e={:?})", self.width(), self.height(), self.color(), format, quality, effort)]
+	// The same dispatch as `encode`/`decode`, which carry the error context.
 	fn to_blob(&self, format: TileFormat, quality: Option<u8>, effort: Option<u8>) -> Result<Blob> {
-		use TileFormat::{AVIF, JPG, PNG, WEBP};
-		match format {
-			AVIF => avif::encode(self, quality, effort),
-			JPG => jpeg::encode(self, quality),
-			PNG => png::encode(self, effort),
-			WEBP => webp::encode(self, quality, effort),
-			_ => bail!("Unsupported image format for encoding: {format:?}"),
-		}
+		crate::format::encode(self, format, quality, effort)
 	}
 
-	#[context("decoding {:?} image ({} bytes)", format, blob.len())]
 	fn from_blob(blob: &Blob, format: TileFormat) -> Result<DynamicImage> {
-		use TileFormat::{AVIF, JPG, PNG, WEBP};
-		match format {
-			AVIF => avif::blob2image(blob),
-			JPG => jpeg::blob2image(blob),
-			PNG => png::blob2image(blob),
-			WEBP => webp::blob2image(blob),
-			_ => bail!("Unsupported image format for decoding: {format:?}"),
-		}
+		crate::format::decode(blob, format)
 	}
 
 	fn iter_pixels(&self) -> impl Iterator<Item = &[u8]> {
