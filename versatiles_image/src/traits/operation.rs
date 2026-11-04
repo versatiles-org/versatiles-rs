@@ -81,6 +81,7 @@ pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 
 	/// Draws `top` over `self` in place (composites at (0,0)).
 	///
+	/// A greyscale `self` becomes RGB first when `top` has colour, so that the colour survives.
 	/// Ensures the images have identical dimensions. Returns an error if sizes differ.
 	fn overlay(&mut self, top: &DynamicImage) -> Result<()>;
 
@@ -253,6 +254,16 @@ where
 	#[context("overlaying top {}x{} {:?} onto base {}x{} {:?}", top.width(), top.height(), top.color(), self.width(), self.height(), self.color())]
 	fn overlay(&mut self, top: &DynamicImage) -> Result<()> {
 		self.ensure_same_size(top)?;
+		// The result keeps the bottom's layout, and a greyscale one would drop
+		// the colour of whatever is drawn over it. Alpha stays as it was: an
+		// opaque bottom is still opaque with anything on top.
+		if top.color().has_color() && !self.color().has_color() {
+			*self = if self.has_alpha() {
+				DynamicImage::ImageRgba8(self.to_rgba8())
+			} else {
+				DynamicImage::ImageRgb8(self.to_rgb8())
+			};
+		}
 		overlay(self, top, 0, 0);
 		Ok(())
 	}
@@ -549,6 +560,30 @@ mod tests {
 		for &(x, y) in &[(0, 0), (8, 8), (15, 15)] {
 			assert_eq!(bottom.get_pixel(x, y).0, [255, 0, 0, 255]);
 		}
+	}
+
+	/// A colour drawn over a greyscale image must stay a colour. The result
+	/// used to keep the bottom's layout, so `from_stacked_raster` turned a
+	/// coloured layer grey wherever a greyscale one lay beneath it.
+	#[rstest]
+	#[case::grey(DynamicImage::from_fn(4, 4, |_, _| [100]), ECT::Rgb8)]
+	#[case::greya(DynamicImage::from_fn(4, 4, |_, _| [100, 255]), ECT::Rgba8)]
+	fn overlay_keeps_the_colour_of_the_top(#[case] mut bottom: DynamicImage, #[case] expect_type: ECT) {
+		let top = DynamicImage::from_fn(4, 4, |x, _| if x < 2 { [255, 0, 0, 255] } else { [0, 0, 255, 0] });
+		bottom.overlay(&top).unwrap();
+		assert_eq!(bottom.extended_color_type(), expect_type);
+		assert_eq!(bottom.get_pixel(0, 0).0, [255, 0, 0, 255], "red drawn on top");
+		assert_eq!(bottom.get_pixel(3, 0).0, [100, 100, 100, 255], "grey shows through");
+	}
+
+	/// Grey drawn over grey needs no colour, so the layout stays as it was.
+	#[test]
+	fn overlay_of_grey_on_grey_stays_grey() {
+		let mut bottom = DynamicImage::from_fn(4, 4, |_, _| [100]);
+		let top = DynamicImage::from_fn(4, 4, |_, _| [200, 255]);
+		bottom.overlay(&top).unwrap();
+		assert_eq!(bottom.extended_color_type(), ECT::L8);
+		assert_eq!(bottom.get_pixel(0, 0).0, [200, 200, 200, 255]);
 	}
 
 	#[test]
