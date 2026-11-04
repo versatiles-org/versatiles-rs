@@ -9,7 +9,8 @@
 //!   design to keep code paths explicit.
 //! - When an image has an alpha channel but is **fully opaque**, the encoder **drops alpha** before
 //!   encoding to reduce size.
-//! - Quality boundary: `< 100` = lossy, `>= 100` = lossless, `None` defaults to 95.
+//! - Quality boundary: `< 100` = lossy, `>= 100` = lossless, `None` defaults to 95. Lossy
+//!   quality covers the alpha channel as well.
 
 use anyhow::{Context, Result, bail, ensure};
 use image::{DynamicImage, ImageBuffer};
@@ -28,7 +29,8 @@ use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 /// Encode a `DynamicImage` into a WebP [`Blob`].
 ///
 /// * `quality` — `Some(q)` selects **lossy** encoding for `q < 100` (0..=99), or **lossless** when
-///   `q >= 100`. `None` defaults to **95** (lossy).
+///   `q >= 100`. `None` defaults to **95** (lossy). A lossy quality applies to the alpha channel
+///   too, so only quality 100 keeps transparency exact.
 /// * `effort` — optional 0..=100 hint (default **80**). Higher → better compression; lower → faster.
 ///   Internally mapped to libwebp's `method` 0..=6 (0 = fastest, 6 = slowest/best).
 /// * Only 8‑bit `Rgb8`/`Rgba8` are accepted. If the input has an alpha channel but is fully opaque,
@@ -120,6 +122,11 @@ fn encode_lossy(data: &[u8], width: i32, height: i32, has_alpha: bool, quality: 
 	let mut config = WebPConfig::new().map_err(|()| anyhow::anyhow!("WebPConfigInit failed"))?;
 	config.lossless = 0;
 	config.quality = f32::from(quality);
+	// libwebp's own default is 100, which keeps the alpha channel lossless
+	// whatever `quality` says. A tile shaded through alpha, as `dem_hillshade`
+	// draws it, then hardly shrinks at all (#308). Whoever wants lossless alpha
+	// asks for quality 100, e.g. with `quality_translucent=100`.
+	config.alpha_quality = i32::from(quality);
 	// Map effort 0..=100 to libwebp method 0..=6 (effort 0 → fastest, effort 100 → best)
 	#[expect(
 		clippy::cast_possible_truncation,
@@ -292,7 +299,7 @@ mod tests {
 	/// WebP tests: lossy & lossless success cases, rejection of grey/greya inputs,
 	/// and verification that fully opaque RGBA is stored without alpha.
 	use super::*;
-	use crate::traits::DynamicImageTraitTest;
+	use crate::traits::{DynamicImageTraitConvert, DynamicImageTraitTest};
 
 	/// An effort above 100 is the best setting, as in the lossy encoder; it
 	/// used to fall through to the second best.
@@ -343,7 +350,7 @@ mod tests {
 
 	#[rstest]
 	#[case::rgb(          DynamicImage::new_test_rgb(),  false, 0.95, vec![0.9, 0.5, 1.5]     )]
-	#[case::rgba(         DynamicImage::new_test_rgba(), false, 0.75, vec![0.9, 0.5, 1.5, 0.0])]
+	#[case::rgba(         DynamicImage::new_test_rgba(), false, 0.77, vec![0.9, 0.5, 1.5, 0.2])]
 	#[case::lossless_rgb( DynamicImage::new_test_rgb(),  true,  0.04, vec![0.0, 0.0, 0.0]     )]
 	#[case::lossless_rgba(DynamicImage::new_test_rgba(), true,  0.03, vec![0.0, 0.0, 0.0, 0.0])]
 	fn webp_ok(
@@ -406,6 +413,28 @@ mod tests {
 		assert!(!blob_q95.is_empty());
 		// Lower quality should generally produce smaller files
 		assert!(blob_q50.len() < blob_q95.len());
+		Ok(())
+	}
+
+	/// A tile whose detail is all in the alpha channel, as `dem_hillshade`
+	/// draws it: black, shaded through transparency. Lossy quality has to
+	/// reach the alpha channel too, or a low quality saves next to nothing
+	/// (#308). libwebp keeps alpha lossless unless `alpha_quality` says
+	/// otherwise.
+	#[test]
+	fn lossy_quality_applies_to_the_alpha_channel() -> Result<()> {
+		#[expect(clippy::cast_possible_truncation, reason = "`% 256` always fits in u8")]
+		let img = DynamicImage::from_fn(256, 256, |x, y| {
+			let shade = (x * 3 + y * 5 + (x * y) % 37 + (x * x + y * 7) % 23) % 256;
+			[0, 0, 0, shade as u8]
+		});
+		let size = |quality: u8| encode(&img, Some(quality), None).map(|blob| blob.len());
+
+		let (low, high) = (size(20)?, size(95)?);
+		assert!(
+			low * 2 < high,
+			"quality 20 should be well under half the size of quality 95: {low} vs {high} bytes"
+		);
 		Ok(())
 	}
 
