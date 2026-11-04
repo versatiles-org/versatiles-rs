@@ -154,9 +154,9 @@ dependencies = [
 
 [[package]]
 name = "astral-tokio-tar"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f2e989b33246fe9240d39accf4dd9a01e0b6c1f3ce9dd095e0a47fa02505523"
+checksum = "821ed36daf7c40d00a7b62759f9833fb279fb7c87dd989ec0a4d626dcd8d1dca"
 dependencies = [
  "futures-core",
  "libc",
@@ -170,9 +170,9 @@ dependencies = [
 
 [[package]]
 name = "async-lock"
-version = "3.4.2"
+version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "290f7f2596bd5b78a9fec8088ccd89180d7f9f55b94b0576823bbbdc72ee8311"
+checksum = "0876700b0d007ad25d5508865a4259c3af9af6d296bf663a0d586d0bc3369f6f"
 dependencies = [
  "event-listener",
  "event-listener-strategy",
@@ -421,9 +421,9 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cc"
-version = "1.10.0"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86e055fa6e3e40ad6187ba25b6855eeb635d5271f8e0f0e1e9a5826b8d75bea0"
+checksum = "375989decec1a0fa424442bed520fa12ede43a48475ce8c7417d2c69b32b5f6b"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -544,9 +544,9 @@ dependencies = [
 
 [[package]]
 name = "crc32fast"
-version = "1.5.3"
+version = "1.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ba106e844045ddc02c20768ac4b0b7cb45f2cc2ecbd833ac9f5dacb183c2055"
+checksum = "5f97d3416d5337d15c4b0d78c8c91df922ca143f57ec20e2d1c188333047ef04"
 dependencies = [
  "cfg-if",
 ]
@@ -1108,9 +1108,9 @@ dependencies = [
 
 [[package]]
 name = "h3o"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fb2db7abbf5a95268cfb53ee6c2d4c02894323e1d3e1d7b300595eee61c482c"
+checksum = "e09e90732a210d62fb37ce0452cac2b999aeff4ebd1998b53cf45290175b39b5"
 dependencies = [
  "ahash",
  "either",
@@ -3395,7 +3395,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "versatiles"
-version = "5.5.0"
+version = "5.6.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -3440,7 +3440,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_container"
-version = "5.5.0"
+version = "5.6.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -3472,7 +3472,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_core"
-version = "5.5.0"
+version = "5.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3497,7 +3497,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_derive"
-version = "5.5.0"
+version = "5.6.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3506,7 +3506,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_geometry"
-version = "5.5.0"
+version = "5.6.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -3526,7 +3526,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_image"
-version = "5.5.0"
+version = "5.6.0"
 dependencies = [
  "anyhow",
  "fast_image_resize",
@@ -3539,7 +3539,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_pipeline"
-version = "5.5.0"
+version = "5.6.0"
 dependencies = [
  "ab_glyph",
  "anyhow",

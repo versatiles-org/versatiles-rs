@@ -208,7 +208,7 @@ env_logger = { version = "0.11.11", default-features = false, features = [
 # async sources and sinks, and the sync `tar::Builder`/`tar::Archive` forced a
 # blocking bridge at every one of those boundaries. `default-features = false`
 # drops `xattr`, which this project never reads and which is unix-only.
-astral-tokio-tar = { version = "0.7.0", default-features = false }
+astral-tokio-tar = { version = "0.7.1", default-features = false }
 
 # HTTP/Server dependencies
 axum = { version = "0.8.9", default-features = false }
