@@ -132,10 +132,7 @@ impl TilesWriter for VersaTilesWriter {
 		let tilejson = reader.tilejson();
 		let zoom_min = tilejson.zoom_min().or(tile_pyramid.level_min()).unwrap_or(0);
 		let zoom_max = tilejson.zoom_max().or(tile_pyramid.level_max()).unwrap_or(zoom_min);
-		let bbox = tilejson
-			.bounds
-			.or(tile_pyramid.geo_extent())
-			.map_or_else(|| GeoBBox::new(-180.0, -85.051_13, 180.0, 85.051_13), Ok)?;
+		let bbox = tilejson.bounds.or(tile_pyramid.geo_extent()).unwrap_or(GeoBBox::WORLD);
 		let mut header = FileHeader::new(*parameters.tile_format(), tile_compression, [zoom_min, zoom_max], &bbox)?;
 
 		// Convert the header to a blob and write it

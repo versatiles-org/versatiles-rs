@@ -386,9 +386,7 @@ impl TileSink for VersaTilesSink {
 			.take()
 			.expect("output must exist — we've either early-flushed or just flushed remaining blocks");
 
-		let bbox = tilejson
-			.bounds
-			.unwrap_or_else(|| GeoBBox::new(-180.0, -85.051_13, 180.0, 85.051_13).expect("valid world bbox constants"));
+		let bbox = tilejson.bounds.unwrap_or(GeoBBox::WORLD);
 
 		// No block written (an empty sink, or only empty blocks): the running
 		// range is still its initial `[u8::MAX, 0]`.

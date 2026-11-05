@@ -66,6 +66,14 @@ pub struct GeoBBox {
 }
 
 impl GeoBBox {
+	/// The whole world as Web Mercator shows it: ±[`MAX_LON`] by ±[`MAX_LAT`].
+	pub const WORLD: GeoBBox = GeoBBox {
+		x_min: -MAX_LON,
+		y_min: -MAX_LAT,
+		x_max: MAX_LON,
+		y_max: MAX_LAT,
+	};
+
 	/// Creates a new `GeoBBox` from four `f64` values:
 	/// `west, south, east, north`.
 	///

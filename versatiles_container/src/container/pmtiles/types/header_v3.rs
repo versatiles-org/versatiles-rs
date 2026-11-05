@@ -46,7 +46,7 @@ impl HeaderV3 {
 		let bbox = tilejson
 			.bounds
 			.or_else(|| tile_pyramid.geo_extent())
-			.map_or_else(|| GeoBBox::new(-180.0, -85.051_13, 180.0, 85.051_13), Ok)?;
+			.unwrap_or(GeoBBox::WORLD);
 		let center = tilejson.center.or_else(|| tile_pyramid.geo_center());
 		let min_zoom = tilejson.zoom_min().or(tile_pyramid.level_min()).unwrap_or(0);
 		let max_zoom = tilejson
