@@ -13,17 +13,17 @@ pub fn get_spatial_ref(epsg: u32) -> Result<SpatialRef> {
 mod tests {
 	use anyhow::Result;
 	use gdal::spatial_ref::CoordTransform;
+	use versatiles_core::EARTH_RADIUS;
 
 	use super::get_spatial_ref;
 
 	// Reference values for (lon=10°, lat=50°) in EPSG:3857
-	const R: f64 = 6_378_137.0; // WGS84 semi-major
 	fn merc_x(lon_deg: f64) -> f64 {
-		R * lon_deg.to_radians()
+		EARTH_RADIUS * lon_deg.to_radians()
 	}
 	fn merc_y(lat_deg: f64) -> f64 {
 		let phi = lat_deg.to_radians();
-		R * ((std::f64::consts::FRAC_PI_4 + phi / 2.0).tan()).ln()
+		EARTH_RADIUS * ((std::f64::consts::FRAC_PI_4 + phi / 2.0).tan()).ln()
 	}
 
 	#[test]

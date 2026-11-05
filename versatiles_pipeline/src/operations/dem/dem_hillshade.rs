@@ -7,7 +7,8 @@ use imageproc::image::{DynamicImage, Rgba, RgbaImage};
 use moka::future::Cache;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use versatiles_core::{
-	ConcurrencyLimits, SharedWork, TileBBox, TileCoord, TileFormat, TileJSON, TileSchema, TileStream, bounded_number,
+	ConcurrencyLimits, SharedWork, TileBBox, TileCoord, TileFormat, TileJSON, TileSchema, TileStream, WORLD_SIZE,
+	bounded_number,
 };
 use versatiles_derive::context;
 use versatiles_image::color::HexColor;
@@ -75,10 +76,6 @@ struct Args {
 	/// DEM encoding of the source. Defaults to the encoding its tile schema implies.
 	encoding: Option<DemEncoding>,
 }
-
-/// Width of the zoom 0 world in meters, from which the ground size of a pixel
-/// follows, as in MapLibre.
-const WORLD_WIDTH_METERS: f64 = 40_075_016.685_578_5;
 
 /// Decoded heights the cache may hold, in bytes.
 const CACHE_BYTES: u64 = 512 * 1024 * 1024;
@@ -197,7 +194,7 @@ fn shade(grid: &[f32], size: u32, coord: &TileCoord, style: &Style, ramp: Option
 	let at = |x: usize, y: usize| f64::from(grid[y * side + x]);
 
 	let tiles = f64::from(1u32 << coord.level);
-	let pixel_meters = WORLD_WIDTH_METERS / tiles / f64::from(size);
+	let pixel_meters = WORLD_SIZE / tiles / f64::from(size);
 	let factor = maplibre_slope_exaggeration(coord.level) / (8.0 * pixel_meters);
 	// The prepared slope is stored as `deriv / 8 + 128 / 255` in 8 bits.
 	let (deriv_min, deriv_max) = (-8.0 * 128.0 / 255.0, 8.0 * 127.0 / 255.0);
@@ -619,7 +616,7 @@ mod tests {
 	/// shading worked out by hand for that derivative.
 	#[tokio::test]
 	async fn a_known_slope_gives_the_expected_shade() -> Result<()> {
-		let pixel = WORLD_WIDTH_METERS / f64::from(1u32 << LEVEL) / 256.0;
+		let pixel = WORLD_SIZE / f64::from(1u32 << LEVEL) / 256.0;
 		let op = hillshade(surface(DemEncoding::Terrarium, |x, _| x * 4.776), "dem_hillshade").await?;
 		let shaded = shaded_image(&op, ORIGIN, ORIGIN).await?;
 		let p = shaded.get_pixel(128, 128).0;
