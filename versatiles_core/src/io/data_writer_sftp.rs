@@ -15,28 +15,13 @@ use super::{
 	network_writer::NetworkWriter,
 	sftp_utils::{self, SshHandle},
 };
-use crate::{Blob, ByteRange};
+use crate::{Blob, ByteRange, utils::format_bytes};
 
 /// Size of the in-memory append buffer. The `.versatiles`/`pmtiles` writers
 /// append once per tile (often only a few KB); over SFTP each unbuffered write
 /// is a separate, round-trip-bound request, which collapses throughput.
 /// Coalescing appends into large writes of this size amortizes that overhead.
 const BUFFER_CAPACITY: usize = 16 * 1024 * 1024;
-
-/// Render a byte count as a human-readable string for diagnostics.
-fn format_bytes(n: u64) -> String {
-	const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
-	let mut value = n as f64;
-	let mut unit = UNITS[0];
-	for next in &UNITS[1..] {
-		if value < 1024.0 {
-			break;
-		}
-		value /= 1024.0;
-		unit = next;
-	}
-	format!("{value:.1} {unit}")
-}
 
 /// A struct that provides writing capabilities to a remote file via SFTP.
 pub struct DataWriterSftp {
@@ -284,17 +269,6 @@ impl Drop for DataWriterSftp {
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	#[test]
-	fn format_bytes_picks_the_largest_unit_below_1024() {
-		assert_eq!(format_bytes(0), "0.0 B");
-		assert_eq!(format_bytes(1023), "1023.0 B");
-		assert_eq!(format_bytes(1024), "1.0 KiB");
-		assert_eq!(format_bytes(3 * 1024 * 1024 / 2), "1.5 MiB");
-		assert_eq!(format_bytes(1 << 40), "1.0 TiB");
-		assert_eq!(format_bytes(1 << 50), "1024.0 TiB");
-		assert_eq!(format_bytes(u64::MAX), "16777216.0 TiB");
-	}
 
 	#[test]
 	fn test_path_from_url() {

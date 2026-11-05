@@ -12,6 +12,7 @@
 use std::time::Duration;
 
 use tokio::task::JoinHandle;
+use versatiles_core::utils::format_bytes;
 
 const DEFAULT_INTERVAL_SECS: u64 = 60;
 
@@ -37,18 +38,6 @@ pub fn process_rss_bytes() -> Option<u64> {
 	{
 		None
 	}
-}
-
-/// Human-readable byte count for log messages.
-fn format_bytes(n: u64) -> String {
-	const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
-	let mut value = n as f64;
-	let mut unit = 0;
-	while value >= 1024.0 && unit < UNITS.len() - 1 {
-		value /= 1024.0;
-		unit += 1;
-	}
-	format!("{value:.1} {}", UNITS[unit])
 }
 
 fn interval_secs() -> u64 {
@@ -109,14 +98,6 @@ fn start_with(secs: u64) -> Option<HeartbeatGuard> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	#[test]
-	fn test_format_bytes() {
-		assert_eq!(format_bytes(0), "0.0 B");
-		assert_eq!(format_bytes(1536), "1.5 KiB");
-		assert_eq!(format_bytes(2 * 1024 * 1024), "2.0 MiB");
-		assert_eq!(format_bytes(3 * 1024 * 1024 * 1024), "3.0 GiB");
-	}
 
 	#[test]
 	fn test_interval_from_the_variable() {
