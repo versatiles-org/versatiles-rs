@@ -28,6 +28,7 @@ use versatiles_geometry::{
 	geo::GeoFeature,
 };
 
+use super::PROGRESS_MIN_BYTES;
 use crate::{
 	PipelineFactory,
 	helpers::{
@@ -37,11 +38,6 @@ use crate::{
 	},
 	vpl::VPLNode,
 };
-
-/// Don't bother showing a progress bar for tiny inputs — the bar would
-/// flicker once and disappear. 10 MB is the smallest size where users start
-/// to notice the wait.
-const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a GeoJSON or Shapefile and emits MVT vector tiles.

@@ -18,6 +18,9 @@ use versatiles_core::WORLD_SIZE;
 /// than silently clamping — callers check the result against their own maximum.
 const MAX_ZOOM: u8 = 30;
 
+/// Cells per tile the derived minimum zoom aims for when nothing is given.
+pub const DEFAULT_MAX_CELLS_PER_TILE: u32 = 1024;
+
 /// The lowest zoom level at which a tile holds at most `max_cells_per_tile` cells.
 ///
 /// At zoom `z` a tile spans `WORLD_SIZE / 2^z` mercator meters, so it holds

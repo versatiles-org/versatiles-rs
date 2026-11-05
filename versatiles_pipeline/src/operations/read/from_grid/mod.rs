@@ -76,12 +76,12 @@ use self::{
 };
 use crate::{
 	PipelineFactory,
-	helpers::{grid_zoom::min_zoom_for_cell_size, tilejson::set_single_vector_layer},
+	helpers::{
+		grid_zoom::{DEFAULT_MAX_CELLS_PER_TILE, min_zoom_for_cell_size},
+		tilejson::set_single_vector_layer,
+	},
 	vpl::VPLNode,
 };
-
-/// Cells per tile the derived minimum zoom aims for when nothing is given.
-const DEFAULT_MAX_CELLS_PER_TILE: u32 = 1024;
 
 /// The INSPIRE id, as Eurostat, its member states and the Eurostat GridMaker
 /// publish it: `CRS3035RES1000mN2691000E4341000`.
