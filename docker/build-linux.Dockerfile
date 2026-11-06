@@ -48,6 +48,13 @@ ENV TARGET="${ARCH}-unknown-linux-${LIBC}"
 # Add Rust target
 RUN rustup target add "$TARGET"
 
+# `cargo auditable build` embeds the dependency tree in the CLI binary, so a
+# server's scanner (`cargo audit bin`, Trivy, Grype, Syft) can tell which crate
+# versions a deployed binary contains, and flag it when one gets an advisory.
+# Installed before the sources are copied, so the layer survives code changes.
+# Pinned with `--locked` for the reasons given at cargo-deb below.
+RUN cargo install cargo-auditable --version 0.7.7 --locked
+
 # Set working directory
 WORKDIR /versatiles
 
@@ -66,9 +73,9 @@ RUN if [ "$RUN_TESTS" = "true" ]; then \
 # Build CLI with static linking for musl (fully static binary)
 RUN if [ "$LIBC" = "musl" ]; then \
         RUSTFLAGS="-C target-feature=+crt-static" \
-        cargo build --package "versatiles" --bin "versatiles" --release --target "$TARGET"; \
+        cargo auditable build --package "versatiles" --bin "versatiles" --release --target "$TARGET"; \
     else \
-        cargo build --package "versatiles" --bin "versatiles" --release --target "$TARGET"; \
+        cargo auditable build --package "versatiles" --bin "versatiles" --release --target "$TARGET"; \
     fi
 RUN ./scripts/selftest-versatiles.sh "/versatiles/target/$TARGET/release/versatiles"
 

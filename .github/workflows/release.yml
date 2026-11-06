@@ -407,9 +407,18 @@ jobs:
         with:
           targets: ${{ matrix.arch }}-apple-darwin
 
+      # `cargo auditable` embeds the dependency tree in the binary, so that a
+      # scanner on the machine that runs it can match it against advisories.
+      # See docker/build-linux.Dockerfile.
+      - name: Install cargo-auditable
+        if: env.BUILD_ENABLED == 'true'
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2
+        with:
+          tool: cargo-auditable@0.7.7
+
       - name: Build CLI binary
         if: env.BUILD_ENABLED == 'true'
-        run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-apple-darwin"
+        run: cargo auditable build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-apple-darwin"
 
       # The only thing that ever executes the artifact being published. The unit
       # tests that used to run here tested dev-profile binaries; these are built
@@ -505,9 +514,18 @@ jobs:
         with:
           targets: ${{ matrix.arch }}-pc-windows-msvc
 
+      # `cargo auditable` embeds the dependency tree in the binary, so that a
+      # scanner on the machine that runs it can match it against advisories.
+      # See docker/build-linux.Dockerfile.
+      - name: Install cargo-auditable
+        if: env.BUILD_ENABLED == 'true'
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2
+        with:
+          tool: cargo-auditable@0.7.7
+
       - name: Build CLI binary
         if: env.BUILD_ENABLED == 'true'
-        run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-pc-windows-msvc"
+        run: cargo auditable build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-pc-windows-msvc"
 
       # x86_64 only: this job runs on windows-latest, which is x64, so the
       # aarch64 binary is cross-compiled and cannot be executed here. Testing it
