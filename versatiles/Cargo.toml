@@ -41,6 +41,13 @@ reqwest = { workspace = true, optional = true }
 env_logger = { workspace = true, optional = true }
 futures.workspace = true
 glob = { version = "0.3", default-features = false, optional = true }
+hyper = { version = "1.12.0", default-features = false, optional = true }
+hyper-util = { version = "0.1.21", default-features = false, optional = true, features = [
+	"server-auto",
+	"server-graceful",
+	"service",
+	"tokio",
+] }
 log.workspace = true
 mime_guess = { version = "2.0.5", default-features = false, optional = true }
 percent-encoding = { version = "2", default-features = false, optional = true }
@@ -50,6 +57,7 @@ serde_yaml_ng = "0.10.0"
 astral-tokio-tar = { workspace = true, optional = true }
 termimad = { version = "0.35.5", optional = true }
 tokio = { workspace = true, features = [
+	"net",
 	"rt-multi-thread",
 	"signal",
 	"sync",
@@ -102,6 +110,8 @@ server = [
 	"dep:axum",
 	"dep:dashmap",
 	"dep:enumset",
+	"dep:hyper",
+	"dep:hyper-util",
 	"dep:mime_guess",
 	"dep:percent-encoding",
 	"dep:regex",

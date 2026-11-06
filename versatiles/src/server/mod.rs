@@ -6,6 +6,7 @@ pub mod encoding;
 #[doc(hidden)]
 pub mod fuzzing;
 mod handlers;
+mod listener;
 mod reload;
 mod routes;
 mod sources;

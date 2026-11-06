@@ -5936,6 +5936,8 @@ dependencies = [
  "futures",
  "geo-types",
  "glob",
+ "hyper",
+ "hyper-util",
  "log",
  "mime_guess",
  "percent-encoding",

@@ -10,7 +10,8 @@
 //! `tile_server.rs` owns *lifecycle* concerns only: configuration ingestion,
 //! building the router, applying cross-cutting middlewares (CORS, backpressure,
 //! timeouts, panic catching), listening on a socket, graceful shutdown, and
-//! a tiny `/status` probe for liveness checks.
+//! a tiny `/status` probe for liveness checks. `listener` accepts and serves
+//! the connections, and limits how long a client may hold one.
 
 use std::{
 	path::Path,
@@ -40,6 +41,7 @@ use versatiles_derive::context;
 
 use super::{
 	cors,
+	listener::{self, ConnectionLimits},
 	reload::{MountedStatic, ReloadHandle},
 	routes, sources,
 };
@@ -92,6 +94,9 @@ pub struct TileServer {
 	/// How long a request may take. A field so that tests can shorten it;
 	/// everything else leaves it at [`REQUEST_TIMEOUT`].
 	request_timeout: std::time::Duration,
+	/// How many connections may be open, and how long a slow or idle client
+	/// may hold one. A field so that tests can shorten it.
+	connection_limits: ConnectionLimits,
 	/// If true, prefer faster (lower ratio) recompression when negotiating encodings.
 	minimal_recompression: bool,
 	/// `Cache-Control` sent with every served tile and static file. Validated
@@ -129,6 +134,7 @@ impl TileServer {
 			exit_signal: None,
 			shutdown_timeout: SHUTDOWN_TIMEOUT,
 			request_timeout: REQUEST_TIMEOUT,
+			connection_limits: ConnectionLimits::default(),
 			join: None,
 			minimal_recompression,
 			cache_control: Arc::from(super::handlers::DEFAULT_CACHE_CONTROL),
@@ -174,6 +180,7 @@ impl TileServer {
 			exit_signal: None,
 			shutdown_timeout: SHUTDOWN_TIMEOUT,
 			request_timeout: REQUEST_TIMEOUT,
+			connection_limits: ConnectionLimits::default(),
 			join: None,
 			minimal_recompression: config.server.minimal_recompression.unwrap_or(false),
 			cache_control: Arc::from(cache_control.as_str()),
@@ -347,7 +354,7 @@ impl TileServer {
 	///
 	/// - Idempotent: if already running, the previous instance is stopped first.
 	/// - Builds the router (`routes`), applies CORS and global protection layers,
-	///   then spawns `axum::serve(...)` with graceful shutdown support.
+	///   then spawns the accept loop in `listener`, with graceful shutdown support.
 	#[context("starting tile server")]
 	pub async fn start(&mut self) -> Result<()> {
 		// If already running, stop first to avoid port conflicts and leaked tasks.
@@ -436,17 +443,7 @@ impl TileServer {
 		let (tx, rx) = oneshot::channel::<()>();
 
 		// Spawn the server and keep a handle so we can await it on shutdown.
-		let handle = tokio::spawn(async move {
-			if let Err(err) = axum::serve(listener, router.into_make_service())
-				.with_graceful_shutdown(async {
-					rx.await.ok();
-				})
-				.await
-			{
-				// The task boundary is a good place to log; we can't bubble this up after spawn.
-				log::error!("server task exited with error: {err}");
-			}
-		});
+		let handle = tokio::spawn(listener::serve(listener, router, self.connection_limits, rx));
 
 		self.exit_signal = Some(tx);
 		self.join = Some(handle);
