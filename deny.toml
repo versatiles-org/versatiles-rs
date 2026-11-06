@@ -20,11 +20,12 @@ all-features = true
 # graph: cargo-deny's default reports them only for direct dependencies, which
 # let a transitive one reach a release unnoticed (RUSTSEC-2026-0097, `rand` 0.7
 # through `mlt-core`, until mlt-core 0.22).
-# Unmaintained crates are reported only when the workspace depends on one
-# directly: those we can act on. A transitive one is the upstream crate's
-# problem until it turns into an actual advisory.
+# Unmaintained crates are reported anywhere in the graph too. A transitive one
+# is not ours to replace, but whether it parses untrusted input is ours to
+# judge: an abandoned parser never gets the fix for the bug found next. Each
+# one is listed in `ignore` below with that judgement.
 unsound = "all"
-unmaintained = "workspace"
+unmaintained = "all"
 yanked = "deny"
 
 # Advisories consciously accepted. Every entry needs a reason and, where the fix
@@ -76,6 +77,20 @@ ignore = [
 	# `tar-codec`; drop this entry once the tar container has moved to a
 	# maintained crate.
 	{ id = "RUSTSEC-2026-0440", reason = "unmaintained, no known flaw; replace with a maintained async tar crate" },
+
+	# Transitive unmaintained crates. None of them sees untrusted input; drop
+	# an entry once the crate that pulls it in has moved on.
+	#
+	# `paste` is a proc macro, so it runs at compile time only. It comes in
+	# through `cel-interpreter` and through `rav1e` (`image`'s AVIF encoder).
+	{ id = "RUSTSEC-2024-0436", reason = "compile-time proc macro only, via cel-interpreter and rav1e" },
+	# `ttf-parser`, through `ab_glyph`, only ever parses the font bundled with
+	# the debug tile source (`from_debug/trim.ttf`), never one from input.
+	{ id = "RUSTSEC-2026-0192", reason = "parses only the bundled trim.ttf, via ab_glyph" },
+	# `unsafe-libyaml`, through `serde_yaml_ng`, parses the server's config
+	# file, which the operator writes, and the shortbread schema embedded in
+	# the binary. Neither is input from a client.
+	{ id = "RUSTSEC-2024-0449", reason = "parses only the operator's config file and an embedded schema, via serde_yaml_ng" },
 ]
 
 [licenses]
