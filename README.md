@@ -980,6 +980,27 @@ export VERSATILES_CACHE_DIR=/tmp/versatiles_cache
 versatiles serve https://download.versatiles.org/osm.versatiles
 ```
 
+### Running a Public Server
+
+`versatiles serve` protects itself from overload, but it does not tell clients apart. It applies these limits to everyone together:
+
+| Limit                        | Value | Past it                             |
+| ---------------------------- | ----- | ----------------------------------- |
+| Open connections             | 2048  | new connections wait to be accepted |
+| Requests in progress         | 256   | requests queue, then get a 503      |
+| Time to send request headers | 20 s  | the connection is closed            |
+| Idle keep-alive connection   | 20 s  | the connection is closed            |
+| Connection with no traffic   | 60 s  | the connection is closed            |
+| Time to answer one request   | 15 s  | the request gets a 503              |
+
+So a single client can still use up the shared limits. On a server that is reachable from the internet:
+
+- **Put a reverse proxy or CDN in front** (nginx, Caddy, or similar). It adds TLS, which `versatiles serve` doesn't have, and per-client rate and connection limits, which it doesn't do either. Then bind VersaTiles to the loopback interface with `--ip 127.0.0.1`, so it can only be reached through the proxy. The default, `0.0.0.0`, listens on every interface.
+- **Run it as an unprivileged user** that can read the tile files and nothing else. Ports above 1024 need no root, and the proxy can listen on 80 and 443.
+- **Raise the open-file limit** above the connection limit, for example `LimitNOFILE=8192` in a systemd unit. Many systems default to 1024.
+- **Don't serve pipelines you didn't write.** A `.vpl` can make the server fetch any URL, including ones on your local network. See [SECURITY.md](SECURITY.md).
+- **Keep it up to date.** Security fixes come as patch releases, and the release binaries can be scanned for vulnerable dependencies; see [Checking a deployed binary](SECURITY.md#checking-a-deployed-binary).
+
 ---
 
 ## GDAL support
