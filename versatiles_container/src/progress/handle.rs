@@ -105,6 +105,10 @@ pub fn install_terminal_reset_hooks() {
 		// `write(2)` syscall, then restores the default handler and re-raises
 		// the signal so the process exits with the correct status/core dump.
 		#[cfg(unix)]
+		#[expect(
+			unsafe_code,
+			reason = "installs a signal handler that only calls async-signal-safe functions; see the SAFETY notes"
+		)]
 		{
 			// SAFETY: signal handlers must be async-signal-safe.  We only call
 			// `libc::write` (which is async-signal-safe) and `AtomicBool::load`
@@ -152,6 +156,7 @@ pub fn release_terminal_reset_signals() {
 	#[cfg(unix)]
 	// SAFETY: `signal` with `SIG_DFL` installs no handler of ours; it only
 	// restores the action the process started with.
+	#[expect(unsafe_code, reason = "restores the default signal action; see the SAFETY note")]
 	unsafe {
 		libc::signal(libc::SIGTERM, libc::SIG_DFL);
 		libc::signal(libc::SIGINT, libc::SIG_DFL);
@@ -474,6 +479,7 @@ mod tests {
 		// above needs every other test to leave them alone.
 		#[cfg(unix)]
 		{
+			#[expect(unsafe_code, reason = "reads the current signal disposition; see the SAFETY note")]
 			fn current_action(signal: libc::c_int) -> libc::sighandler_t {
 				// SAFETY: a null `act` only reads the current disposition.
 				unsafe {

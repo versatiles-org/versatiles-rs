@@ -100,6 +100,10 @@ impl std::fmt::Debug for Started {
 	}
 }
 
+#[expect(
+	unsafe_code,
+	reason = "napi's `ToNapiValue` is an unsafe trait method; `env` is the one napi passed in, forwarded unchanged"
+)]
 impl ToNapiValue for Started {
 	unsafe fn to_napi_value(env: napi::sys::napi_env, val: Self) -> Result<napi::sys::napi_value> {
 		lock_hold(&val.0)?.update(&Env::from_raw(env))?;

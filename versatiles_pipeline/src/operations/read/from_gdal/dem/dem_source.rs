@@ -43,6 +43,10 @@ pub fn encode_elevation(elevation: f32, encoding: DemEncoding) -> [u8; 3] {
 
 /// Reproject the source dataset into a 1-band Float32 in-memory dataset
 /// covering the given bbox in Web Mercator (EPSG:3857).
+#[expect(
+	unsafe_code,
+	reason = "GDAL warp through its C API; the handles are owned by this function and destroyed on every path"
+)]
 fn reproject_to_float_dataset(
 	instance: &Instance,
 	width: usize,

@@ -5,6 +5,11 @@
 //! progress callback whether to go on as it works through the warp; this one
 //! answers with the request's [`CancelToken`].
 
+#![expect(
+	unsafe_code,
+	reason = "a C callback for GDAL and the pointer it gets back; see the Safety and SAFETY notes"
+)]
+
 use std::ffi::{c_char, c_int, c_void};
 
 use gdal_sys::GDALWarpOptions;

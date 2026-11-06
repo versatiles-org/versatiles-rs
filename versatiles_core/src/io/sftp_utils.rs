@@ -846,6 +846,10 @@ mod tests {
 	/// `#[serial_test::serial]`, so no other test is running.
 	struct EnvGuard(&'static str, Option<std::ffi::OsString>);
 
+	#[expect(
+		unsafe_code,
+		reason = "`set_var`/`remove_var` while no other thread reads the environment: every test using this is `#[serial_test::serial]`"
+	)]
 	impl EnvGuard {
 		fn set(key: &'static str, value: &str) -> Self {
 			let previous = std::env::var_os(key);
@@ -860,6 +864,7 @@ mod tests {
 		}
 	}
 
+	#[expect(unsafe_code, reason = "restores the variable; serial tests only, as above")]
 	impl Drop for EnvGuard {
 		fn drop(&mut self) {
 			match self.1.take() {

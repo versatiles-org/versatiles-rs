@@ -1042,6 +1042,10 @@ mod tests {
 	/// variable's prior value so a developer running with it set does not see a
 	/// spurious failure.
 	#[test]
+	#[expect(
+		unsafe_code,
+		reason = "sets an environment variable while ENV_LOCK keeps other tests out"
+	)]
 	fn tile_count_limit_env_var_is_honoured() {
 		static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 		let _guard = ENV_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);

@@ -13,6 +13,10 @@ use super::{
 };
 
 /// Reproject the source dataset into an 8-bit in-memory dataset in EPSG:3857.
+#[expect(
+	unsafe_code,
+	reason = "GDAL warp through its C API; the handles are owned by this function and destroyed on every path"
+)]
 #[context("Failed to reproject GDAL dataset to target bbox ({bbox:?}) and size {width}x{height}")]
 fn reproject_to_dataset(
 	instance: &Instance,

@@ -237,6 +237,10 @@ fn encode_size_no_blue(grid: &Grid, w: i32, h: i32, method: i32) -> usize {
 	encode_rgb_bytes(&rgb, w, h, method)
 }
 
+#[expect(
+	unsafe_code,
+	reason = "benchmark calling libwebp directly, on buffers sized from the image it was given"
+)]
 fn encode_rgb_bytes(rgb: &[u8], w: i32, h: i32, method: i32) -> usize {
 	unsafe {
 		let mut config = WebPConfig::new().unwrap();

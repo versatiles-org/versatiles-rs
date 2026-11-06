@@ -144,6 +144,10 @@ fn combined(e_raw: &[i64], w: usize, h: usize, pm: f64, se_tv: f64) -> Vec<i64> 
 }
 
 /// Encode a raw terrarium grid as lossless WebP (method 6, like production).
+#[expect(
+	unsafe_code,
+	reason = "benchmark calling libwebp directly, on buffers sized from the image it was given"
+)]
 fn encode_webp(raw: &[i64], w: i32, h: i32) -> Vec<u8> {
 	let mut rgb = Vec::with_capacity((w * h * 3) as usize);
 	for &r in raw {

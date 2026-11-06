@@ -50,6 +50,10 @@ exclude = [
 [workspace.lints.rust]
 missing_docs = "deny"
 unused_imports = "deny"
+# Every `unsafe` block, function and impl opts out of this with an `#[expect]`
+# whose reason says why it is sound, so new unsafe code is a visible decision
+# in review rather than one more block among the existing ones.
+unsafe_code = "deny"
 # `fuzzing` is set by `cargo fuzz`, and gates `versatiles::server::fuzzing`.
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(fuzzing)'] }
 

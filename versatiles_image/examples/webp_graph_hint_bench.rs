@@ -25,6 +25,10 @@ use libwebp_sys::{
 	WebPMemoryWriterInit, WebPPicture, WebPPictureFree, WebPPictureImportRGB,
 };
 
+#[expect(
+	unsafe_code,
+	reason = "benchmark calling libwebp directly, on buffers sized from the image it was given"
+)]
 fn encode_lossless_hint(
 	data: &[u8],
 	width: i32,

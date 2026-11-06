@@ -76,6 +76,10 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, effort: Option<u8>) -> 
 }
 
 /// Encode using the advanced API (WebPConfig + WebPPicture + WebPEncode).
+#[expect(
+	unsafe_code,
+	reason = "libwebp FFI. `data` comes from an 8-bit RGB(A) image buffer of `width` x `height`, so it holds the `stride * height` bytes the import reads; the picture and writer are freed on every path"
+)]
 fn webp_encode_advanced(data: &[u8], width: i32, height: i32, has_alpha: bool, config: &WebPConfig) -> Result<Blob> {
 	unsafe {
 		let mut picture = WebPPicture::new().map_err(|()| anyhow::anyhow!("WebPPictureInit failed"))?;
@@ -208,6 +212,10 @@ pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
 /// Decode a WebP [`Blob`] back into a [`DynamicImage`].
 ///
 /// Returns a decoding error if the blob is not valid WebP.
+#[expect(
+	unsafe_code,
+	reason = "libwebp FFI. Input is passed as pointer and length; the output buffer is copied by `copy_decoded_pixels` with the size the decoder reported, then freed"
+)]
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 	let data = blob.as_slice();
 	if data.is_empty() {
@@ -291,6 +299,7 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 /// `ptr` must point to a readable buffer of at least `width * height * channels`
 /// bytes, which is what `WebPDecodeRGB`/`WebPDecodeRGBA` return alongside the
 /// `width`/`height` they wrote.
+#[expect(unsafe_code, reason = "reads a buffer libwebp allocated; see `# Safety`")]
 unsafe fn copy_decoded_pixels(ptr: *const u8, width: i32, height: i32, channels: usize) -> Result<(u32, u32, Vec<u8>)> {
 	let width = u32::try_from(width).context("WebP decoder returned a negative width")?;
 	let height = u32::try_from(height).context("WebP decoder returned a negative height")?;

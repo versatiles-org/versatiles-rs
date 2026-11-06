@@ -102,6 +102,10 @@ pub fn original_blobs() -> Vec<(String, Vec<u8>)> {
 		.collect()
 }
 
+#[expect(
+	unsafe_code,
+	reason = "benchmark calling libwebp directly, on buffers sized from the image it was given"
+)]
 fn decode_webp_to_rgb(data: &[u8], label: &str) -> (Vec<u8>, i32, i32) {
 	unsafe {
 		let mut features: WebPBitstreamFeatures = std::mem::zeroed();
