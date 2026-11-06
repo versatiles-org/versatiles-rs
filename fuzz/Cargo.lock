@@ -3395,7 +3395,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "versatiles"
-version = "5.6.0"
+version = "5.7.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -3405,6 +3405,8 @@ dependencies = [
  "dashmap",
  "enumset",
  "futures",
+ "hyper",
+ "hyper-util",
  "log",
  "mime_guess",
  "percent-encoding",
@@ -3435,12 +3437,13 @@ dependencies = [
  "versatiles_container",
  "versatiles_core",
  "versatiles_geometry",
+ "versatiles_image",
  "versatiles_pipeline",
 ]
 
 [[package]]
 name = "versatiles_container"
-version = "5.6.0"
+version = "5.7.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -3459,6 +3462,7 @@ dependencies = [
  "r2d2_sqlite",
  "regex",
  "reqwest",
+ "scheduled-thread-pool",
  "tempfile",
  "terminal_size",
  "time",
@@ -3472,7 +3476,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_core"
-version = "5.6.0"
+version = "5.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3497,7 +3501,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_derive"
-version = "5.6.0"
+version = "5.7.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3506,7 +3510,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_geometry"
-version = "5.6.0"
+version = "5.7.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -3526,7 +3530,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_image"
-version = "5.6.0"
+version = "5.7.0"
 dependencies = [
  "anyhow",
  "fast_image_resize",
@@ -3539,7 +3543,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_pipeline"
-version = "5.6.0"
+version = "5.7.0"
 dependencies = [
  "ab_glyph",
  "anyhow",

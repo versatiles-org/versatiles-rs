@@ -20,6 +20,7 @@ versatiles = { path = "../versatiles", default-features = false, features = ["se
 versatiles_container = { path = "../versatiles_container" }
 versatiles_core = { path = "../versatiles_core" }
 versatiles_geometry = { path = "../versatiles_geometry" }
+versatiles_image = { path = "../versatiles_image" }
 versatiles_pipeline = { path = "../versatiles_pipeline" }
 
 # Fuzzing a parser is about what it does with bad input, and both of those are
@@ -62,6 +63,27 @@ bench = false
 [[bin]]
 name = "server_request"
 path = "fuzz_targets/server_request.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "image_decode"
+path = "fuzz_targets/image_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mbtiles_container"
+path = "fuzz_targets/mbtiles_container.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tar_container"
+path = "fuzz_targets/tar_container.rs"
 test = false
 doc = false
 bench = false

@@ -1,7 +1,7 @@
 # Fuzz targets
 
-Four parsers that consume untrusted bytes, and the request handling of the
-server, driven by [`cargo-fuzz`].
+The parsers and decoders that consume untrusted bytes, and the request handling
+of the server, driven by [`cargo-fuzz`].
 
 The 2026-09 security audit found nine input-handling bugs by hand. Four of them
 — an out-of-bounds tile index, unbounded directory recursion, a `run_length`
@@ -40,6 +40,9 @@ Targets:
 | `vpl`                  | VPL text, both parsers             |
 | `pmtiles_container`    | a `.pmtiles` file, opened and read |
 | `versatiles_container` | a `.versatiles` file, likewise     |
+| `mbtiles_container`    | an `.mbtiles` file, likewise       |
+| `tar_container`        | a `.tar` of tiles, likewise        |
+| `image_decode`         | a WebP, PNG or JPEG raster tile    |
 | `server_request`       | a request path and its headers     |
 
 A time-boxed run, which is what a scheduled job wants:
@@ -78,7 +81,7 @@ per-PR run finds nothing new on most PRs and slows every one of them down. The
 corpus is what makes successive runs cumulative.
 
 That is what the `Linux: Fuzz` job in `.github/workflows/ci.yml` does: it runs
-all five targets weekly (or on manual dispatch) and carries
+every target for ten minutes weekly (or on manual dispatch) and carries
 `fuzz/corpus/<target>/` between runs in the Actions cache.
 
 `corpus/` and `artifacts/` are not committed. `seeds/<target>/` is: inputs a
