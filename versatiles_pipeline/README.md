@@ -459,7 +459,7 @@ The shading is MapLibre's default `standard` method, including the slope exagger
 
 With a `ramp`, each pixel is the colour for its elevation with the shading drawn over it, which gives a coloured relief in one step. The ramp is written as in `dem_colorize`, and `ramp=default` is its hypsometric tint. A ramp with only opaque stops gives RGB tiles, and a JPEG source stays JPEG; one with a translucent stop gives RGBA tiles, and a JPEG source becomes PNG.
 
-The slopes at a tile's edge are computed with the pixels of the adjacent tiles, so there are no seams; the tiles are read in chunks with a one-tile ring around them, and decoded heights are cached for the neighbours that follow. Across the antimeridian the neighbour wraps around. Where there is none, at the poles or the edge of the data, the edge pixels are repeated.
+The slopes at a tile's edge are computed with the pixels of the adjacent tiles, so there are no seams. The tiles are read in chunks, several ahead of the ones being shaded, and the edges of every tile are kept for the chunks next to it. Across the antimeridian the neighbour wraps around. Where there is none, at the poles or the edge of the data, the edge pixels are repeated.
 
 ### Parameters
 

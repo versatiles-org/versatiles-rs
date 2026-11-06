@@ -1,15 +1,22 @@
-use std::{f64::consts::PI, sync::Arc};
+use std::{
+	collections::{HashMap, HashSet},
+	f64::consts::PI,
+	sync::{
+		Arc, Mutex,
+		atomic::{AtomicU64, Ordering},
+	},
+};
 
 use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, future::try_join_all, stream};
 use imageproc::image::{DynamicImage, Rgba, RgbaImage};
 use moka::{future::Cache, policy::EvictionPolicy};
-use tokio::sync::Semaphore;
+use tokio::sync::{Semaphore, watch};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use versatiles_core::{
-	ConcurrencyLimits, SharedWork, TileBBox, TileCoord, TileFormat, TileJSON, TileSchema, TileSize, TileStream,
-	WORLD_SIZE, bounded_number,
+	CancelToken, ConcurrencyLimits, SharedWork, TileBBox, TileCoord, TileFormat, TileJSON, TileSchema, TileSize,
+	TileStream, WORLD_SIZE, bounded_number,
 };
 use versatiles_derive::context;
 use versatiles_image::color::HexColor;
@@ -52,10 +59,11 @@ bounded_number! {
 /// translucent stop gives RGBA tiles, and a JPEG source becomes PNG.
 ///
 /// The slopes at a tile's edge are computed with the pixels of the adjacent
-/// tiles, so there are no seams; the tiles are read in chunks with a one-tile
-/// ring around them, and decoded heights are cached for the neighbours that
-/// follow. Across the antimeridian the neighbour wraps around. Where there is
-/// none, at the poles or the edge of the data, the edge pixels are repeated.
+/// tiles, so there are no seams. The tiles are read in chunks, several ahead
+/// of the ones being shaded, and the edges of every tile are kept for the
+/// chunks next to it. Across the antimeridian the neighbour wraps around.
+/// Where there is none, at the poles or the edge of the data, the edge pixels
+/// are repeated.
 struct Args {
 	/// Direction the light comes from, in degrees clockwise from north. Defaults to `335`.
 	#[vpl(default = "335")]
@@ -78,17 +86,29 @@ struct Args {
 	encoding: Option<DemEncoding>,
 }
 
-/// Decoded heights the cache may hold, in bytes.
+/// Decoded heights the cache may hold, in bytes: the chunks held, with room
+/// to spare.
 const CACHE_BYTES: u64 = 512 * 1024 * 1024;
 
-/// Tiles one side of a chunk spans at 256 px: 16 × 16 tiles plus their ring
-/// are 324 decoded tiles, about 85 MB. Larger tiles get smaller chunks.
+/// Edges of decoded tiles the cache may hold, in bytes: 8 KB a tile at 512 px.
+const EDGES_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Tiles one side of a chunk spans at 256 px: 16 × 16 decoded tiles are
+/// 64 MiB. Larger tiles get smaller chunks of the same size in bytes.
 const CHUNK_TILES_AT_256: u32 = 16;
 
-/// Chunks worked on at once, across all streams of the operation: a consumer
-/// that opens many streams at once, such as a writer buffering small blocks,
-/// would otherwise prefetch more rings than the cache holds.
-const CHUNKS_IN_FLIGHT: usize = 2;
+/// Chunks shaded at once in a stream.
+const CHUNKS_SHADING: usize = 2;
+
+/// Chunks read ahead of the ones being shaded, so that reading and shading
+/// overlap. Without it, shading waited for every chunk to arrive, and the
+/// network for every chunk to be shaded (#310).
+const CHUNKS_AHEAD: usize = 4;
+
+/// Chunks whose heights are held at once, across all streams of the
+/// operation: a consumer that opens many streams at once, such as a writer
+/// buffering small blocks, would otherwise read more than the cache holds.
+const CHUNKS_HELD: usize = CHUNKS_SHADING + CHUNKS_AHEAD;
 
 /// A light and its colours, as MapLibre's `standard` hillshade takes them.
 #[derive(Clone, Copy, Debug)]
@@ -148,7 +168,7 @@ impl Heights {
 	/// `(size + 2)²` of them. `neighbours[dy + 1][dx + 1]` is the tile `dx`
 	/// across and `dy` down; where one is missing or of another size, the edge
 	/// of this tile is repeated, as MapLibre does before it can backfill.
-	fn with_border(&self, neighbours: &[[Option<Arc<Heights>>; 3]; 3]) -> Vec<f32> {
+	fn with_border(&self, neighbours: &[[Option<Arc<Edges>>; 3]; 3]) -> Vec<f32> {
 		let size = self.size;
 		let side = size + 2;
 		// Where row or column `g` of the bordered grid comes from: which tile
@@ -176,6 +196,50 @@ impl Heights {
 			}
 		}
 		grid
+	}
+}
+
+/// The outermost heights of a tile: all that shading its neighbours takes from
+/// it, and a 128th of its heights at 512 px.
+#[derive(Debug)]
+struct Edges {
+	size: u32,
+	top: Vec<f32>,
+	bottom: Vec<f32>,
+	left: Vec<f32>,
+	right: Vec<f32>,
+}
+
+impl Edges {
+	fn of(heights: &Heights) -> Edges {
+		let size = heights.size;
+		let last = size.saturating_sub(1);
+		Edges {
+			size,
+			top: (0..size).map(|x| heights.at(x, 0)).collect(),
+			bottom: (0..size).map(|x| heights.at(x, last)).collect(),
+			left: (0..size).map(|y| heights.at(0, y)).collect(),
+			right: (0..size).map(|y| heights.at(last, y)).collect(),
+		}
+	}
+
+	/// The height at `(x, y)`, which lies on the edge.
+	fn at(&self, x: u32, y: u32) -> f32 {
+		let last = self.size - 1;
+		if y == 0 {
+			self.top[x as usize]
+		} else if y == last {
+			self.bottom[x as usize]
+		} else if x == 0 {
+			self.left[y as usize]
+		} else {
+			debug_assert_eq!(x, last, "({x}, {y}) is not on the edge");
+			self.right[y as usize]
+		}
+	}
+
+	fn weight(&self) -> u32 {
+		16 * self.size + 64
 	}
 }
 
@@ -297,11 +361,47 @@ struct Inner {
 	tile_size: TileSize,
 	/// Decoded source tiles; `None` is a tile the source lacks.
 	heights: Cache<TileCoord, Option<Arc<Heights>>>,
+	/// The edges of decoded source tiles, kept long after their heights, so
+	/// that a chunk finds the edges of the chunks before it rather than reading
+	/// them again; `None` is a tile the source lacks.
+	edges: Cache<TileCoord, Option<Arc<Edges>>>,
 	/// Which requests wait for which entry of `heights` (#265).
 	shared: SharedWork<TileCoord>,
-	/// Permits for the chunks worked on at once, `CHUNKS_IN_FLIGHT` of them.
-	chunks: Semaphore,
+	/// Permits for the chunks whose heights are held, `CHUNKS_HELD` of them.
+	chunks: Arc<Semaphore>,
+	/// The chunks being read, by the cell of the chunk grid they lie in: a
+	/// tile in one of them is waited for rather than read a second time.
+	reading: Mutex<HashMap<(u8, u32, u32), Vec<ChunkRead>>>,
+	/// Numbers the entries of `reading`.
+	reads_started: AtomicU64,
 	runtime: TilesRuntime,
+}
+
+/// A chunk being read, which those waiting for it watch.
+struct ChunkRead {
+	id: u64,
+	bbox: TileBBox,
+	done: watch::Receiver<()>,
+}
+
+/// Registers a chunk as being read, until it is dropped.
+struct Reading {
+	operation: Operation,
+	cell: (u8, u32, u32),
+	id: u64,
+	_done: watch::Sender<()>,
+}
+
+impl Drop for Reading {
+	fn drop(&mut self) {
+		let mut reading = self.operation.inner.reading.lock().expect("poisoned mutex");
+		if let Some(reads) = reading.get_mut(&self.cell) {
+			reads.retain(|read| read.id != self.id);
+			if reads.is_empty() {
+				reading.remove(&self.cell);
+			}
+		}
+	}
 }
 
 impl std::fmt::Debug for Operation {
@@ -362,6 +462,10 @@ impl Operation {
 		});
 		metadata.update_tilejson(&mut tilejson);
 
+		// Both caches are LRU, not moka's default TinyLFU: a tile just read has
+		// been used less often than the tiles of finished chunks, so TinyLFU
+		// would turn it away once the cache is full, and its chunk would read it
+		// again.
 		Ok(Operation {
 			inner: Arc::new(Inner {
 				source,
@@ -372,9 +476,6 @@ impl Operation {
 				encoding,
 				tile_size,
 				heights: Cache::builder()
-					// LRU, not the default TinyLFU: a tile just prefetched has been used
-					// less often than the tiles of finished chunks, so TinyLFU would turn
-					// it away once the cache is full, and its chunk would read it again.
 					.max_capacity(cache_bytes)
 					.eviction_policy(EvictionPolicy::lru())
 					.weigher(|_, heights: &Option<Arc<Heights>>| {
@@ -383,8 +484,15 @@ impl Operation {
 							.map_or(256, |h| u32::try_from(h.meters.len() * 4).unwrap_or(u32::MAX))
 					})
 					.build(),
+				edges: Cache::builder()
+					.max_capacity(EDGES_BYTES)
+					.eviction_policy(EvictionPolicy::lru())
+					.weigher(|_, edges: &Option<Arc<Edges>>| edges.as_ref().map_or(256, |e| e.weight()))
+					.build(),
 				shared: SharedWork::new(),
-				chunks: Semaphore::new(CHUNKS_IN_FLIGHT),
+				chunks: Arc::new(Semaphore::new(CHUNKS_HELD)),
+				reading: Mutex::default(),
+				reads_started: AtomicU64::new(0),
 				runtime: factory.runtime(),
 			}),
 		})
@@ -411,7 +519,18 @@ impl Operation {
 			.await
 	}
 
-	/// The hillshade tile at `coord`, from its heights and its neighbours'.
+	/// The edges of the source tile at `coord`.
+	async fn edges(&self, coord: TileCoord) -> Result<Option<Arc<Edges>>> {
+		if let Some(edges) = self.inner.edges.get(&coord).await {
+			return Ok(edges);
+		}
+		let edges = self.heights(coord).await?.map(|heights| Arc::new(Edges::of(&heights)));
+		self.inner.edges.insert(coord, edges.clone()).await;
+		Ok(edges)
+	}
+
+	/// The hillshade tile at `coord`, from its heights and its neighbours'
+	/// edges.
 	async fn shaded(&self, coord: TileCoord) -> Result<Option<Tile>> {
 		let Some(center) = self.heights(coord).await? else {
 			return Ok(None);
@@ -421,14 +540,14 @@ impl Operation {
 		let coords: Vec<Option<TileCoord>> = neighbour_coords(&coord).into_iter().flatten().collect();
 		let found = try_join_all(coords.iter().map(|c| async move {
 			match c {
-				Some(c) => self.heights(*c).await,
+				Some(c) => self.edges(*c).await,
 				None => Ok(None),
 			}
 		}))
 		.await?;
-		let mut neighbours: [[Option<Arc<Heights>>; 3]; 3] = Default::default();
-		for (i, heights) in found.into_iter().enumerate() {
-			neighbours[i / 3][i % 3] = heights;
+		let mut neighbours: [[Option<Arc<Edges>>; 3]; 3] = Default::default();
+		for (i, edges) in found.into_iter().enumerate() {
+			neighbours[i / 3][i % 3] = edges;
 		}
 
 		let inner = Arc::clone(&self.inner);
@@ -449,54 +568,180 @@ impl Operation {
 		Ok(Some(Tile::from_image(image, format)?))
 	}
 
-	/// Reads `chunk` and the ring of tiles around it with one request to the
-	/// source, and caches the heights of every tile not cached yet, so that
-	/// shading the chunk asks the source for nothing more.
-	async fn prefetch(&self, chunk: TileBBox) -> Result<()> {
-		let max = (1u32 << chunk.level()) - 1;
-		let ring = TileBBox::from_min_and_max(
-			chunk.level(),
-			chunk.x_min()?.saturating_sub(1),
-			chunk.y_min()?.saturating_sub(1),
-			(chunk.x_max()? + 1).min(max),
-			(chunk.y_max()? + 1).min(max),
-		)?;
-		let encoding = self.inner.encoding;
-		let mut decoded = self
+	/// The cell of the chunk grid `coord` lies in.
+	fn cell(&self, coord: &TileCoord) -> (u8, u32, u32) {
+		let side = self.chunk_tiles_per_side();
+		(coord.level, coord.x / side, coord.y / side)
+	}
+
+	/// Registers `chunk` as being read, until the guard is dropped.
+	fn start_reading(&self, chunk: TileBBox) -> Option<Reading> {
+		let first = chunk.iter_coords().next()?;
+		let cell = self.cell(&first);
+		let id = self.inner.reads_started.fetch_add(1, Ordering::Relaxed);
+		let (done, watched) = watch::channel(());
+		let read = ChunkRead {
+			id,
+			bbox: chunk,
+			done: watched,
+		};
+		self
 			.inner
-			.source
-			.tile_stream(ring)
-			.await?
-			.map_parallel_try(move |coord, tile| Heights::decode(coord, tile, encoding));
-		let mut arrived = std::collections::HashSet::new();
-		while let Some((coord, heights)) = decoded.next().await {
-			arrived.insert(coord);
-			if !self.inner.heights.contains_key(&coord) {
-				self.inner.heights.insert(coord, Some(Arc::new(heights?))).await;
+			.reading
+			.lock()
+			.expect("poisoned mutex")
+			.entry(cell)
+			.or_default()
+			.push(read);
+		Some(Reading {
+			operation: self.clone(),
+			cell,
+			id,
+			_done: done,
+		})
+	}
+
+	/// What the chunks being read hold of `coords`, to wait for.
+	fn reads_of(&self, coords: &[TileCoord]) -> Vec<watch::Receiver<()>> {
+		let reading = self.inner.reading.lock().expect("poisoned mutex");
+		let mut ids = HashSet::new();
+		let mut found = Vec::new();
+		for coord in coords {
+			for read in reading.get(&self.cell(coord)).into_iter().flatten() {
+				if read.bbox.includes_coord(coord) && ids.insert(read.id) {
+					found.push(read.done.clone());
+				}
 			}
 		}
-		let ring_coords: Vec<TileCoord> = ring.iter_coords().collect();
-		for coord in ring_coords {
-			if !arrived.contains(&coord) && !self.inner.heights.contains_key(&coord) {
-				self.inner.heights.insert(coord, None).await;
+		found
+	}
+
+	/// The tiles around `chunk` whose edges shading it takes.
+	fn ring(chunk: &TileBBox) -> Vec<TileCoord> {
+		let mut ring = HashSet::new();
+		for coord in chunk.iter_coords() {
+			for neighbour in neighbour_coords(&coord).into_iter().flatten().flatten() {
+				if !chunk.includes_coord(&neighbour) {
+					ring.insert(neighbour);
+				}
 			}
 		}
+		ring.into_iter().collect()
+	}
+
+	/// Reads `chunk` with one request to the source and caches its heights and
+	/// edges, then reads the edges of its ring, except those of the chunk read
+	/// next, `next`, and of the chunks being read: shading the chunk waits for
+	/// those. The rest, typically a row along the bottom, is one request more.
+	///
+	/// `reading` registers the chunk as being read until this returns; it is
+	/// taken before the task that runs this is spawned, so that the chunk
+	/// before this one cannot miss it.
+	async fn prefetch(&self, chunk: TileBBox, next: Option<TileBBox>, reading: Option<Reading>) -> Result<()> {
+		let inner = &self.inner;
+		let _reading = reading;
+
+		if chunk.iter_coords().any(|coord| !inner.heights.contains_key(&coord)) {
+			let encoding = inner.encoding;
+			let mut decoded = inner
+				.source
+				.tile_stream(chunk)
+				.await?
+				.map_parallel_try(move |coord, tile| Heights::decode(coord, tile, encoding));
+			let mut arrived = HashSet::new();
+			while let Some((coord, heights)) = decoded.next().await {
+				arrived.insert(coord);
+				if !inner.heights.contains_key(&coord) {
+					let heights = Arc::new(heights?);
+					inner.edges.insert(coord, Some(Arc::new(Edges::of(&heights)))).await;
+					inner.heights.insert(coord, Some(heights)).await;
+				}
+			}
+			let absent: Vec<TileCoord> = chunk.iter_coords().filter(|coord| !arrived.contains(coord)).collect();
+			for coord in absent {
+				if !inner.heights.contains_key(&coord) {
+					inner.heights.insert(coord, None).await;
+					inner.edges.insert(coord, None).await;
+				}
+			}
+		}
+
+		let ring: Vec<TileCoord> = Self::ring(&chunk)
+			.into_iter()
+			.filter(|coord| !next.is_some_and(|next| next.includes_coord(coord)))
+			.collect();
+		self.read_edges(ring, false).await
+	}
+
+	/// Caches the edges of `coords`, reading those not cached yet in as few
+	/// requests as their arrangement allows. A tile in a chunk being read is
+	/// waited for if `wait` is set, and otherwise left to that chunk.
+	async fn read_edges(&self, coords: Vec<TileCoord>, wait: bool) -> Result<()> {
+		let inner = &self.inner;
+		let mut wanted: Vec<TileCoord> = coords
+			.into_iter()
+			.filter(|coord| !inner.edges.contains_key(coord))
+			.collect();
+		let reads = self.reads_of(&wanted);
+		if wait {
+			for mut read in reads {
+				// Errs once the read is over, which is what is waited for.
+				let _ = read.changed().await;
+			}
+		} else if !reads.is_empty() {
+			let reading = inner.reading.lock().expect("poisoned mutex");
+			wanted.retain(|coord| {
+				!reading
+					.get(&self.cell(coord))
+					.is_some_and(|reads| reads.iter().any(|read| read.bbox.includes_coord(coord)))
+			});
+		}
+
+		let mut unread = Vec::new();
+		for coord in wanted {
+			if inner.edges.contains_key(&coord) {
+				continue;
+			}
+			match inner.heights.get(&coord).await {
+				Some(heights) => {
+					let edges = heights.map(|heights| Arc::new(Edges::of(&heights)));
+					inner.edges.insert(coord, edges).await;
+				}
+				None => unread.push(coord),
+			}
+		}
+
+		let encoding = inner.encoding;
+		try_join_all(strips(&unread)?.into_iter().map(|strip| async move {
+			let mut decoded = inner
+				.source
+				.tile_stream(strip)
+				.await?
+				.map_parallel_try(move |coord, tile| Heights::decode(coord, tile, encoding).map(|h| Edges::of(&h)));
+			let mut arrived = HashSet::new();
+			while let Some((coord, edges)) = decoded.next().await {
+				arrived.insert(coord);
+				inner.edges.insert(coord, Some(Arc::new(edges?))).await;
+			}
+			let absent: Vec<TileCoord> = strip.iter_coords().filter(|coord| !arrived.contains(coord)).collect();
+			for coord in absent {
+				inner.edges.insert(coord, None).await;
+			}
+			Ok::<_, anyhow::Error>(())
+		}))
+		.await?;
 		Ok(())
 	}
 
-	/// The hillshade tiles of `chunk`.
-	async fn chunk_tiles(&self, chunk: TileBBox) -> Vec<(TileCoord, Tile)> {
+	/// The hillshade tiles of `chunk`, read already.
+	async fn shade_chunk(&self, chunk: TileBBox) -> Vec<(TileCoord, Tile)> {
 		let runtime = &self.inner.runtime;
-		// Held until the chunk is shaded, so that its ring stays in the cache
-		// until it is used. The semaphore is never closed.
-		let Ok(_permit) = self.inner.chunks.acquire().await else {
-			return Vec::new();
-		};
-		if let Err(error) = self.prefetch(chunk).await {
-			runtime.record_error(&format!("dem_hillshade reading {chunk:?}"), &error);
+		if let Err(error) = self.read_edges(Self::ring(&chunk), true).await {
+			runtime.record_error(&format!("dem_hillshade reading around {chunk:?}"), &error);
 			return Vec::new();
 		}
-		stream::iter(chunk.iter_coords().collect::<Vec<_>>())
+		let coords: Vec<TileCoord> = chunk.iter_coords().collect();
+		let tiles = stream::iter(coords.clone())
 			.map(|coord| async move { (coord, self.shaded(coord).await) })
 			.buffer_unordered(ConcurrencyLimits::default().cpu_bound)
 			.filter_map(|(coord, result)| async move {
@@ -509,7 +754,14 @@ impl Operation {
 				}
 			})
 			.collect()
-			.await
+			.await;
+		// Their neighbours take their edges, from the other cache. Left in this
+		// one, they would look used more recently than the chunks read ahead,
+		// and LRU would drop those instead.
+		for coord in coords {
+			self.inner.heights.invalidate(&coord).await;
+		}
+		tiles
 	}
 
 	/// Tiles one side of a chunk spans, smaller for larger tiles so that a
@@ -518,6 +770,44 @@ impl Operation {
 		let size = u32::from(self.inner.tile_size.size());
 		(CHUNK_TILES_AT_256 * 256 / size.max(1)).clamp(4, CHUNK_TILES_AT_256)
 	}
+}
+
+/// Boxes that cover `coords` and nothing else: runs side by side in a row,
+/// then runs one above the other in a column for the rest. The ring of a
+/// chunk comes out as up to four strips.
+fn strips(coords: &[TileCoord]) -> Result<Vec<TileBBox>> {
+	let mut sorted = coords.to_vec();
+	sorted.sort_by_key(|coord| (coord.level, coord.y, coord.x));
+	sorted.dedup();
+
+	let mut strips = Vec::new();
+	let mut single = Vec::new();
+	for run in sorted.chunk_by(|a, b| a.level == b.level && a.y == b.y && a.x + 1 == b.x) {
+		let (first, last) = (run[0], run[run.len() - 1]);
+		if run.len() > 1 {
+			strips.push(TileBBox::from_min_and_max(
+				first.level,
+				first.x,
+				first.y,
+				last.x,
+				last.y,
+			)?);
+		} else {
+			single.push(first);
+		}
+	}
+	single.sort_by_key(|coord| (coord.level, coord.x, coord.y));
+	for run in single.chunk_by(|a, b| a.level == b.level && a.x == b.x && a.y + 1 == b.y) {
+		let (first, last) = (run[0], run[run.len() - 1]);
+		strips.push(TileBBox::from_min_and_max(
+			first.level,
+			first.x,
+			first.y,
+			last.x,
+			last.y,
+		)?);
+	}
+	Ok(strips)
 }
 
 #[async_trait]
@@ -538,15 +828,55 @@ impl TileSource for Operation {
 		self.shaded(*coord).await
 	}
 
+	/// Reads up to `CHUNKS_AHEAD` chunks ahead of the `CHUNKS_SHADING` being
+	/// shaded, each in a task of its own so that it goes on while the stream
+	/// waits for shading.
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		let chunks: Vec<TileBBox> = bbox.iter_grid(self.chunk_tiles_per_side()).collect();
-		let this = self.clone();
-		let tiles = stream::iter(chunks)
-			.map(move |chunk| {
-				let this = this.clone();
-				async move { this.chunk_tiles(chunk).await }
+		let jobs: Vec<(TileBBox, Option<TileBBox>)> = chunks
+			.iter()
+			.enumerate()
+			.map(|(i, chunk)| (*chunk, chunks.get(i + 1).copied()))
+			.collect();
+
+		let reader = self.clone();
+		let shader = self.clone();
+		let tiles = stream::iter(jobs)
+			// One chunk after the other, so that a stream waiting for a permit
+			// holds permits only of chunks before the one it waits for.
+			.then(move |(chunk, next)| {
+				let this = reader.clone();
+				async move {
+					let permit = Arc::clone(&this.inner.chunks).acquire_owned().await;
+					let reading = this.start_reading(chunk);
+					let read =
+						tokio::spawn(CancelToken::current().scope(async move { this.prefetch(chunk, next, reading).await }));
+					(chunk, permit, read)
+				}
 			})
-			.buffer_unordered(CHUNKS_IN_FLIGHT)
+			.map(|(chunk, permit, read)| async move { (chunk, permit, read.await) })
+			.buffered(CHUNKS_AHEAD)
+			.map(move |(chunk, permit, read)| {
+				let this = shader.clone();
+				async move {
+					// Held until the chunk is shaded, so that its heights stay in
+					// the cache until they are used. The semaphore is never closed.
+					let Ok(_permit) = permit else {
+						return Vec::new();
+					};
+					let error = match read {
+						Ok(Ok(())) => return this.shade_chunk(chunk).await,
+						Ok(Err(error)) => error,
+						Err(error) => anyhow!("the reading task failed: {error}"),
+					};
+					this
+						.inner
+						.runtime
+						.record_error(&format!("dem_hillshade reading {chunk:?}"), &error);
+					Vec::new()
+				}
+			})
+			.buffer_unordered(CHUNKS_SHADING)
 			.flat_map(stream::iter);
 		Ok(TileStream::from_stream(Box::pin(tiles)))
 	}
@@ -781,85 +1111,151 @@ mod tests {
 	/// can fill the cache cheaply.
 	const COUNTED_SIZE: u32 = 64;
 
-	/// The hillshade of 3 × 3 chunks of a source that counts its reads in
-	/// `reads`, with a cache that holds the rings of the chunks in flight and one
-	/// more: about 2.3 times less than the chunks need together.
-	async fn counted_over_small_cache(reads: &'static AtomicU32) -> Result<(Operation, TileBBox)> {
-		const CHUNK: u32 = CHUNK_TILES_AT_256;
-		let bbox = TileBBox::from_min_and_max(8, 64, 64, 64 + 3 * CHUNK - 1, 64 + 3 * CHUNK - 1)?;
-		let mut source = DummyImageSource::new(
-			move |coord| {
-				reads.fetch_add(1, Ordering::Relaxed);
-				let mut image = RgbImage::new(COUNTED_SIZE, COUNTED_SIZE);
-				for (x, y, pixel) in image.enumerate_pixels_mut() {
-					pixel.0 = encode(DemEncoding::Terrarium, f64::from(x + y + coord.x));
-				}
-				Tile::from_image(DynamicImage::ImageRgb8(image), TileFormat::PNG).ok()
-			},
-			TileFormat::PNG,
-			Some(TilePyramid::from_tile_coords(bbox.iter_coords())),
-		)?;
-		source.tilejson_mut().tile_schema = Some(super::super::encoding::to_tile_schema(DemEncoding::Terrarium));
+	/// Chunks along each side of the area of `Counted`.
+	const COUNTED_CHUNKS: u32 = 4;
 
-		let ring_bytes = u64::from((CHUNK + 2) * (CHUNK + 2) * COUNTED_SIZE * COUNTED_SIZE * 4);
-		let op = Operation::build_with_cache(
-			VPLNode::try_from_str("dem_hillshade")?,
-			Box::new(source),
-			&PipelineFactory::new_dummy(),
-			ring_bytes * (CHUNKS_IN_FLIGHT as u64 + 1),
-		)
-		.await?;
-		Ok((op, bbox))
+	/// What a `Counted` source has seen.
+	#[derive(Debug)]
+	struct Counts {
+		/// Tiles handed out.
+		reads: AtomicU32,
+		/// Requests open now, and the most at once.
+		open: AtomicU32,
+		widest: AtomicU32,
 	}
 
-	/// Asserts that `counted_over_small_cache` read each tile about once per
-	/// chunk ring it lies in: along each axis the rings span 17 + 18 + 17 tiles,
-	/// cut off where the source ends. moka keeps recency lazily and may drop
-	/// some of it under load, so a few more reads are allowed; a cache that
-	/// lost the rings it still needed read 50 to 85 % more.
-	fn assert_reads_once_per_ring(reads: &AtomicU32) {
-		let side = 3 * CHUNK_TILES_AT_256 + 4;
-		let minimum = side * side;
-		let reads = reads.load(Ordering::Relaxed);
-		assert!(
-			(minimum..=minimum + minimum / 20).contains(&reads),
-			"{reads} reads, expected {minimum} and at most 5 % more"
-		);
+	impl Counts {
+		const fn new() -> Self {
+			Counts {
+				reads: AtomicU32::new(0),
+				open: AtomicU32::new(0),
+				widest: AtomicU32::new(0),
+			}
+		}
 	}
 
-	/// A stream over more tiles than the cache holds reads each tile once per
-	/// chunk ring it lies in, and no more: the cache keeps what the chunks in
-	/// flight still need, rather than the tiles of finished chunks.
+	/// A source of 4 × 4 chunks of tiles that counts what it is asked for.
+	/// Each request takes a moment, as with a remote source.
+	#[derive(Debug)]
+	struct Counted {
+		inner: DummyImageSource,
+		counts: &'static Counts,
+	}
+
+	impl Counted {
+		fn bbox() -> TileBBox {
+			let side = COUNTED_CHUNKS * CHUNK_TILES_AT_256;
+			TileBBox::from_min_and_max(8, 64, 64, 64 + side - 1, 64 + side - 1).unwrap()
+		}
+
+		/// The hillshade of this source, with a cache that holds the chunks
+		/// held and one more: about 2.3 times less than they need together.
+		async fn hillshade(counts: &'static Counts) -> Result<Operation> {
+			let mut inner = DummyImageSource::new(
+				move |coord| {
+					counts.reads.fetch_add(1, Ordering::Relaxed);
+					let mut image = RgbImage::new(COUNTED_SIZE, COUNTED_SIZE);
+					for (x, y, pixel) in image.enumerate_pixels_mut() {
+						pixel.0 = encode(DemEncoding::Terrarium, f64::from(x + y + coord.x));
+					}
+					Tile::from_image(DynamicImage::ImageRgb8(image), TileFormat::PNG).ok()
+				},
+				TileFormat::PNG,
+				Some(TilePyramid::from_tile_coords(Self::bbox().iter_coords())),
+			)?;
+			inner.tilejson_mut().tile_schema = Some(super::super::encoding::to_tile_schema(DemEncoding::Terrarium));
+
+			let chunk_bytes = u64::from(CHUNK_TILES_AT_256 * CHUNK_TILES_AT_256 * COUNTED_SIZE * COUNTED_SIZE * 4);
+			let op = Operation::build_with_cache(
+				VPLNode::try_from_str("dem_hillshade")?,
+				Box::new(Counted { inner, counts }),
+				&PipelineFactory::new_dummy(),
+				chunk_bytes * (CHUNKS_HELD as u64 + 1),
+			)
+			.await?;
+			// Building measures the tile size, which the source does not declare.
+			counts.reads.store(0, Ordering::Relaxed);
+			counts.widest.store(0, Ordering::Relaxed);
+			Ok(op)
+		}
+	}
+
+	#[async_trait]
+	impl TileSource for Counted {
+		fn source_type(&self) -> Arc<SourceType> {
+			self.inner.source_type()
+		}
+		fn metadata(&self) -> &TileSourceMetadata {
+			self.inner.metadata()
+		}
+		fn tilejson(&self) -> &TileJSON {
+			self.inner.tilejson()
+		}
+		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+			let open = self.counts.open.fetch_add(1, Ordering::Relaxed) + 1;
+			self.counts.widest.fetch_max(open, Ordering::Relaxed);
+			tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+			let tiles = self.inner.tile_stream(bbox).await?.to_vec().await;
+			self.counts.open.fetch_sub(1, Ordering::Relaxed);
+			Ok(TileStream::from_vec(tiles))
+		}
+	}
+
+	/// A stream reads each tile once, and at most the row below each chunk a
+	/// second time, ahead of the chunk below: along each of 3 rows of chunks,
+	/// 17 + 18 + 18 + 17 tiles, cut off where the source ends. Fewer where the
+	/// chunk below is being read already. Reading each chunk with its ring, as
+	/// before #310, read 4,900 tiles.
 	#[tokio::test]
-	async fn a_stream_larger_than_the_cache_reads_no_tile_twice_per_chunk() -> Result<()> {
-		static READS: AtomicU32 = AtomicU32::new(0);
-		let (op, bbox) = counted_over_small_cache(&READS).await?;
+	async fn a_stream_reads_each_tile_once_and_at_most_a_row_per_chunk_again() -> Result<()> {
+		static COUNTS: Counts = Counts::new();
+		let op = Counted::hillshade(&COUNTS).await?;
 
-		let tiles = op.tile_stream(bbox).await?.to_vec().await;
-		assert_eq!(tiles.len() as u64, bbox.count_tiles());
-		assert_reads_once_per_ring(&READS);
+		let tiles = op.tile_stream(Counted::bbox()).await?.to_vec().await;
+		assert_eq!(tiles.len() as u64, Counted::bbox().count_tiles());
+		let reads = COUNTS.reads.load(Ordering::Relaxed);
+		assert!((64 * 64..=64 * 64 + 3 * 70).contains(&reads), "{reads} reads");
 		Ok(())
 	}
 
 	/// Many streams at once, as a writer buffering small blocks opens them,
-	/// work on no more chunks together than one stream does, so their rings
-	/// still fit the cache.
+	/// read no more together than reading each chunk with its ring would, and
+	/// their chunks still fit the cache. Before they shared the chunks held,
+	/// such streams read about twice as much.
 	#[tokio::test(flavor = "multi_thread")]
-	async fn streams_opened_at_once_share_the_chunks_in_flight() -> Result<()> {
-		static READS: AtomicU32 = AtomicU32::new(0);
-		let (op, bbox) = counted_over_small_cache(&READS).await?;
+	async fn streams_opened_at_once_read_no_more_than_every_ring() -> Result<()> {
+		static COUNTS: Counts = Counts::new();
+		let op = Counted::hillshade(&COUNTS).await?;
 
-		let blocks: Vec<TileBBox> = bbox.iter_grid(CHUNK_TILES_AT_256).collect();
+		let blocks: Vec<TileBBox> = Counted::bbox().iter_grid(CHUNK_TILES_AT_256).collect();
 		let counts: Vec<usize> = stream::iter(blocks)
 			.map(|block| {
 				let op = op.clone();
 				async move { Ok::<_, anyhow::Error>(op.tile_stream(block).await?.to_vec().await.len()) }
 			})
-			.buffer_unordered(9)
+			.buffer_unordered(16)
 			.try_collect()
 			.await?;
-		assert_eq!(counts.iter().sum::<usize>() as u64, bbox.count_tiles());
-		assert_reads_once_per_ring(&READS);
+		assert_eq!(counts.iter().sum::<usize>() as u64, Counted::bbox().count_tiles());
+		let reads = COUNTS.reads.load(Ordering::Relaxed);
+		assert!((64 * 64..=70 * 70).contains(&reads), "{reads} reads");
+		Ok(())
+	}
+
+	/// Chunks are read ahead of the ones being shaded, so that a remote source
+	/// is read while the cores shade (#310). Before, two chunks were read and
+	/// then shaded, one pair after the other.
+	#[tokio::test(flavor = "multi_thread")]
+	async fn chunks_are_read_ahead_of_shading() -> Result<()> {
+		static COUNTS: Counts = Counts::new();
+		let op = Counted::hillshade(&COUNTS).await?;
+
+		op.tile_stream(Counted::bbox()).await?.to_vec().await;
+		let widest = COUNTS.widest.load(Ordering::Relaxed);
+		assert!(
+			usize::try_from(widest)? >= CHUNKS_AHEAD,
+			"at most {widest} requests at once"
+		);
 		Ok(())
 	}
 
@@ -889,6 +1285,30 @@ mod tests {
 		}
 		let op = hillshade(Ok(source), "dem_hillshade").await?;
 		assert_eq!(op.chunk_tiles_per_side(), side);
+		Ok(())
+	}
+
+	/// The ring of a chunk is read as its four sides, corners included.
+	#[test]
+	fn the_ring_of_a_chunk_comes_out_as_four_strips() -> Result<()> {
+		let chunk = TileBBox::from_min_and_max(8, 16, 16, 31, 31)?;
+		let mut strips: Vec<String> = strips(&Operation::ring(&chunk))?
+			.into_iter()
+			.map(|strip| {
+				format!(
+					"{}x{} at {},{}",
+					strip.width(),
+					strip.height(),
+					strip.x_min().unwrap(),
+					strip.y_min().unwrap()
+				)
+			})
+			.collect();
+		strips.sort();
+		assert_eq!(
+			strips,
+			["18x1 at 15,15", "18x1 at 15,32", "1x16 at 15,16", "1x16 at 32,16"]
+		);
 		Ok(())
 	}
 
