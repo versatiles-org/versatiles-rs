@@ -67,6 +67,15 @@ ignore = [
 	# so there is nothing to bump to; drop this entry once `russh` depends on a
 	# fixed `rsa`.
 	{ id = "RUSTSEC-2023-0071", reason = "Marvin needs a decryption oracle; an SSH client only signs. No fixed rsa (RustCrypto/RSA#626)" },
+
+	# RUSTSEC-2026-0440 — `astral-tokio-tar` is unmaintained since 2026-11-03.
+	#
+	# An "unmaintained" notice, not a vulnerability: no flaw is known in 0.7.1.
+	# The tar reader and writer in versatiles_container are built on it, for
+	# the async reasons given in the workspace `Cargo.toml`. Astral suggests
+	# `tar-codec`; drop this entry once the tar container has moved to a
+	# maintained crate.
+	{ id = "RUSTSEC-2026-0440", reason = "unmaintained, no known flaw; replace with a maintained async tar crate" },
 ]
 
 [licenses]
