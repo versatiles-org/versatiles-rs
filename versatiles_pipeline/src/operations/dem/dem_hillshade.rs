@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use futures::{StreamExt, future::try_join_all, stream};
 use imageproc::image::{DynamicImage, Rgba, RgbaImage};
 use moka::{future::Cache, policy::EvictionPolicy};
+use tokio::sync::Semaphore;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use versatiles_core::{
 	ConcurrencyLimits, SharedWork, TileBBox, TileCoord, TileFormat, TileJSON, TileSchema, TileStream, WORLD_SIZE,
@@ -84,7 +85,9 @@ const CACHE_BYTES: u64 = 512 * 1024 * 1024;
 /// are 324 decoded tiles, about 85 MB. Larger tiles get smaller chunks.
 const CHUNK_TILES_AT_256: u32 = 16;
 
-/// Chunks worked on at once in a stream.
+/// Chunks worked on at once, across all streams of the operation: a consumer
+/// that opens many streams at once, such as a writer buffering small blocks,
+/// would otherwise prefetch more rings than the cache holds.
 const CHUNKS_IN_FLIGHT: usize = 2;
 
 /// A light and its colours, as MapLibre's `standard` hillshade takes them.
@@ -294,6 +297,8 @@ struct Inner {
 	heights: Cache<TileCoord, Option<Arc<Heights>>>,
 	/// Which requests wait for which entry of `heights` (#265).
 	shared: SharedWork<TileCoord>,
+	/// Permits for the chunks worked on at once, `CHUNKS_IN_FLIGHT` of them.
+	chunks: Semaphore,
 	runtime: TilesRuntime,
 }
 
@@ -368,6 +373,7 @@ impl Operation {
 					})
 					.build(),
 				shared: SharedWork::new(),
+				chunks: Semaphore::new(CHUNKS_IN_FLIGHT),
 				runtime: factory.runtime(),
 			}),
 		})
@@ -470,6 +476,11 @@ impl Operation {
 	/// The hillshade tiles of `chunk`.
 	async fn chunk_tiles(&self, chunk: TileBBox) -> Vec<(TileCoord, Tile)> {
 		let runtime = &self.inner.runtime;
+		// Held until the chunk is shaded, so that its ring stays in the cache
+		// until it is used. The semaphore is never closed.
+		let Ok(_permit) = self.inner.chunks.acquire().await else {
+			return Vec::new();
+		};
 		if let Err(error) = self.prefetch(chunk).await {
 			runtime.record_error(&format!("dem_hillshade reading {chunk:?}"), &error);
 			return Vec::new();
@@ -541,6 +552,7 @@ crate::operations::macros::define_transform_factory!("dem_hillshade", Args, Oper
 mod tests {
 	use std::sync::atomic::{AtomicU32, Ordering};
 
+	use futures::TryStreamExt;
 	use imageproc::image::RgbImage;
 	use versatiles_core::TilePyramid;
 
@@ -754,21 +766,20 @@ mod tests {
 		Ok(())
 	}
 
-	/// A stream over more tiles than the cache holds reads each tile once per
-	/// chunk ring it lies in, and no more: the cache keeps what the chunks in
-	/// flight still need, rather than the tiles of finished chunks.
-	#[tokio::test]
-	async fn a_stream_larger_than_the_cache_reads_no_tile_twice_per_chunk() -> Result<()> {
-		static READS: AtomicU32 = AtomicU32::new(0);
-		const SIZE: u32 = 64;
-		const CHUNK: u32 = CHUNK_TILES_AT_256;
+	/// Tile side of the sources that count their reads, small so that a test
+	/// can fill the cache cheaply.
+	const COUNTED_SIZE: u32 = 64;
 
-		// 3 × 3 chunks, about 2.3 times what the cache holds.
+	/// The hillshade of 3 × 3 chunks of a source that counts its reads in
+	/// `reads`, with a cache that holds the rings of the chunks in flight and one
+	/// more: about 2.3 times less than the chunks need together.
+	async fn counted_over_small_cache(reads: &'static AtomicU32) -> Result<(Operation, TileBBox)> {
+		const CHUNK: u32 = CHUNK_TILES_AT_256;
 		let bbox = TileBBox::from_min_and_max(8, 64, 64, 64 + 3 * CHUNK - 1, 64 + 3 * CHUNK - 1)?;
 		let mut source = DummyImageSource::new(
-			|coord| {
-				READS.fetch_add(1, Ordering::Relaxed);
-				let mut image = RgbImage::new(SIZE, SIZE);
+			move |coord| {
+				reads.fetch_add(1, Ordering::Relaxed);
+				let mut image = RgbImage::new(COUNTED_SIZE, COUNTED_SIZE);
 				for (x, y, pixel) in image.enumerate_pixels_mut() {
 					pixel.0 = encode(DemEncoding::Terrarium, f64::from(x + y + coord.x));
 				}
@@ -779,23 +790,65 @@ mod tests {
 		)?;
 		source.tilejson_mut().tile_schema = Some(super::super::encoding::to_tile_schema(DemEncoding::Terrarium));
 
-		// Room for the rings of the chunks in flight and one more.
-		let ring_bytes = u64::from((CHUNK + 2) * (CHUNK + 2) * SIZE * SIZE * 4);
-		let cache_bytes = ring_bytes * (CHUNKS_IN_FLIGHT as u64 + 1);
+		let ring_bytes = u64::from((CHUNK + 2) * (CHUNK + 2) * COUNTED_SIZE * COUNTED_SIZE * 4);
 		let op = Operation::build_with_cache(
 			VPLNode::try_from_str("dem_hillshade")?,
 			Box::new(source),
 			&PipelineFactory::new_dummy(),
-			cache_bytes,
+			ring_bytes * (CHUNKS_IN_FLIGHT as u64 + 1),
 		)
 		.await?;
+		Ok((op, bbox))
+	}
+
+	/// Asserts that `counted_over_small_cache` read each tile about once per
+	/// chunk ring it lies in: along each axis the rings span 17 + 18 + 17 tiles,
+	/// cut off where the source ends. moka keeps recency lazily and may drop
+	/// some of it under load, so a few more reads are allowed; a cache that
+	/// lost the rings it still needed read 50 to 85 % more.
+	fn assert_reads_once_per_ring(reads: &AtomicU32) {
+		let side = 3 * CHUNK_TILES_AT_256 + 4;
+		let minimum = side * side;
+		let reads = reads.load(Ordering::Relaxed);
+		assert!(
+			(minimum..=minimum + minimum / 20).contains(&reads),
+			"{reads} reads, expected {minimum} and at most 5 % more"
+		);
+	}
+
+	/// A stream over more tiles than the cache holds reads each tile once per
+	/// chunk ring it lies in, and no more: the cache keeps what the chunks in
+	/// flight still need, rather than the tiles of finished chunks.
+	#[tokio::test]
+	async fn a_stream_larger_than_the_cache_reads_no_tile_twice_per_chunk() -> Result<()> {
+		static READS: AtomicU32 = AtomicU32::new(0);
+		let (op, bbox) = counted_over_small_cache(&READS).await?;
 
 		let tiles = op.tile_stream(bbox).await?.to_vec().await;
-		assert_eq!(tiles.len(), 9 * CHUNK as usize * CHUNK as usize);
-		// Along each axis the rings span 17 + 18 + 17 tiles, cut off where the
-		// source ends.
-		let ring_side = 3 * CHUNK + 4;
-		assert_eq!(READS.load(Ordering::Relaxed), ring_side * ring_side);
+		assert_eq!(tiles.len() as u64, bbox.count_tiles());
+		assert_reads_once_per_ring(&READS);
+		Ok(())
+	}
+
+	/// Many streams at once, as a writer buffering small blocks opens them,
+	/// work on no more chunks together than one stream does, so their rings
+	/// still fit the cache.
+	#[tokio::test(flavor = "multi_thread")]
+	async fn streams_opened_at_once_share_the_chunks_in_flight() -> Result<()> {
+		static READS: AtomicU32 = AtomicU32::new(0);
+		let (op, bbox) = counted_over_small_cache(&READS).await?;
+
+		let blocks: Vec<TileBBox> = bbox.iter_grid(CHUNK_TILES_AT_256).collect();
+		let counts: Vec<usize> = stream::iter(blocks)
+			.map(|block| {
+				let op = op.clone();
+				async move { Ok::<_, anyhow::Error>(op.tile_stream(block).await?.to_vec().await.len()) }
+			})
+			.buffer_unordered(9)
+			.try_collect()
+			.await?;
+		assert_eq!(counts.iter().sum::<usize>() as u64, bbox.count_tiles());
+		assert_reads_once_per_ring(&READS);
 		Ok(())
 	}
 
