@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, future::try_join_all, stream};
 use imageproc::image::{DynamicImage, Rgba, RgbaImage};
-use moka::future::Cache;
+use moka::{future::Cache, policy::EvictionPolicy};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use versatiles_core::{
 	ConcurrencyLimits, SharedWork, TileBBox, TileCoord, TileFormat, TileJSON, TileSchema, TileStream, WORLD_SIZE,
@@ -308,8 +308,19 @@ impl std::fmt::Debug for Operation {
 }
 
 impl Operation {
-	#[context("Building dem_hillshade operation in VPL node {:?}", vpl_node.name)]
 	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation> {
+		Self::build_with_cache(vpl_node, source, factory, CACHE_BYTES).await
+	}
+
+	/// Builds the operation with a cache of `cache_bytes`, so that a test can
+	/// fill the cache without decoding half a gigabyte.
+	#[context("Building dem_hillshade operation in VPL node {:?}", vpl_node.name)]
+	async fn build_with_cache(
+		vpl_node: VPLNode,
+		source: Box<dyn TileSource>,
+		factory: &PipelineFactory,
+		cache_bytes: u64,
+	) -> Result<Operation> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let encoding = resolve_encoding(args.encoding, source.tilejson().tile_schema.as_ref())?;
 
@@ -345,7 +356,11 @@ impl Operation {
 				ramp: args.ramp,
 				encoding,
 				heights: Cache::builder()
-					.max_capacity(CACHE_BYTES)
+					// LRU, not the default TinyLFU: a tile just prefetched has been used
+					// less often than the tiles of finished chunks, so TinyLFU would turn
+					// it away once the cache is full, and its chunk would read it again.
+					.max_capacity(cache_bytes)
+					.eviction_policy(EvictionPolicy::lru())
 					.weigher(|_, heights: &Option<Arc<Heights>>| {
 						heights
 							.as_ref()
@@ -524,6 +539,8 @@ crate::operations::macros::define_transform_factory!("dem_hillshade", Args, Oper
 
 #[cfg(test)]
 mod tests {
+	use std::sync::atomic::{AtomicU32, Ordering};
+
 	use imageproc::image::RgbImage;
 	use versatiles_core::TilePyramid;
 
@@ -734,6 +751,51 @@ mod tests {
 				assert!(pa.0[k].abs_diff(pb.0[k]) <= 1, "{pa:?} against {pb:?}");
 			}
 		}
+		Ok(())
+	}
+
+	/// A stream over more tiles than the cache holds reads each tile once per
+	/// chunk ring it lies in, and no more: the cache keeps what the chunks in
+	/// flight still need, rather than the tiles of finished chunks.
+	#[tokio::test]
+	async fn a_stream_larger_than_the_cache_reads_no_tile_twice_per_chunk() -> Result<()> {
+		static READS: AtomicU32 = AtomicU32::new(0);
+		const SIZE: u32 = 64;
+		const CHUNK: u32 = CHUNK_TILES_AT_256;
+
+		// 3 × 3 chunks, about 2.3 times what the cache holds.
+		let bbox = TileBBox::from_min_and_max(8, 64, 64, 64 + 3 * CHUNK - 1, 64 + 3 * CHUNK - 1)?;
+		let mut source = DummyImageSource::new(
+			|coord| {
+				READS.fetch_add(1, Ordering::Relaxed);
+				let mut image = RgbImage::new(SIZE, SIZE);
+				for (x, y, pixel) in image.enumerate_pixels_mut() {
+					pixel.0 = encode(DemEncoding::Terrarium, f64::from(x + y + coord.x));
+				}
+				Tile::from_image(DynamicImage::ImageRgb8(image), TileFormat::PNG).ok()
+			},
+			TileFormat::PNG,
+			Some(TilePyramid::from_tile_coords(bbox.iter_coords())),
+		)?;
+		source.tilejson_mut().tile_schema = Some(super::super::encoding::to_tile_schema(DemEncoding::Terrarium));
+
+		// Room for the rings of the chunks in flight and one more.
+		let ring_bytes = u64::from((CHUNK + 2) * (CHUNK + 2) * SIZE * SIZE * 4);
+		let cache_bytes = ring_bytes * (CHUNKS_IN_FLIGHT as u64 + 1);
+		let op = Operation::build_with_cache(
+			VPLNode::try_from_str("dem_hillshade")?,
+			Box::new(source),
+			&PipelineFactory::new_dummy(),
+			cache_bytes,
+		)
+		.await?;
+
+		let tiles = op.tile_stream(bbox).await?.to_vec().await;
+		assert_eq!(tiles.len(), 9 * CHUNK as usize * CHUNK as usize);
+		// Along each axis the rings span 17 + 18 + 17 tiles, cut off where the
+		// source ends.
+		let ring_side = 3 * CHUNK + 4;
+		assert_eq!(READS.load(Ordering::Relaxed), ring_side * ring_side);
 		Ok(())
 	}
 
