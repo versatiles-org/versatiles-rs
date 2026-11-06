@@ -39,7 +39,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use geo::MapCoords;
 use geo_types::{Coord, Geometry, MultiPolygon, Polygon};
-use moka::future::Cache;
+use moka::{future::Cache, policy::EvictionPolicy};
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TileStream, ZoomLevel};
 use versatiles_derive::context;
@@ -56,6 +56,37 @@ use crate::{PipelineFactory, operations::removed::refuse_removed_parameters, vpl
 const DEFAULT_BUFFER: u32 = 80;
 /// Cache budget for decoded parent vector tiles.
 const CACHE_CAPACITY_BYTES: u64 = 256 * 1024 * 1024;
+
+/// The cache of decoded source tiles; `None` is a tile the source lacks.
+///
+/// LRU, not moka's default TinyLFU. A stream needs a source tile again one row
+/// of output tiles later, and by then the tiles of the rows before have been
+/// used more often: once the cache is full, TinyLFU turned the new tiles away,
+/// and the next row read them again.
+fn source_cache(capacity: u64) -> Cache<TileCoord, Option<Arc<VectorTile>>> {
+	Cache::builder()
+		.max_capacity(capacity)
+		.eviction_policy(EvictionPolicy::lru())
+		.weigher(|_k: &TileCoord, v: &Option<Arc<VectorTile>>| -> u32 {
+			// A missing tile costs a cache entry, not nothing: weighed at 8
+			// bytes, the budget allowed 32 million of them.
+			v.as_ref().map_or(256, |t| {
+				// Approximate decoded size by total feature geom_data + tag bytes.
+				let bytes: u64 = t
+					.layers
+					.iter()
+					.map(|l| {
+						l.features
+							.iter()
+							.map(|f| f.geom_data.len() + (f.tag_ids.len() as u64) * 4)
+							.sum::<u64>()
+					})
+					.sum();
+				u32::try_from(bytes.saturating_add(64)).unwrap_or(u32::MAX)
+			})
+		})
+		.build()
+}
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Serves vector tiles above the source's highest zoom level by clipping and rescaling.
@@ -157,28 +188,7 @@ impl Operation {
 		let mut tilejson = source.as_ref().tilejson().clone();
 		metadata.update_tilejson(&mut tilejson);
 
-		let cache = Cache::builder()
-			.max_capacity(CACHE_CAPACITY_BYTES)
-			.weigher(|_k: &TileCoord, v: &Option<Arc<VectorTile>>| -> u32 {
-				// A missing tile costs a cache entry, not nothing: weighed at 8
-				// bytes, the budget allowed 32 million of them.
-				v.as_ref().map_or(256, |t| {
-					// Approximate decoded size by total feature geom_data + tag bytes.
-					let bytes: u64 = t
-						.layers
-						.iter()
-						.map(|l| {
-							l.features
-								.iter()
-								.map(|f| f.geom_data.len() + (f.tag_ids.len() as u64) * 4)
-								.sum::<u64>()
-						})
-						.sum();
-					u32::try_from(bytes.saturating_add(64)).unwrap_or(u32::MAX)
-				})
-			})
-			.build();
-		let cache = Arc::new(cache);
+		let cache = source_cache(CACHE_CAPACITY_BYTES);
 
 		Ok(Self {
 			metadata,
@@ -186,7 +196,7 @@ impl Operation {
 			tilejson,
 			level_top,
 			buffer: buffer.unwrap_or(DEFAULT_BUFFER),
-			cache,
+			cache: Arc::new(cache),
 		})
 	}
 
@@ -196,6 +206,13 @@ impl Operation {
 	async fn find_tile(&self, coord_dst: TileCoord) -> Result<Option<(TileCoord, Arc<VectorTile>)>> {
 		let coord_src = coord_dst.at_level(self.level_top.min(coord_dst.level));
 		Ok(self.try_fetch_tile(coord_src).await?.map(|tile| (coord_src, tile)))
+	}
+
+	/// Replaces the cache with one of `capacity` bytes, so that a test can fill it.
+	#[cfg(test)]
+	fn with_cache_bytes(mut self, capacity: u64) -> Self {
+		self.cache = Arc::new(source_cache(capacity));
+		self
 	}
 
 	/// The decoded tile of the source at `coord`. Requests that arrive
@@ -529,6 +546,8 @@ crate::operations::macros::define_transform_factory!("vector_overzoom", Args, Op
 
 #[cfg(test)]
 mod tests {
+	use std::sync::atomic::{AtomicU32, Ordering};
+
 	use geo_types::Geometry;
 	use versatiles_core::{TileBBox, TileCoord, TilePyramid};
 	use versatiles_geometry::geo::GeoValue;
@@ -685,6 +704,55 @@ mod tests {
 		assert_eq!(props.get("z"), Some(&GeoValue::UInt(2)));
 		assert_eq!(props.get("x"), Some(&GeoValue::UInt(1)));
 		assert_eq!(props.get("y"), Some(&GeoValue::UInt(1)));
+		Ok(())
+	}
+
+	/// A source that counts the tiles asked of it one by one.
+	#[derive(Debug)]
+	struct CountingSource(DummyVectorSource, &'static AtomicU32);
+
+	#[async_trait]
+	impl TileSource for CountingSource {
+		fn source_type(&self) -> Arc<SourceType> {
+			self.0.source_type()
+		}
+		fn metadata(&self) -> &TileSourceMetadata {
+			self.0.metadata()
+		}
+		fn tilejson(&self) -> &TileJSON {
+			self.0.tilejson()
+		}
+		async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+			self.1.fetch_add(1, Ordering::Relaxed);
+			self.0.tile(coord).await
+		}
+		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+			self.0.tile_stream(bbox).await
+		}
+	}
+
+	/// A stream reads each source tile once, though its 16 children lie in four
+	/// rows and the source has four times more tiles than the cache holds. With
+	/// moka's default policy this read 621 tiles of 512.
+	#[tokio::test]
+	async fn a_stream_reads_each_source_tile_once() -> Result<()> {
+		static READS: AtomicU32 = AtomicU32::new(0);
+		let source_bbox = TileBBox::from_min_and_max(6, 0, 0, 63, 7)?;
+		let source = DummyVectorSource::new(
+			&[("dummy", &[&[("k", "v")]])],
+			Some(TilePyramid::from_tile_coords(source_bbox.iter_coords())),
+		);
+		let op = Operation::build(
+			VPLNode::try_from_str("vector_overzoom level_max=8")?,
+			Box::new(CountingSource(source, &READS)),
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+		// Each of these decoded tiles weighs 99 bytes: room for 128 of them.
+		let op = op.with_cache_bytes(128 * 99);
+
+		op.tile_stream(source_bbox.at_level(8)).await?.to_vec().await;
+		assert_eq!(u64::from(READS.load(Ordering::Relaxed)), source_bbox.count_tiles());
 		Ok(())
 	}
 
