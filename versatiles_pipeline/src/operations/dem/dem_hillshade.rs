@@ -8,8 +8,8 @@ use moka::{future::Cache, policy::EvictionPolicy};
 use tokio::sync::Semaphore;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use versatiles_core::{
-	ConcurrencyLimits, SharedWork, TileBBox, TileCoord, TileFormat, TileJSON, TileSchema, TileStream, WORLD_SIZE,
-	bounded_number,
+	ConcurrencyLimits, SharedWork, TileBBox, TileCoord, TileFormat, TileJSON, TileSchema, TileSize, TileStream,
+	WORLD_SIZE, bounded_number,
 };
 use versatiles_derive::context;
 use versatiles_image::color::HexColor;
@@ -293,6 +293,8 @@ struct Inner {
 	/// The colours under the shading, if any.
 	ramp: Option<ColorRamp>,
 	encoding: DemEncoding,
+	/// The size of the source's tiles, declared or measured.
+	tile_size: TileSize,
 	/// Decoded source tiles; `None` is a tile the source lacks.
 	heights: Cache<TileCoord, Option<Arc<Heights>>>,
 	/// Which requests wait for which entry of `heights` (#265).
@@ -328,6 +330,14 @@ impl Operation {
 	) -> Result<Operation> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let encoding = resolve_encoding(args.encoding, source.tilejson().tile_schema.as_ref())?;
+		// The size of a chunk follows from the size of a tile, which a source
+		// need not declare. Mapterhorn's planet does not, and its tiles of
+		// 512 px were read in chunks meant for 256 px, four times as many bytes
+		// as the cache was sized for.
+		let tile_size = match source.tilejson().tile_size {
+			Some(size) => size,
+			None => source.measure_tile_size().await?.unwrap_or(TileSize::Size256),
+		};
 
 		let style = Style {
 			azimuth: args.azimuth.unwrap_or(335.0).to_radians() + PI,
@@ -360,6 +370,7 @@ impl Operation {
 				style,
 				ramp: args.ramp,
 				encoding,
+				tile_size,
 				heights: Cache::builder()
 					// LRU, not the default TinyLFU: a tile just prefetched has been used
 					// less often than the tiles of finished chunks, so TinyLFU would turn
@@ -504,7 +515,7 @@ impl Operation {
 	/// Tiles one side of a chunk spans, smaller for larger tiles so that a
 	/// chunk takes about the same memory.
 	fn chunk_tiles_per_side(&self) -> u32 {
-		let size = self.inner.tilejson.tile_size.map_or(256, |s| u32::from(s.size()));
+		let size = u32::from(self.inner.tile_size.size());
 		(CHUNK_TILES_AT_256 * 256 / size.max(1)).clamp(4, CHUNK_TILES_AT_256)
 	}
 }
@@ -849,6 +860,35 @@ mod tests {
 			.await?;
 		assert_eq!(counts.iter().sum::<usize>() as u64, bbox.count_tiles());
 		assert_reads_once_per_ring(&READS);
+		Ok(())
+	}
+
+	/// A source that does not declare its tile size gets chunks for the size
+	/// of its tiles, measured, not for 256 px: Mapterhorn's planet declares
+	/// none, and its chunks of 512 px tiles were four times too large.
+	#[rstest::rstest]
+	#[case::declared_512(512, Some(512), 8)]
+	#[case::measured_512(512, None, 8)]
+	#[case::measured_256(256, None, 16)]
+	#[tokio::test]
+	async fn chunks_follow_the_size_of_the_tiles(
+		#[case] size: u32,
+		#[case] declared: Option<u32>,
+		#[case] side: u32,
+	) -> Result<()> {
+		let mut source = DummyImageSource::new(
+			move |_| Tile::from_image(DynamicImage::ImageRgb8(RgbImage::new(size, size)), TileFormat::PNG).ok(),
+			TileFormat::PNG,
+			Some(TilePyramid::new_full_up_to(2)),
+		)?;
+		source.tilejson_mut().tile_schema = Some(super::super::encoding::to_tile_schema(DemEncoding::Terrarium));
+		if let Some(declared) = declared {
+			source.tilejson_mut().set_tile_size(declared)?;
+		} else {
+			assert!(source.tilejson().tile_size.is_none());
+		}
+		let op = hillshade(Ok(source), "dem_hillshade").await?;
+		assert_eq!(op.chunk_tiles_per_side(), side);
 		Ok(())
 	}
 
