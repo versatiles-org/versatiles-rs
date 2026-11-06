@@ -20,7 +20,7 @@ use std::{
 use anyhow::{Context, Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, TryStreamExt, stream};
-use moka::future::Cache;
+use moka::{future::Cache, policy::EvictionPolicy};
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use versatiles_core::{
 	ConcurrencyLimits, GeoBBox, MAX_ZOOM_LEVEL, SharedWork, TileBBox, TileCoord, TileCover, TileFormat, TileJSON,
@@ -42,6 +42,9 @@ const MAX_MASKED_TILES: u64 = 64;
 /// How many tiles are created from one source tile in one go. Small, because
 /// every one of them is a decoded image until something encodes it.
 const TILES_PER_TASK: usize = 16;
+
+/// Encoded tiles kept between their mask and their image, in bytes.
+const ENCODED_BYTES: u64 = 256 * 1024 * 1024;
 
 /// Creates every tile its source lacks, up to `level_max`, from the nearest
 /// tile the source has at a lower zoom level. Tiles the source has are passed
@@ -67,6 +70,10 @@ pub struct FillOverscale {
 	images: Cache<TileCoord, Option<Arc<DynamicImage>>>,
 	/// Where source tiles have content. `None` is a tile the source lacks.
 	masks: Cache<TileCoord, Option<Arc<Mask>>>,
+	/// Opaque source tiles whose mask was settled without decoding them, as
+	/// read, until [`image`](Self::image) takes them. Without it, a tile was
+	/// read once for its mask and again for its image.
+	encoded: Cache<TileCoord, Arc<Tile>>,
 	/// Which requests wait for which entry of `images` and `masks`, so that
 	/// reading one stops once all of them are cancelled, and only then (#265).
 	shared_images: Arc<SharedWork<TileCoord>>,
@@ -146,6 +153,13 @@ impl FillOverscale {
 			masks: Cache::builder()
 				.max_capacity(64 * 1024 * 1024)
 				.weigher(|_, mask: &Option<Arc<Mask>>| 256 + mask.as_ref().map_or(0, |mask| mask.weight()))
+				.build(),
+			// LRU, not moka's default TinyLFU: every entry is read once, so
+			// TinyLFU would turn new ones away in favour of older ones.
+			encoded: Cache::builder()
+				.max_capacity(ENCODED_BYTES)
+				.eviction_policy(EvictionPolicy::lru())
+				.weigher(|_, tile: &Arc<Tile>| u32::try_from(tile.estimated_heap_size()).unwrap_or(u32::MAX))
 				.build(),
 			shared_images: Arc::default(),
 			shared_masks: Arc::default(),
@@ -317,7 +331,10 @@ impl FillOverscale {
 			.shared_images
 			.run(coord, || {
 				self.images.try_get_with(coord, async {
-					let tile = self.source.tile(&coord).await?;
+					let tile = match self.encoded.remove(&coord).await {
+						Some(tile) => Some(Arc::try_unwrap(tile).unwrap_or_else(|tile| (*tile).clone())),
+						None => self.source.tile(&coord).await?,
+					};
 					tile.map(|tile| tile.into_image().map(Arc::new)).transpose()
 				})
 			})
@@ -343,6 +360,8 @@ impl FillOverscale {
 						return Ok(None);
 					};
 					if self.never_transparent() || tile.is_opaque()? {
+						// Kept for the image, which is likely wanted next.
+						self.encoded.insert(coord, Arc::new(tile)).await;
 						return Ok(Some(Arc::new(Mask::Full)));
 					}
 					let image = Arc::new(tile.into_image()?);
@@ -373,15 +392,9 @@ impl FillOverscale {
 				continue;
 			}
 
-			// With the image in the cache, the mask is derived from it; the
-			// other way round, an opaque tile would be read twice.
-			let mask = if let Some(mask) = self.masks.get(&source_coord).await {
-				mask
-			} else {
-				self.image(source_coord).await?;
-				self.mask(source_coord).await?
-			};
-			let Some(mask) = mask else {
+			// Either way a tile is read once: a translucent one is decoded for
+			// its mask, and an opaque one is kept for its image.
+			let Some(mask) = self.mask(source_coord).await? else {
 				continue;
 			};
 			if !mask.has_content(source_coord, &region) {
@@ -1160,6 +1173,41 @@ mod tests {
 		// Through all of that, the world tile was read once, when the
 		// operation was built: what it shows is remembered as a mask.
 		assert_eq!(reads.lock().unwrap()[&coord(0, 0, 0)], 1);
+		Ok(())
+	}
+
+	/// A stream reads each source tile once, opaque or not, though its mask
+	/// is settled before its image is wanted. An opaque tile used to be read
+	/// once for each.
+	#[rstest::rstest]
+	#[case::opaque_png(TileFormat::PNG, false)]
+	#[case::jpeg(TileFormat::JPG, false)]
+	#[case::translucent_png(TileFormat::PNG, true)]
+	#[tokio::test]
+	async fn a_stream_reads_each_source_tile_once(#[case] format: TileFormat, #[case] translucent: bool) -> Result<()> {
+		let tiles = level_tiles(6, 0..=7, 0..=7)
+			.into_iter()
+			.map(|c| {
+				(
+					c,
+					if translucent {
+						partial(c, [0, 0, 7, 3])
+					} else {
+						opaque(c)
+					},
+				)
+			})
+			.collect();
+		let source = TestSource::new(format, tiles, None);
+		let reads = Arc::clone(&source.reads);
+		let op = fill(source, Some(8)).await;
+
+		let created = op.tile_stream(TileBBox::from_min_and_max(8, 0, 0, 31, 31)?).await?;
+		// Translucent tiles have content in their upper half only.
+		assert_eq!(created.to_vec().await.len(), if translucent { 512 } else { 1024 });
+		let reads = reads.lock().unwrap();
+		assert_eq!(reads.len(), 64, "every source tile is used");
+		assert!(reads.values().all(|&n| n == 1), "{reads:?}");
 		Ok(())
 	}
 
