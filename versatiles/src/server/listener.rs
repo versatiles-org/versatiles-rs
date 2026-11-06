@@ -314,6 +314,22 @@ mod tests {
 		assert!(waited < Duration::from_secs(5), "still open after {waited:?}");
 	}
 
+	/// hyper restarts the header-read clock after each response, so a
+	/// keep-alive connection that never sends its next request is closed by
+	/// it, well before the idle timeout.
+	#[tokio::test]
+	async fn closes_a_keep_alive_connection_left_idle() {
+		let limits = ConnectionLimits {
+			idle_timeout: Duration::from_secs(30),
+			..short_limits()
+		};
+		let (addr, _tx) = start(limits).await;
+		let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+		stream.write_all(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n").await.unwrap();
+		let waited = time_until_closed(&mut stream).await;
+		assert!(waited < Duration::from_secs(5), "still open after {waited:?}");
+	}
+
 	/// Before the first byte, hyper does not know the protocol yet, and its
 	/// header-read timeout has not started. The idle timeout covers that.
 	#[tokio::test]
