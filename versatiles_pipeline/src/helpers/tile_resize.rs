@@ -2,7 +2,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use anyhow::{Result, anyhow, bail, ensure};
 use imageproc::image::DynamicImage;
-use moka::future::Cache;
+use moka::{future::Cache, policy::EvictionPolicy};
 use versatiles_container::{SharedTileSource, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
 use versatiles_image::GenericImage;
@@ -23,6 +23,25 @@ pub struct TileResizeCore {
 	/// channel, and there those are heights. Without it, a resized tile in WebP
 	/// was encoded at the default quality.
 	pub lossless: bool,
+}
+
+/// Decoded source tiles the cache may hold, in bytes.
+const CACHE_BYTES: u64 = 512 * 1024 * 1024;
+
+/// The cache of decoded source tiles; `None` is a tile the source lacks.
+///
+/// LRU, not moka's default TinyLFU. When a split stream reaches a new source
+/// tile, the tiles it finished with have been read twice, the new one not yet:
+/// once the cache is full, TinyLFU turned the new one away, and the next row
+/// read it again.
+fn source_cache(bytes: u64) -> Cache<TileCoord, Option<Arc<DynamicImage>>> {
+	Cache::builder()
+		.max_capacity(bytes)
+		.eviction_policy(EvictionPolicy::lru())
+		.weigher(|_k: &TileCoord, v: &Option<Arc<DynamicImage>>| -> u32 {
+			v.as_ref().map_or(8, |image| image.width() * image.height() * 4)
+		})
+		.build()
 }
 
 impl Debug for TileResizeCore {
@@ -113,12 +132,7 @@ impl TileResizeCore {
 		tilejson.set_tile_size(tartile_size)?;
 		metadata.update_tilejson(&mut tilejson);
 
-		let cache = Cache::builder()
-			.max_capacity(512 * 1024 * 1024)
-			.weigher(|_k: &TileCoord, v: &Option<Arc<DynamicImage>>| -> u32 {
-				v.as_ref().map_or(8, |image| image.width() * image.height() * 4)
-			})
-			.build();
+		let cache = source_cache(CACHE_BYTES);
 
 		Ok(Self {
 			source: Arc::from(source),
@@ -131,20 +145,28 @@ impl TileResizeCore {
 		})
 	}
 
+	/// Replaces the cache with one of `bytes`, so that a test can fill it.
+	#[cfg(test)]
+	fn with_cache_bytes(mut self, bytes: u64) -> Self {
+		self.cache = Arc::new(source_cache(bytes));
+		self
+	}
+
+	/// The decoded source tile at `coord`, read once for all the tiles that
+	/// need it: the two tiles of a row that split it ask at the same time.
 	async fn fetch_source_tile(&self, coord: &TileCoord) -> Result<Option<Arc<DynamicImage>>> {
-		if let Some(cached) = self.cache.get(coord).await {
-			return Ok(cached);
-		}
-
-		let image = self
-			.source
-			.tile(coord)
-			.await?
-			.map(|t| t.into_image().map(Arc::new))
-			.transpose()?;
-
-		self.cache.insert(*coord, image.clone()).await;
-		Ok(image)
+		self
+			.cache
+			.try_get_with(*coord, async {
+				self
+					.source
+					.tile(coord)
+					.await?
+					.map(|t| t.into_image().map(Arc::new))
+					.transpose()
+			})
+			.await
+			.map_err(|e| anyhow!("{e:#}"))
 	}
 
 	async fn process_split_tile(&self, coord_dst: TileCoord) -> Result<Option<DynamicImage>> {
@@ -299,6 +321,8 @@ impl TileResizeCore {
 #[cfg(test)]
 #[expect(clippy::cast_possible_truncation, reason = "test data is built from literal values")]
 mod tests {
+	use std::sync::atomic::{AtomicU32, Ordering};
+
 	use versatiles_core::{TileFormat, TilePyramid};
 	use versatiles_image::{
 		DynamicImage,
@@ -326,6 +350,32 @@ mod tests {
 
 	fn scale_down_fn() -> ScaleDownFn {
 		Arc::new(|img: &DynamicImage| img.scaled_down(2))
+	}
+
+	/// Splitting reads each source tile once, though four tiles in two rows
+	/// need it and the stream needs four times more than the cache holds.
+	/// With moka's default policy this read 448 tiles of 256.
+	#[tokio::test]
+	async fn a_split_reads_each_source_tile_once() -> Result<()> {
+		static READS: AtomicU32 = AtomicU32::new(0);
+		let source_bbox = TileBBox::from_min_and_max(8, 0, 0, 31, 7)?;
+		let mut source = DummyImageSource::new(
+			|_| {
+				READS.fetch_add(1, Ordering::Relaxed);
+				let image = DynamicImage::from_fn(512, 512, |x, _| [x as u8, 0, 0]);
+				Tile::from_image(image, TileFormat::PNG).ok()
+			},
+			TileFormat::PNG,
+			Some(TilePyramid::from_tile_coords(source_bbox.iter_coords())),
+		)?;
+		source.tilejson_mut().set_tile_size(512)?;
+		// Room for two rows of source tiles.
+		let core = TileResizeCore::new(Box::new(source), 256, scale_down_fn())?.with_cache_bytes(2 * 32 * 512 * 512 * 4);
+
+		let tiles = core.tile_stream(source_bbox.leveled_up())?.to_vec().await;
+		assert_eq!(tiles.len() as u64, 4 * source_bbox.count_tiles());
+		assert_eq!(u64::from(READS.load(Ordering::Relaxed)), source_bbox.count_tiles());
+		Ok(())
 	}
 
 	#[test]
