@@ -28,7 +28,7 @@ use std::{
 	},
 };
 
-use moka::future::Cache;
+use moka::{future::Cache, policy::EvictionPolicy};
 use versatiles_core::TileCoord;
 
 use super::overview::{ScaledBlock, estimate_entry_bytes};
@@ -94,8 +94,13 @@ impl BlockCache {
 
 		let reuse = (0..levels)
 			.map(|_| {
+				// LRU, as the module docs say, not moka's default TinyLFU: a
+				// block shed from the reservation is new to the tier, and
+				// TinyLFU turned it away in favour of blocks asked for more
+				// often, though it is the one a consumer still wants.
 				Cache::builder()
 					.max_capacity(per_level)
+					.eviction_policy(EvictionPolicy::lru())
 					.weigher(|_key: &TileCoord, block: &ScaledBlock| -> u32 {
 						u32::try_from(estimate_entry_bytes(block)).unwrap_or(u32::MAX)
 					})
@@ -456,6 +461,40 @@ mod tests {
 		assert!(
 			cache.peek(first).await.is_some(),
 			"the oldest block was dropped rather than moved to the reuse tier"
+		);
+	}
+
+	/// A shed block is kept even when the reuse tier is full of blocks that
+	/// were asked for more often: it is the one a consumer still wants. With
+	/// moka's default policy the tier turned it away.
+	#[tokio::test]
+	async fn a_shed_block_displaces_older_reused_blocks() {
+		// A level's share of the reuse tier is about 75 KB here.
+		let cache = BlockCache::with_budget(6, 1024 * 1024);
+		for x in 0..12u32 {
+			let key = TileCoord::new(6, x, 1).unwrap();
+			cache.store(key, block(key, 6 * 1024)).await;
+			for _ in 0..5 {
+				cache.peek(key).await;
+			}
+		}
+
+		let first = TileCoord::new(6, 0, 0).unwrap();
+		let each = cache.pending_limit / 16;
+		for x in 0..18u32 {
+			let key = TileCoord::new(6, x, 0).unwrap();
+			cache.produce(key, block(key, each)).await;
+		}
+		assert!(
+			cache.demotion_warned.load(Ordering::Relaxed),
+			"the reservation should have shed"
+		);
+
+		// moka admits and evicts in its pending tasks; run them first.
+		cache.entry_count().await;
+		assert!(
+			cache.peek(first).await.is_some(),
+			"the shed block was turned away by the reuse tier"
 		);
 	}
 
