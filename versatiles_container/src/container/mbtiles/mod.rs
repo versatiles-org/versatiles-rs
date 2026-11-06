@@ -16,11 +16,41 @@ mod reader;
 mod sink;
 mod writer;
 
+use std::sync::{Arc, LazyLock};
+
 use anyhow::{Result, bail};
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 pub use reader::MBTilesReader;
+use scheduled_thread_pool::ScheduledThreadPool;
 pub use sink::MBTilesTileSink;
 use versatiles_core::{TileCompression, TileFormat};
 pub use writer::MBTilesWriter;
+
+/// The scheduler that every `SQLite` connection pool in this module runs its
+/// background jobs on.
+///
+/// Without one, r2d2 starts three threads for each pool, and they outlive the
+/// pool by up to 30 seconds while they wait for its next reaper run. Opening
+/// files in quick succession, as a pipeline over many sources or a fuzzer
+/// does, piled them up until the process could start no more threads. The
+/// jobs are short and rare, so one scheduler serves every pool.
+static POOL_SCHEDULER: LazyLock<Arc<ScheduledThreadPool>> = LazyLock::new(|| {
+	Arc::new(
+		ScheduledThreadPool::builder()
+			.num_threads(3)
+			.thread_name_pattern("versatiles-mbtiles-{}")
+			.build(),
+	)
+});
+
+/// Build the connection pool for one `MBTiles` file, on the shared scheduler.
+pub(crate) fn build_pool(manager: SqliteConnectionManager) -> Result<Pool<SqliteConnectionManager>> {
+	Ok(Pool::builder()
+		.max_size(10)
+		.thread_pool(Arc::clone(&POOL_SCHEDULER))
+		.build(manager)?)
+}
 
 /// How MBTiles stores a given tile format: the value for its `format` metadata
 /// row, and the one compression it accepts.

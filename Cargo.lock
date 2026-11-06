@@ -5985,6 +5985,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rstest",
+ "scheduled-thread-pool",
  "tempfile",
  "terminal_size",
  "time",

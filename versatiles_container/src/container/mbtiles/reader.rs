@@ -154,7 +154,7 @@ impl MBTilesReader {
 		// side effect of reading it is not this reader's decision to make.
 		let manager = SqliteConnectionManager::file(path)
 			.with_flags(OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX);
-		let pool = Pool::builder().max_size(10).build(manager)?;
+		let pool = super::build_pool(manager)?;
 		let metadata = TileSourceMetadata::new(MVT, Uncompressed, Traversal::ANY, None);
 
 		let mut reader = MBTilesReader {

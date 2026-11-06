@@ -76,7 +76,7 @@ impl MBTilesTileSink {
 		// cost the user the output they already had.
 
 		let manager = SqliteConnectionManager::file(path);
-		let pool = Pool::builder().max_size(10).build(manager)?;
+		let pool = super::build_pool(manager)?;
 
 		pool.get()?.execute_batch(
 			"CREATE TABLE metadata (name TEXT, value TEXT, UNIQUE (name));
