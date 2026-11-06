@@ -14,6 +14,26 @@ If you cannot use GitHub for some reason, email `versatiles@michael-kreil.de` in
 
 We aim to acknowledge reports within 7 days and to work with you on a coordinated disclosure timeline.
 
+## Fixes and patch releases
+
+A vulnerability in VersaTiles, or a dependency advisory that affects the released binaries, is fixed in a patch release of the current major line. For high or critical severity we aim to publish it within 7 days of the fix being known, without waiting for other changes. The fix is listed in the release notes with its advisory ID.
+
+## Checking a deployed binary
+
+The release binaries of the `versatiles` CLI after v5.7.0 carry their dependency list, built in with [`cargo auditable`](https://github.com/rust-secure-code/cargo-auditable). A scanner can read it from the binary and match it against advisories, so a server can be checked without knowing which release it runs:
+
+```sh
+cargo audit bin /usr/local/bin/versatiles
+```
+
+Trivy, Grype and Syft read the same data. Binaries built from source with plain `cargo build` or `cargo install` don't carry it; build them with `cargo auditable build` or `cargo auditable install` instead.
+
+To check that a downloaded release was built by this repository's workflow:
+
+```sh
+gh attestation verify --owner versatiles-org versatiles-<platform>.tar.gz
+```
+
 ## Scope
 
 In scope:
