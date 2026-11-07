@@ -24,6 +24,9 @@ pub use mock::{
 	MOCK_BYTES_JPG, MOCK_BYTES_PBF, MOCK_BYTES_PNG, MOCK_BYTES_WEBP, MockReader, MockReaderProfile, MockWriter,
 };
 
+mod null;
+pub use null::{NullWriter, is_null_destination};
+
 mod pmtiles;
 pub use pmtiles::{PMTilesReader, PMTilesWriter};
 

@@ -46,9 +46,9 @@ use versatiles_core::{TileCompression, TileFormat, TilePyramid};
 use versatiles_derive::context;
 
 use crate::{
-	DataSource, DirectoryReader, DirectoryWriter, MBTilesReader, MBTilesWriter, PMTilesReader, PMTilesWriter,
-	SharedTileSource, TarTilesReader, TarTilesWriter, TileSource, TilesReader, TilesRuntime, TilesWriter,
-	VersaTilesReader, VersaTilesWriter,
+	DataSource, DirectoryReader, DirectoryWriter, MBTilesReader, MBTilesWriter, NullWriter, PMTilesReader,
+	PMTilesWriter, SharedTileSource, TarTilesReader, TarTilesWriter, TileSource, TilesReader, TilesRuntime, TilesWriter,
+	VersaTilesReader, VersaTilesWriter, is_null_destination,
 	types::{
 		data_location::DataLocation, data_source::looks_like_vpl, staged_output::StagedOutput,
 		tile_sink::destination_is_directory, url_reader::open_url_reader,
@@ -368,6 +368,11 @@ impl ContainerRegistry {
 		#[cfg(feature = "sftp")]
 		if destination.starts_with("sftp://") {
 			return self.write_to_sftp(reader, destination, runtime).await;
+		}
+
+		// Nothing is staged or published: there is no output to keep complete.
+		if is_null_destination(destination) {
+			return NullWriter::write(reader.as_ref(), runtime).await;
 		}
 
 		let path = Path::new(destination);

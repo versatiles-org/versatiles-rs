@@ -229,6 +229,7 @@ pub struct Subcommand {
 	/// Output tile container path or SFTP URL.
 	/// Supported formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory.
 	/// SFTP URLs: sftp://[user[:pass]@]host[:port]/path (requires the sftp feature)
+	/// /dev/null encodes every tile and discards it, to measure a pipeline (see --stats)
 	#[arg(verbatim_doc_comment)]
 	output_file: String,
 
