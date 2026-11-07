@@ -255,7 +255,10 @@ mod tests {
 					StaticSourceConfig::from(("/assets", "../testdata"))
 				],
 				tile_sources: vec![
-					TileSourceConfig::from(("osm", "https://download.versatiles.org/osm.versatiles")),
+					TileSourceConfig::from((
+						"osm",
+						"https://download.versatiles.org/osm-vector/osm-vector.versatiles"
+					)),
 					TileSourceConfig::from(("berlin", "../testdata/berlin.mbtiles")),
 					TileSourceConfig::from(("pipeline", "../testdata/berlin.vpl"))
 				]

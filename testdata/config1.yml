@@ -42,7 +42,7 @@ static:
 # --- Tile sources ------------------------------------------------------------
 tiles:
   - name: osm
-    src: "https://download.versatiles.org/osm.versatiles"
+    src: "https://download.versatiles.org/osm-vector/osm-vector.versatiles"
 
   - name: berlin
     src: "./berlin.mbtiles"

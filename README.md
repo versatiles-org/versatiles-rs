@@ -196,7 +196,7 @@ versatiles --version
 
 ```sh
 # Download a small region (Berlin, ~60MB)
-versatiles convert --bbox=13.0,52.3,13.8,52.7 --bbox-border=3 https://download.versatiles.org/osm.versatiles berlin.versatiles
+versatiles convert --bbox=13.0,52.3,13.8,52.7 --bbox-border=3 https://download.versatiles.org/osm-vector/osm-vector.versatiles berlin.versatiles
 ```
 
 ### 3. Explore Your Data
@@ -255,7 +255,7 @@ VersaTiles works with **tile containers** - files or directories containing map 
 **Remote access:** VersaTiles can read remote `.versatiles` and `.pmtiles` files via HTTPS, and write to remote servers via SFTP (requires `sftp` feature):
 
 ```sh
-versatiles serve https://download.versatiles.org/osm.versatiles
+versatiles serve https://download.versatiles.org/osm-vector/osm-vector.versatiles
 ```
 
 #### SFTP host keys
@@ -348,7 +348,7 @@ versatiles convert --flip-y \
 
 # Remote conversion with zoom filtering
 versatiles convert --min-zoom=1 --max-zoom=10 \
-  https://download.versatiles.org/osm.versatiles \
+  https://download.versatiles.org/osm-vector/osm-vector.versatiles \
   local-osm-filtered.versatiles
 
 # Write directly to a remote server via SFTP (requires sftp feature)
@@ -423,7 +423,7 @@ versatiles probe tiles.versatiles -dd
 versatiles probe tiles.versatiles -ddd
 
 # Probe remote container
-versatiles probe https://download.versatiles.org/osm.versatiles -d
+versatiles probe https://download.versatiles.org/osm-vector/osm-vector.versatiles -d
 ```
 
 When `-ddd` reports MVT spec issues the output includes a `fix:` line suggesting the correct `vector_repair` invocation. To apply repairs:
@@ -623,12 +623,12 @@ or `sftp://` URLs; `.mbtiles`, `.tar` and directories have to be local.
 
 ```sh
 # Serve remote tiles directly
-versatiles serve https://download.versatiles.org/osm.versatiles
+versatiles serve https://download.versatiles.org/osm-vector/osm-vector.versatiles
 
 # Mix local and remote sources
 versatiles serve \
   [local]local.versatiles \
-  [osm]https://download.versatiles.org/osm.versatiles
+  [osm]https://download.versatiles.org/osm-vector/osm-vector.versatiles
 ```
 
 **Configuration file:**
@@ -745,7 +745,7 @@ versatiles convert \
 
 # merge a remote base map with a local overlay and serve it live
 versatiles serve '[,vpl](from_merged_vector [
-  from_container filename="https://download.versatiles.org/osm.versatiles",
+  from_container filename="https://download.versatiles.org/osm-vector/osm-vector.versatiles",
   from_container filename="local-overlay.versatiles"
 ])'
 ```
@@ -853,7 +853,7 @@ tiles:
 
   # Remote HTTPS
   - name: osm
-    src: "https://download.versatiles.org/osm.versatiles"
+    src: "https://download.versatiles.org/osm-vector/osm-vector.versatiles"
 
   # MBTiles format
   - name: elevation
@@ -898,7 +898,7 @@ cors:
 
 tiles:
   - name: basemap
-    src: "https://download.versatiles.org/osm.versatiles"
+    src: "https://download.versatiles.org/osm-vector/osm-vector.versatiles"
   - name: satellite
     src: "./satellite.mbtiles"
 
@@ -981,7 +981,7 @@ VERSATILES_CACHE_DIR=/var/cache/versatiles versatiles serve tiles.versatiles
 
 # or
 export VERSATILES_CACHE_DIR=/tmp/versatiles_cache
-versatiles serve https://download.versatiles.org/osm.versatiles
+versatiles serve https://download.versatiles.org/osm-vector/osm-vector.versatiles
 ```
 
 ### Running a Public Server

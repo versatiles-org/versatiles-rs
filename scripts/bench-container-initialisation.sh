@@ -30,7 +30,7 @@ BENCHDIR="$TESTDATA/bench"
 
 # Real-world benchmark dataset: Ocean tiles from the public OSM mirror.
 # Large enough that the lazy-pyramid optimisation is actually visible.
-SOURCE_URL="https://download.versatiles.org/osm.versatiles"
+SOURCE_URL="https://download.versatiles.org/osm-vector/osm-vector.versatiles"
 SOURCE_BBOX="-180,-30,-150,0"
 SOURCE_VERSATILES="$BENCHDIR/bench.versatiles"
 

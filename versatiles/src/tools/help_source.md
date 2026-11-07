@@ -189,7 +189,7 @@ JSON fields:
 versatiles convert tiles.mbtiles output.versatiles
 
 # Remote VersaTiles container over HTTPS
-versatiles probe https://download.versatiles.org/osm.versatiles
+versatiles probe https://download.versatiles.org/osm-vector/osm-vector.versatiles
 
 # Remote PMTiles container over HTTPS
 versatiles probe https://example.org/world.pmtiles
