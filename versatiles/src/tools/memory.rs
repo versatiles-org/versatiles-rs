@@ -6,38 +6,24 @@
 //! process itself cannot report (a `SIGKILL` can't be caught or logged).
 //!
 //! Controlled by `VERSATILES_MEMORY_LOG_SECS` (default `60`; set to `0` to
-//! disable). RSS is read from `/proc/self/status` and is therefore Linux-only;
-//! on other platforms the heartbeat is a no-op.
+//! disable). RSS comes from [`ResourceUsage`], so the heartbeat runs on Linux
+//! and macOS and is a no-op elsewhere. `--stats` reports more than this; the
+//! heartbeat stays for runs that were not started with it.
 
 use std::time::Duration;
 
 use tokio::task::JoinHandle;
+use versatiles_container::ResourceUsage;
 use versatiles_core::utils::format_bytes;
 
 const DEFAULT_INTERVAL_SECS: u64 = 60;
 
 /// Current resident set size of this process in bytes, if available.
 ///
-/// Reads `VmRSS` from `/proc/self/status` (Linux only); returns `None` elsewhere
-/// or if the value cannot be read.
+/// Returns `None` on platforms where [`ResourceUsage`] cannot read it.
 #[must_use]
 pub fn process_rss_bytes() -> Option<u64> {
-	#[cfg(target_os = "linux")]
-	{
-		let status = std::fs::read_to_string("/proc/self/status").ok()?;
-		for line in status.lines() {
-			if let Some(rest) = line.strip_prefix("VmRSS:") {
-				// e.g. "VmRSS:\t 1234567 kB"
-				let kb: u64 = rest.split_whitespace().next()?.parse().ok()?;
-				return Some(kb * 1024);
-			}
-		}
-		None
-	}
-	#[cfg(not(target_os = "linux"))]
-	{
-		None
-	}
+	ResourceUsage::read().rss_bytes
 }
 
 fn interval_secs() -> u64 {
@@ -107,10 +93,10 @@ mod tests {
 		assert_eq!(interval_from(Some("soon")), DEFAULT_INTERVAL_SECS);
 	}
 
-	#[cfg(target_os = "linux")]
+	#[cfg(any(target_os = "linux", target_os = "macos"))]
 	#[test]
-	fn test_rss_available_on_linux() {
-		let rss = process_rss_bytes().expect("RSS should be readable on Linux");
+	fn test_rss_available_on_linux_and_macos() {
+		let rss = process_rss_bytes().expect("RSS should be readable on Linux and macOS");
 		assert!(rss > 0, "RSS should be positive");
 	}
 

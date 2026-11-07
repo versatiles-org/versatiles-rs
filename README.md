@@ -310,8 +310,12 @@ versatiles convert input.mbtiles output.versatiles
 | `--dry-run`                | Check the pipeline and exit, reading no tiles                                                                  | `--dry-run`                              |
 | `--writer-option`          | Format-specific output option (repeatable)                                                                     | `--writer-option=allow_unclustered=true` |
 | `--force`                  | Replace a destination directory that is not empty                                                              | `--force`                                |
+| `--stats`                  | Report CPU, memory and disk usage every 10 seconds and at the end                                              | `--stats`                                |
+| `--stats-file`             | Write CPU, memory and disk usage once a second, as JSON Lines                                                  | `--stats-file=stats.jsonl`               |
 
 **Elevation tiles.** Tiles whose tile schema says they hold heights (`dem/mapbox`, `dem/terrarium`, `dem/versatiles`) are re-encoded without loss when `--tile-format` names a format and no quality: a lossy encoder changes the color bytes a little, and each byte is part of a height. `webp` and `png` can do that; `avif` and `jpg` cannot, so `--tile-format=avif` on such tiles is refused unless you name a quality yourself (`--tile-format=avif,90`) and accept the loss. Other tiles get the encoder's default quality, as before.
+
+**Measuring a run.** `--stats` logs how busy the cores are, how much memory is resident, and how much is read from and written to disk: every 10 seconds, and in total at the end. When the CPU share stays low, the iowait share (Linux only) tells whether the cores are waiting on storage. `--stats-file` writes the same readings once a second as JSON Lines, to compare runs or to attach to an issue.
 
 **How the output is written.** A conversion builds its output beside the destination, under a `.<name>.tmp` name, and moves it into place as the last step. The destination therefore only ever holds a complete container: a conversion that fails part-way leaves whatever was there before exactly as it was, and leaves nothing new behind. (A crash leaves the `.tmp` behind; the next run to that destination clears it.) Writing to a _new_ path costs no extra disk — the bytes live under one name and the move is free — but overwriting an existing output holds both copies until the move completes.
 

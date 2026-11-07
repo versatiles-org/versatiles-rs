@@ -13,3 +13,4 @@ pub mod probe;
 pub mod reduce;
 #[cfg(feature = "server")]
 pub mod serve;
+pub mod stats;

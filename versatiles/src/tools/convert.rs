@@ -8,6 +8,8 @@ use versatiles_core::{GeoBBox, GeoCrop, TileCompression, TileFormat, TilePyramid
 use versatiles_derive::context;
 use versatiles_pipeline::{check_pipeline, vpl::parse_vpl};
 
+use super::stats::StatsOptions;
+
 /// Parse a tile format string like "webp", "webp,80", "avif,90,50" or "mlt"
 /// into (TileFormat, Option<quality>, Option<effort>).
 ///
@@ -249,6 +251,9 @@ pub struct Subcommand {
 	/// the inputs have been read.
 	#[arg(long, display_order = 4, verbatim_doc_comment)]
 	dry_run: bool,
+
+	#[command(flatten)]
+	stats: StatsOptions,
 }
 
 #[tokio::main]
@@ -269,6 +274,17 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		return dry_run(arguments);
 	}
 
+	let monitor = arguments.stats.start()?;
+	let result = convert(arguments, runtime).await;
+	match monitor {
+		// A failed conversion keeps its own error; the summary is still logged.
+		Some(monitor) => result.and(monitor.finish().await),
+		None => result,
+	}
+}
+
+/// Opens the source and writes the destination.
+async fn convert(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	log::trace!(
 		"convert: opening source '{}'",
 		location_for_display(&arguments.input_file)
