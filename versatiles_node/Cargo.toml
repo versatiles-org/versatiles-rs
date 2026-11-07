@@ -36,7 +36,7 @@ versatiles_container = { workspace = true, features = ["sftp"] }
 versatiles_core = { workspace = true, default-features = false }
 versatiles_geometry.workspace = true
 serde.workspace = true
-serde_json = { version = "1.0", default-features = false, features = ["std"] }
+serde_json.workspace = true
 
 [dev-dependencies]
 approx.workspace = true

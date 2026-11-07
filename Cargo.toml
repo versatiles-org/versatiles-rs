@@ -188,14 +188,17 @@ byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
 enumset = { version = "1.1.15", default-features = false }
 futures = { version = "0.3.34", features = ["default"] }
 itertools = { version = "0.15.0", default-features = false }
+libc = "0.2.191"
 log = { version = "0.4.35", default-features = false }
 num_cpus = { version = "1.17.0", default-features = false }
+percent-encoding = { version = "2.3.2", default-features = false }
 regex = { version = "1.13.1", default-features = false, features = [
 	"std",
 	"unicode-case",
 	"unicode-perl",
 ] }
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", default-features = false, features = ["std"] }
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
@@ -246,6 +249,7 @@ arc-swap = "1.9"                                    # Lock-free updates
 # Development dependencies
 approx = { version = "0.5.1", default-features = false, features = ["std"] }
 assert_fs = "1.1.4"
+criterion = "0.8.2"
 pretty_assertions = "1.4.1"
 rstest = { version = "0.28.0", default-features = false }
 tempfile = "3.27.0"

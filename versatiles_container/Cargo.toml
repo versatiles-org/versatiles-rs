@@ -25,7 +25,7 @@ dashmap.workspace = true
 enumset.workspace = true
 futures.workspace = true
 itertools = { workspace = true, features = ["use_alloc"] }
-libc = "0.2"
+libc.workspace = true
 log.workspace = true
 moka.workspace = true
 parking_lot.workspace = true
