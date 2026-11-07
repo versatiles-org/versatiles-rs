@@ -15,6 +15,7 @@ use axum::{
 	routing::get,
 };
 use dashmap::DashMap;
+use versatiles_core::json::JsonArray;
 use versatiles_derive::context;
 
 use super::{
@@ -144,11 +145,8 @@ pub async fn add_api_to_app(app: Router, sources: Arc<DashMap<String, Arc<Server
 					.map(|entry| entry.key().clone())
 					.collect();
 				ids.sort();
-				let tiles_index_json = format!(
-					"[{}]",
-					ids.iter().map(|id| format!("\"{id}\"")).collect::<Vec<_>>().join(",")
-				);
-				ok_json(&tiles_index_json).await
+				// Names are free text from the config, so they are escaped.
+				ok_json(&JsonArray::from(ids).stringify()).await
 			}
 		}),
 	);
@@ -182,6 +180,24 @@ mod tests {
 		let (status, body) = get_body_text(app, "/tiles/index.json").await;
 		assert_eq!(status, StatusCode::OK);
 		assert_eq!(body, "[]");
+	}
+
+	/// Source names come from the config unchecked, so the list must escape
+	/// them to stay valid JSON.
+	#[tokio::test]
+	async fn api_index_json_escapes_source_names() {
+		let sources: Arc<DashMap<String, Arc<ServerTileSource>>> = Arc::new(DashMap::new());
+		for id in ["plain", "quo\"te", "back\\slash"] {
+			let reader = MockReader::new_mock_profile(MockReaderProfile::Png)
+				.unwrap()
+				.into_shared();
+			sources.insert(id.to_string(), Arc::new(ServerTileSource::from(reader, id).unwrap()));
+		}
+		let app = add_api_to_app(Router::new(), sources).await.unwrap();
+
+		let (status, body) = get_body_text(app, "/tiles/index.json").await;
+		assert_eq!(status, StatusCode::OK);
+		assert_eq!(body, r#"["back\\slash","plain","quo\"te"]"#);
 	}
 
 	#[tokio::test]
