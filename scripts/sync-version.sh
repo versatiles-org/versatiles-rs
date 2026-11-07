@@ -12,10 +12,8 @@ echo "Cargo.toml version: $CARGO_VERSION"
 echo "package.json version: $NPM_VERSION"
 
 if [ "$CARGO_VERSION" != "$NPM_VERSION" ]; then
-    echo "ERROR: Version mismatch!"
-
     if [ "$1" == "--fix" ]; then
-        echo "Syncing package.json to match Cargo.toml..."
+        echo "Syncing package.json from $NPM_VERSION to $CARGO_VERSION..."
         cd versatiles_node
 
         # Update main version
@@ -41,6 +39,7 @@ if [ "$CARGO_VERSION" != "$NPM_VERSION" ]; then
         echo "✓ Versions synchronized (including optionalDependencies)"
         exit 0
     else
+        echo "ERROR: Version mismatch!"
         echo ""
         echo "Run with --fix to automatically sync package.json to Cargo.toml version"
         exit 1

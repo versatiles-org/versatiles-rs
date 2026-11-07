@@ -544,7 +544,10 @@ main() {
 		log_error "Format check failed! Run: cargo fmt-all"
 		exit 1
 	fi
-	if ! cargo deny check; then
+	# `--log-level error`: the duplicate-version warnings (`multiple-versions =
+	# "warn"` in deny.toml) print hundreds of lines of inclusion graphs and never
+	# fail CI. CI still shows them.
+	if ! cargo deny --log-level error check; then
 		log_error "cargo deny failed!"
 		exit 1
 	fi
