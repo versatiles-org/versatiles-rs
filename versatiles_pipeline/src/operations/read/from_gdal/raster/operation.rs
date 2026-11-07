@@ -284,7 +284,7 @@ impl TileSource for Operation {
 
 				if let Some(image) = image {
 					// Crop into tiles on a blocking thread
-					let spawn_result = tokio::task::spawn_blocking(move || {
+					let spawn_result = versatiles_core::stage::spawn_blocking(move || {
 						// The decoded image covers the whole chunk, so a tile's pixel offset
 						// within it is its distance from the chunk's top-left corner.
 						let x_min = bbox.x_min().expect("bbox is non-empty");

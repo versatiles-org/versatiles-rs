@@ -51,7 +51,7 @@ impl Manager for GdalManager {
 	async fn create(&self) -> Result<Self::Type, Self::Error> {
 		use anyhow::Context;
 		let open_dataset = self.open_dataset.clone();
-		let result = tokio::task::spawn_blocking(move || {
+		let result = versatiles_core::stage::spawn_blocking(move || {
 			let ds = (open_dataset)().context("failed to open GDAL dataset via factory")?;
 			Ok(Instance::new(ds))
 		})

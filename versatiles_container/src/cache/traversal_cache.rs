@@ -190,7 +190,7 @@ impl<V: CacheValue> TraversalCache<V> {
 				for file_path in files {
 					let tx = tx.clone();
 					let runtime = runtime.clone();
-					tokio::task::spawn_blocking(move || {
+					versatiles_core::stage::spawn_blocking(move || {
 						Self::drain_file_into(&file_path, &tx, &runtime);
 						// `drain_file_into` has returned, so the iterator — and with it the
 						// file handle — is dropped; the file can be deleted.

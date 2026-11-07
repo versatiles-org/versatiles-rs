@@ -223,7 +223,7 @@ impl TileSource for Operation {
 				};
 
 				if let Some(image) = image {
-					let spawn_result = tokio::task::spawn_blocking(move || {
+					let spawn_result = versatiles_core::stage::spawn_blocking(move || {
 						bbox
 							.iter_coords_zorder()
 							.map(|coord| {

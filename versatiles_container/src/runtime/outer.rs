@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{Result, bail};
+use versatiles_core::{Stage, StageStats};
 
 use super::{EventBus, RuntimeBuilder, RuntimeInner};
 use crate::{CacheType, DataLocation, DataSource, ProgressHandle, SharedTileSource};
@@ -140,6 +141,42 @@ impl TilesRuntime {
 	/// `false` so the server keeps running when a read fails.
 	pub fn set_abort_on_error(&self, abort: bool) {
 		self.inner.abort_on_error.store(abort, Ordering::Relaxed);
+	}
+
+	/// Starts measuring the stages created from now on: each one
+	/// [`stage`](Self::stage) hands out is kept, for
+	/// [`stage_stats`](Self::stage_stats) to report.
+	pub fn measure_stages(&self) {
+		let mut stages = self.inner.stages.lock().expect("poisoned mutex");
+		stages.get_or_insert_with(Vec::new);
+	}
+
+	/// A new stage to count the work of `name`, which reads from `input`, or
+	/// `None` while stages are not measured. A pipeline makes one per
+	/// operation.
+	#[must_use]
+	pub fn stage(&self, name: &str, input: Option<Arc<Stage>>) -> Option<Arc<Stage>> {
+		let mut stages = self.inner.stages.lock().expect("poisoned mutex");
+		let stages = stages.as_mut()?;
+		let stage = Stage::new(name, input);
+		stages.push(Arc::clone(&stage));
+		Some(stage)
+	}
+
+	/// The stage created last, which in a pipeline is its last operation: the
+	/// one a writer reads from.
+	#[must_use]
+	pub fn last_stage(&self) -> Option<Arc<Stage>> {
+		let stages = self.inner.stages.lock().expect("poisoned mutex");
+		stages.as_ref()?.last().cloned()
+	}
+
+	/// What each measured stage has cost so far, in the order the stages were
+	/// created.
+	#[must_use]
+	pub fn stage_stats(&self) -> Vec<StageStats> {
+		let stages = self.inner.stages.lock().expect("poisoned mutex");
+		stages.iter().flatten().map(|stage| stage.stats()).collect()
 	}
 
 	/// Whether the user has authorised replacing a destination a conversion

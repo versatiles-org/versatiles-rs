@@ -7,6 +7,8 @@ use std::{
 	},
 };
 
+use versatiles_core::Stage;
+
 use super::EventBus;
 use crate::{CacheType, ContainerRegistry, ProgressFactory};
 
@@ -54,6 +56,10 @@ pub struct RuntimeInner {
 	/// `abort_on_error` is atomic: the CLI builds one runtime in `main` and
 	/// fills this in per subcommand.
 	pub writer_options: Mutex<BTreeMap<String, String>>,
+	/// The stages measured under this runtime, in the order they were
+	/// created, or `None` while stages are not measured. Set by the CLI's
+	/// `--stats`; see `TilesRuntime::stage`.
+	pub stages: Mutex<Option<Vec<std::sync::Arc<Stage>>>>,
 }
 
 #[cfg(test)]
@@ -77,6 +83,7 @@ mod tests {
 			force: AtomicBool::new(false),
 			error_count: AtomicUsize::new(0),
 			writer_options: Mutex::new(BTreeMap::new()),
+			stages: Mutex::new(None),
 		};
 
 		assert_eq!(inner.cache_type, CacheType::InMemory);
@@ -100,6 +107,7 @@ mod tests {
 			force: AtomicBool::new(false),
 			error_count: AtomicUsize::new(0),
 			writer_options: Mutex::new(BTreeMap::new()),
+			stages: Mutex::new(None),
 		};
 
 		assert_eq!(inner.cache_type, CacheType::Disk(path_buf));
@@ -122,6 +130,7 @@ mod tests {
 			force: AtomicBool::new(false),
 			error_count: AtomicUsize::new(0),
 			writer_options: Mutex::new(BTreeMap::new()),
+			stages: Mutex::new(None),
 		};
 
 		// Verify we can lock and access the progress factory
@@ -147,6 +156,7 @@ mod tests {
 			force: AtomicBool::new(false),
 			error_count: AtomicUsize::new(0),
 			writer_options: Mutex::new(BTreeMap::new()),
+			stages: Mutex::new(None),
 		};
 
 		// Verify event bus works

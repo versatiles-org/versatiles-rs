@@ -275,7 +275,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		return dry_run(arguments);
 	}
 
-	let monitor = arguments.stats.start()?;
+	let monitor = arguments.stats.start(runtime)?;
 	let result = convert(arguments, runtime).await;
 	match monitor {
 		// A failed conversion keeps its own error; the summary is still logged.

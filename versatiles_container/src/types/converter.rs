@@ -49,7 +49,9 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-use crate::{RemappedTileSource, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
+use crate::{
+	MeasuredSource, RemappedTileSource, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime,
+};
 
 /// Parameters that control how tiles are transformed during reading/conversion.
 ///
@@ -250,10 +252,25 @@ pub async fn convert_tiles_container_to_str(
 ) -> Result<()> {
 	runtime.events().step("Starting conversion".to_string());
 
+	// A pipeline has measured stages of its own, one per operation; any other
+	// source becomes one stage.
+	let reader = if runtime.last_stage().is_none()
+		&& let Some(stage) = runtime.stage("read", None)
+	{
+		MeasuredSource::new(Box::new(reader), stage).into_shared()
+	} else {
+		reader
+	};
 	let converter = TilesConvertReader::new_from_reader(reader, cp).await?;
 	let pyramid = converter.tile_pyramid().await?;
 	check_tile_count(&pyramid, resolve_tile_count_limit())?;
-	runtime.write_to_str(converter.into_shared(), destination).await?;
+	// The writer turns each tile into bytes, so the encoding a pipeline asked
+	// for, such as `raster_format`'s, is done and counted here.
+	let write = runtime.write_to_str(converter.into_shared(), destination);
+	match runtime.stage("encode & write", runtime.last_stage()) {
+		Some(stage) => stage.instrument(write).await?,
+		None => write.await?,
+	}
 
 	// No `had_errors` check here either: local writes go through `StagedOutput`
 	// and remote ones through `publish_remote`, and both keep an incomplete

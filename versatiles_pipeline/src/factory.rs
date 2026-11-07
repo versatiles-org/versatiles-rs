@@ -13,7 +13,7 @@
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
-	sync::LazyLock,
+	sync::{Arc, LazyLock},
 	time::Instant,
 	vec,
 };
@@ -23,8 +23,8 @@ use async_trait::async_trait;
 use futures::future::BoxFuture;
 use itertools::Itertools;
 use regex::Regex;
-use versatiles_container::{DataLocation, TileSource, TilesRuntime};
-use versatiles_core::{TileFormat, TileType, io::url_for_display};
+use versatiles_container::{DataLocation, MeasuredSource, TileSource, TilesRuntime};
+use versatiles_core::{Stage, TileFormat, TileType, io::url_for_display};
 use versatiles_derive::context;
 
 use crate::{
@@ -452,6 +452,8 @@ impl PipelineFactory {
 			.read_operation_from_node(head)
 			.await
 			.map_err(|err| build_error::at_node(err, 0, &head_name))?;
+		let mut stage = None;
+		vpl_operation = self.measured(vpl_operation, &head_name, &mut stage);
 		log::trace!(
 			"pipeline: read node '{head_name}' built in {:.2}s",
 			node_started.elapsed().as_secs_f32()
@@ -464,6 +466,7 @@ impl PipelineFactory {
 				.tran_operation_from_node(node, vpl_operation)
 				.await
 				.map_err(|err| build_error::at_node(err, index, &node_name))?;
+			vpl_operation = self.measured(vpl_operation, &node_name, &mut stage);
 			log::trace!(
 				"pipeline: transform node '{node_name}' built in {:.2}s",
 				node_started.elapsed().as_secs_f32()
@@ -475,6 +478,24 @@ impl PipelineFactory {
 			pipeline_started.elapsed().as_secs_f32()
 		);
 		Ok(vpl_operation)
+	}
+
+	/// `operation`, counted as a stage of its own that reads from `stage`,
+	/// while the runtime measures stages. `stage` becomes the new one, for the
+	/// next operation to read from.
+	fn measured(
+		&self,
+		operation: Box<dyn TileSource>,
+		name: &str,
+		stage: &mut Option<Arc<Stage>>,
+	) -> Box<dyn TileSource> {
+		match self.runtime.stage(name, stage.take()) {
+			Some(new) => {
+				*stage = Some(Arc::clone(&new));
+				Box::new(MeasuredSource::new(operation, new))
+			}
+			None => operation,
+		}
 	}
 
 	/// Instantiates a read operation from a VPL node using the registered factory.

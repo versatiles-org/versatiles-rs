@@ -60,6 +60,11 @@ versatiles_derive.workspace = true
 # it is also a dev-dependency, for this crate's own `cfg(test)` builds.
 getrandom = { version = "0.4", optional = true }
 
+# The CPU clock of a thread, which `stage` counts each stage's work with. There
+# is none on wasm32, where no work is counted.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 approx.workspace = true
 assert_fs.workspace = true

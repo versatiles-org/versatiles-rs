@@ -510,7 +510,7 @@ impl Operation {
 						return Ok(None);
 					};
 					let encoding = inner.encoding;
-					let heights = tokio::task::spawn_blocking(move || Heights::decode(coord, tile, encoding))
+					let heights = versatiles_core::stage::spawn_blocking(move || Heights::decode(coord, tile, encoding))
 						.await
 						.map_err(|e| anyhow!("decoding task failed: {e}"))??;
 					Ok(Some(Arc::new(heights)))
@@ -553,7 +553,7 @@ impl Operation {
 		let inner = Arc::clone(&self.inner);
 		let opaque = inner.ramp.as_ref().is_some_and(ColorRamp::is_opaque);
 		let format = *inner.metadata.tile_format();
-		let image = tokio::task::spawn_blocking(move || {
+		let image = versatiles_core::stage::spawn_blocking(move || {
 			let grid = center.with_border(&neighbours);
 			shade(&grid, center.size, &coord, &inner.style, inner.ramp.as_ref())
 		})
@@ -849,8 +849,9 @@ impl TileSource for Operation {
 				async move {
 					let permit = Arc::clone(&this.inner.chunks).acquire_owned().await;
 					let reading = this.start_reading(chunk);
-					let read =
-						tokio::spawn(CancelToken::current().scope(async move { this.prefetch(chunk, next, reading).await }));
+					let read = versatiles_core::stage::spawn(
+						CancelToken::current().scope(async move { this.prefetch(chunk, next, reading).await }),
+					);
 					(chunk, permit, read)
 				}
 			})

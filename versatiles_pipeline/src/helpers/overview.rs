@@ -456,7 +456,7 @@ impl OverviewCore {
 		let vec: Vec<(TileCoord, DynamicImage)> =
 			futures::future::join_all(map.into_iter().filter(|(_, sub_entries)| !sub_entries.is_empty()).map(
 				|(coord0, sub_entries)| {
-					tokio::task::spawn_blocking(move || {
+					versatiles_core::stage::spawn_blocking(move || {
 						let mut image_tmp = DynamicImage::new_rgba8(full_size, full_size);
 						for (coord1, image1) in sub_entries {
 							image_tmp
@@ -499,7 +499,7 @@ impl OverviewCore {
 			let scale_fn = scale_fn.clone();
 			// Errors, not asserts: a panic here took down the blocking worker
 			// for a source whose tiles are not the size it declares.
-			tokio::task::spawn_blocking(move || -> Result<_> {
+			versatiles_core::stage::spawn_blocking(move || -> Result<_> {
 				let cached = if scale {
 					image_opt
 						.as_ref()

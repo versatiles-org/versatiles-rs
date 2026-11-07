@@ -211,7 +211,7 @@ impl DemSource {
 		// The warp, too, runs on the blocking pool, as in `RasterSource::image`.
 		// It used to run here on the async executor, where it held a worker
 		// thread for as long as the warp took.
-		let image = tokio::task::spawn_blocking(move || {
+		let image = versatiles_core::stage::spawn_blocking(move || {
 			cancel.sync_scope(|| -> Result<Option<DynamicImage>> {
 				let dst = reproject_to_float_dataset(&instance, width, height, &bbox, cutline.as_ref())?;
 				let band = dst.rasterband(1)?.read_band_as::<f32>()?;

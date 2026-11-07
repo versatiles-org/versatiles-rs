@@ -87,7 +87,7 @@ where
 			.inner
 			.map(move |(coord, item)| {
 				let cb = Arc::clone(&arc_cb);
-				tokio::task::spawn_blocking(move || (coord, cb(coord, item)))
+				crate::stage::spawn_blocking(move || (coord, cb(coord, item)))
 			})
 			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
 			.flat_map_unordered(None, |result| match result {

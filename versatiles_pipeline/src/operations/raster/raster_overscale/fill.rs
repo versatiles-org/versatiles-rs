@@ -575,7 +575,7 @@ impl FillOverscale {
 							return Vec::new();
 						}
 					};
-					let scaled = tokio::task::spawn_blocking(move || {
+					let scaled = versatiles_core::stage::spawn_blocking(move || {
 						coords
 							.into_iter()
 							.filter_map(|coord| match this.scale(&image, source_coord, coord) {

@@ -95,7 +95,7 @@ where
 			.map(move |coord| {
 				let cb = Arc::clone(&callback);
 				// Spawn a task for each coordinate
-				tokio::task::spawn_blocking(move || (coord, cb(coord)))
+				crate::stage::spawn_blocking(move || (coord, cb(coord)))
 			})
 			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
 			.filter_map(|result| async {
@@ -188,7 +188,7 @@ where
 		T: 'static,
 	{
 		let s = stream::iter(bbox.into_iter_coords())
-			.map(move |coord| tokio::spawn(callback(coord)))
+			.map(move |coord| crate::stage::spawn(callback(coord)))
 			.buffer_unordered(concurrency.max(1))
 			.filter_map(|result| async {
 				match result {
@@ -237,7 +237,7 @@ where
 		let s = stream::iter(bbox.into_iter_coords())
 			.map(move |coord| {
 				let fut = callback(coord);
-				async move { (coord, tokio::spawn(fut).await) }
+				async move { (coord, crate::stage::spawn(fut).await) }
 			})
 			.buffer_unordered(limits.cpu_bound)
 			.filter_map(|(coord, join_result)| async move {

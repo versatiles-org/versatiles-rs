@@ -269,7 +269,7 @@ impl RasterSource {
 		let band_mapping2 = self.band_mapping.clone();
 		let channel_count = band_mapping2.len(); // color bands + alpha
 		let bbox = *bbox;
-		let image = tokio::task::spawn_blocking(move || {
+		let image = versatiles_core::stage::spawn_blocking(move || {
 			cancel.sync_scope(|| -> Result<Option<DynamicImage>> {
 				let dst = reproject_to_dataset(
 					&instance,

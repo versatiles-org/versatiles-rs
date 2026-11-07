@@ -457,9 +457,9 @@ impl TileSource for Operation {
 				let client = client.clone();
 				let template = template.clone();
 				let runtime = runtime.clone();
-				tokio::spawn(
-					async move { fetch_tile(client, template, coord, tile_format, max_retries, Some(runtime)).await },
-				)
+				versatiles_core::stage::spawn(async move {
+					fetch_tile(client, template, coord, tile_format, max_retries, Some(runtime)).await
+				})
 			})
 			.buffer_unordered(max_concurrent)
 			.filter_map({

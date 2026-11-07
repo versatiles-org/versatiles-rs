@@ -56,6 +56,8 @@ pub mod compression;
 /// Helpers for running work across threads.
 pub mod concurrency;
 pub use concurrency::*;
+pub mod stage;
+pub use stage::{Stage, StageStats};
 pub mod io;
 pub mod json;
 pub mod macros;

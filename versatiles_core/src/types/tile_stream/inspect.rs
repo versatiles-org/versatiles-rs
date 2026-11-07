@@ -131,7 +131,7 @@ where
 			.inner
 			.map(move |(coord, item)| {
 				let cb = Arc::clone(&arc_cb);
-				tokio::task::spawn_blocking(move || {
+				crate::stage::spawn_blocking(move || {
 					cb(coord, &item);
 					(coord, item)
 				})
