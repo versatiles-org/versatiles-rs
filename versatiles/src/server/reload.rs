@@ -5,10 +5,7 @@ use arc_swap::ArcSwap;
 use dashmap::DashMap;
 use versatiles_container::TilesRuntime;
 
-use super::{
-	Url,
-	sources::{ServerTileSource, StaticSource},
-};
+use super::sources::{ServerTileSource, StaticSource};
 use crate::config::{Config, StaticSourceConfig, TileSourceConfig};
 
 /// A static source the config named, and what it was built from.
@@ -42,28 +39,56 @@ fn config_name(cfg: &TileSourceConfig) -> Option<String> {
 		.or_else(|| cfg.src.name().ok().map(ToString::to_string))
 }
 
-/// Refuses tile sources that would be served under the same or overlapping URLs.
+/// Every name a tile source is served under, its name first, if it has one.
+fn served_names(cfg: &TileSourceConfig) -> Result<Option<Vec<String>>> {
+	config_name(cfg)
+		.map(|name| ServerTileSource::served_names(&name, &cfg.aliases))
+		.transpose()
+}
+
+/// Whether `old` and `new` open the same source under the same name, so that
+/// at most their aliases differ, and the running source can stay.
+fn same_source(old: &TileSourceConfig, new: &TileSourceConfig) -> bool {
+	let without_aliases = |cfg: &TileSourceConfig| TileSourceConfig {
+		aliases: Vec::new(),
+		..cfg.clone()
+	};
+	without_aliases(old) == without_aliases(new)
+}
+
+/// Refuses tile sources that would be served under the same or overlapping
+/// URLs, counting their aliases.
 ///
 /// The start refuses them too. Applied one by one, the later of two sources
 /// with one name would silently replace the earlier.
 fn check_tile_source_names(configs: &[TileSourceConfig]) -> Result<()> {
-	let mut seen: Vec<(String, Url)> = Vec::new();
+	// Each name served so far, with the name of the source it serves.
+	let mut seen: Vec<(String, String)> = Vec::new();
 	for cfg in configs {
-		let Some(name) = config_name(cfg) else {
+		let Some(names) = served_names(cfg)? else {
 			continue;
 		};
-		let prefix = ServerTileSource::prefix_for(&name);
-		for (other_name, other_prefix) in &seen {
-			if *other_name == name {
-				bail!("tile source '{name}' is defined more than once");
-			}
-			if other_prefix.starts_with(&prefix) || prefix.starts_with(other_prefix) {
-				bail!(
-					"URL prefix collision: tile source '{name}' ({prefix}) conflicts with '{other_name}' ({other_prefix})"
-				);
+		let name = &names[0];
+		for key in &names {
+			for (other_key, other_name) in &seen {
+				let new = ServerTileSource::describe(key, name);
+				let other = ServerTileSource::describe(other_key, other_name);
+				if other_key == key {
+					if key == name && other_key == other_name {
+						bail!("tile source '{name}' is defined more than once");
+					}
+					bail!("{new} and {other} have the same name");
+				}
+				if ServerTileSource::names_collide(key, other_key) {
+					bail!(
+						"URL prefix collision: {new} ({}) conflicts with {other} ({})",
+						ServerTileSource::prefix_for(key),
+						ServerTileSource::prefix_for(other_key)
+					);
+				}
 			}
 		}
-		seen.push((name, prefix));
+		seen.extend(names.iter().map(|key| (key.clone(), name.clone())));
 	}
 	Ok(())
 }
@@ -109,49 +134,83 @@ impl ReloadHandle {
 				log::warn!("reload: skipping tile source with no resolvable name");
 				continue;
 			};
-			if old_configs.contains(new) {
-				applied_configs.push(new.clone());
-				continue;
-			}
 
-			let source = match self.runtime.reader(new.src.clone()).await {
-				Ok(reader) => ServerTileSource::from(reader, &new_name),
-				Err(e) => Err(e.context("opening the source")),
-			};
-			match source {
-				Ok(source) => {
-					let replaced = self.tile_sources.insert(new_name.clone(), Arc::new(source)).is_some();
-					let verb = if replaced { "replaced" } else { "added" };
-					log::info!("reload: {verb} tile source '{new_name}'");
-					applied_configs.push(new.clone());
-				}
-				Err(e) => {
-					// The config the running source was opened from stays on record,
-					// so the source keeps serving and still counts as changed.
-					let previous = old_configs
-						.iter()
-						.rev()
-						.find(|c| config_name(c).as_deref() == Some(&new_name));
-					if let Some(previous) = previous {
-						log::error!("reload: failed to replace tile source '{new_name}', keeping the previous one: {e:#}");
-						applied_configs.push(previous.clone());
-					} else {
-						log::error!("reload: failed to add tile source '{new_name}': {e:#}");
+			// A source whose config changed in its aliases only keeps running.
+			let running = old_configs
+				.iter()
+				.any(|old| same_source(old, new))
+				.then(|| self.tile_sources.get(&new_name).map(|entry| Arc::clone(entry.value())))
+				.flatten()
+				.filter(|source| source.id == new_name);
+
+			let source = if let Some(source) = running {
+				source
+			} else {
+				let opened = match self.runtime.reader(new.src.clone()).await {
+					Ok(reader) => ServerTileSource::from(reader, &new_name),
+					Err(e) => Err(e.context("opening the source")),
+				};
+				match opened {
+					Ok(source) => {
+						let source = Arc::new(source);
+						let replaced = self
+							.tile_sources
+							.insert(new_name.clone(), Arc::clone(&source))
+							.is_some();
+						let verb = if replaced { "replaced" } else { "added" };
+						log::info!("reload: {verb} tile source '{new_name}'");
+						source
+					}
+					Err(e) => {
+						// The configs the running sources were opened from stay on
+						// record, so those sources keep serving and the new one
+						// still counts as to do. That includes a source renamed to
+						// this one, which an alias names: its old URLs keep working.
+						let names = served_names(new).ok().flatten().unwrap_or_default();
+						let previous: Vec<TileSourceConfig> = old_configs
+							.iter()
+							.filter(|old| config_name(old).is_some_and(|name| names.contains(&name)))
+							.cloned()
+							.collect();
+						if previous.is_empty() {
+							log::error!("reload: failed to add tile source '{new_name}': {e:#}");
+						} else {
+							log::error!("reload: failed to replace tile source '{new_name}', keeping the previous one: {e:#}");
+							applied_configs.extend(previous);
+						}
+						continue;
 					}
 				}
+			};
+
+			// After the source itself, so that an alias that was the old name of
+			// a renamed source moves over without a gap.
+			for alias in &new.aliases {
+				let previous = self.tile_sources.insert(alias.clone(), Arc::clone(&source));
+				if !previous.is_some_and(|previous| Arc::ptr_eq(&previous, &source)) {
+					log::info!("reload: serving tile source '{new_name}' under the alias '{alias}'");
+				}
 			}
+			applied_configs.push(new.clone());
 		}
 
-		// Drop sources whose name is no longer in the config. By name, not by
-		// config: a changed source has a new config under its old name, and was
-		// replaced above.
+		// Drop names no longer served. By name, not by config: a changed source
+		// has a new config under its old name, and was replaced above. And
+		// against every name still served, aliases included: a source renamed
+		// to an alias is served under its old name by its new config.
+		let wanted: Vec<String> = applied_configs
+			.iter()
+			.filter_map(|cfg| served_names(cfg).ok().flatten())
+			.flatten()
+			.collect();
 		for old in &old_configs {
-			let Some(old_name) = config_name(old) else {
+			let Ok(Some(names)) = served_names(old) else {
 				continue;
 			};
-			let still_wanted = new_configs.iter().any(|c| config_name(c).as_deref() == Some(&old_name));
-			if !still_wanted && self.tile_sources.remove(&old_name).is_some() {
-				log::info!("reload: removed tile source '{old_name}'");
+			for key in &names {
+				if !wanted.contains(key) && self.tile_sources.remove(key).is_some() {
+					log::info!("reload: removed {}", ServerTileSource::describe(key, &names[0]));
+				}
 			}
 		}
 
@@ -307,6 +366,7 @@ mod tests {
 	use versatiles_container::{DataLocation, DataSource};
 
 	use super::*;
+	use crate::server::Url;
 
 	/// A handle wired to `path`, holding nothing yet.
 	fn handle(config_path: PathBuf) -> ReloadHandle {
@@ -324,7 +384,117 @@ mod tests {
 		TileSourceConfig {
 			name: name.map(ToString::to_string),
 			src: DataSource::parse(src).unwrap(),
+			aliases: Vec::new(),
 		}
+	}
+
+	fn tile_config_with_aliases(name: &str, src: &str, aliases: &[&str]) -> TileSourceConfig {
+		TileSourceConfig {
+			aliases: aliases.iter().map(ToString::to_string).collect(),
+			..tile_config(Some(name), src)
+		}
+	}
+
+	fn served(handle: &ReloadHandle, key: &str) -> Arc<ServerTileSource> {
+		Arc::clone(&handle.tile_sources.get(key).expect("the name is served"))
+	}
+
+	/// The rename aliases are for (#311): the old name becomes an alias of the
+	/// new source, and must not be dropped as a name that is gone.
+	#[tokio::test]
+	async fn a_renamed_source_keeps_its_old_name_as_an_alias() {
+		let handle = handle(PathBuf::from("unused"));
+		handle
+			.apply_tile_source_diff(&[tile_config(Some("osm"), "../testdata/berlin.mbtiles")])
+			.await;
+
+		handle
+			.apply_tile_source_diff(&[tile_config_with_aliases(
+				"osm-vector",
+				"../testdata/berlin.pmtiles",
+				&["osm"],
+			)])
+			.await;
+		assert_eq!(loaded_names(&handle), ["osm", "osm-vector"]);
+		assert!(Arc::ptr_eq(&served(&handle, "osm"), &served(&handle, "osm-vector")));
+
+		// And back: the alias becomes a name again, and the other name goes.
+		handle
+			.apply_tile_source_diff(&[tile_config(Some("osm"), "../testdata/berlin.mbtiles")])
+			.await;
+		assert_eq!(loaded_names(&handle), ["osm"]);
+		assert_eq!(served(&handle, "osm").id, "osm");
+	}
+
+	/// A source renamed to a name it cannot open under keeps serving under
+	/// the name it had, which the new config lists as an alias.
+	#[tokio::test]
+	async fn a_renamed_source_that_cannot_be_opened_keeps_its_old_name() {
+		let handle = handle(PathBuf::from("unused"));
+		handle
+			.apply_tile_source_diff(&[tile_config(Some("osm"), "../testdata/berlin.mbtiles")])
+			.await;
+		let before = served(&handle, "osm");
+
+		let renamed = [tile_config_with_aliases(
+			"osm-vector",
+			"../testdata/does_not_exist.mbtiles",
+			&["osm"],
+		)];
+		handle.apply_tile_source_diff(&renamed).await;
+		assert_eq!(loaded_names(&handle), ["osm"]);
+		assert!(Arc::ptr_eq(&before, &served(&handle, "osm")));
+
+		// Still to do, so the next reload tries again.
+		let renamed = [tile_config_with_aliases(
+			"osm-vector",
+			"../testdata/berlin.pmtiles",
+			&["osm"],
+		)];
+		handle.apply_tile_source_diff(&renamed).await;
+		assert_eq!(loaded_names(&handle), ["osm", "osm-vector"]);
+	}
+
+	/// Aliases are names only: changing them must not reopen the source.
+	#[tokio::test]
+	async fn changing_only_the_aliases_keeps_the_source_open() {
+		let handle = handle(PathBuf::from("unused"));
+		let src = "../testdata/berlin.mbtiles";
+		handle
+			.apply_tile_source_diff(&[tile_config_with_aliases("berlin", src, &["a"])])
+			.await;
+		let first = served(&handle, "berlin");
+		assert!(Arc::ptr_eq(&first, &served(&handle, "a")));
+
+		handle
+			.apply_tile_source_diff(&[tile_config_with_aliases("berlin", src, &["b"])])
+			.await;
+		assert_eq!(loaded_names(&handle), ["b", "berlin"]);
+		assert!(Arc::ptr_eq(&first, &served(&handle, "berlin")));
+		assert!(Arc::ptr_eq(&first, &served(&handle, "b")));
+
+		handle.apply_tile_source_diff(&[tile_config(Some("berlin"), src)]).await;
+		assert_eq!(loaded_names(&handle), ["berlin"]);
+		assert!(Arc::ptr_eq(&first, &served(&handle, "berlin")));
+	}
+
+	#[rstest::rstest]
+	#[case::alias_is_another_name(&["b"], "b", &[], "tile source 'b' and alias 'b' of tile source 'a' have the same name")]
+	#[case::two_sources_one_alias(&["old"], "b", &["old"], "alias 'old' of tile source 'b' and alias 'old' of tile source 'a' have the same name")]
+	#[case::name_inside_an_alias(&["old"], "old/b", &[], "URL prefix collision: tile source 'old/b' (/tiles/old/b/) conflicts with alias 'old' of tile source 'a' (/tiles/old/)")]
+	#[case::alias_is_its_own_name(&["a"], "b", &[], "tile source 'a' lists its own name as an alias")]
+	fn aliases_count_as_names_when_a_config_is_checked(
+		#[case] first_aliases: &[&str],
+		#[case] second: &str,
+		#[case] second_aliases: &[&str],
+		#[case] expected: &str,
+	) {
+		let configs = [
+			tile_config_with_aliases("a", "a.mbtiles", first_aliases),
+			tile_config_with_aliases(second, "b.mbtiles", second_aliases),
+		];
+		let error = check_tile_source_names(&configs).expect_err("the names collide");
+		assert_eq!(format!("{error:#}"), expected);
 	}
 
 	/// Write a config naming one tile source at `src`.

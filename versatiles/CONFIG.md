@@ -114,4 +114,12 @@ tiles:
     # Can be a local file (.versatiles, .mbtiles, .pmtiles, .tar),
     # a remote URL, or a VPL pipeline file (.vpl).
     src: osm.versatiles
+
+    # Optional list of other names the same tiles are served under, such as
+    # names the source had before it was renamed
+    # `/tiles/{alias}/{z}/{x}/{y}` serves the same tiles, and
+    # `/tiles/{alias}/tiles.json` points to the URLs under `name`, so clients
+    # that load the TileJSON move to the new name.
+    # `/tiles/index.json` lists only `name`.
+    aliases: [openstreetmap]
 ```

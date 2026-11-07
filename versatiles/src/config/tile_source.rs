@@ -41,6 +41,15 @@ pub struct TileSourceConfig {
 	/// a remote URL, or a VPL pipeline file (.vpl).
 	#[config_demo("osm.versatiles")]
 	pub src: DataSource,
+
+	/// Optional list of other names the same tiles are served under, such as
+	/// names the source had before it was renamed
+	/// `/tiles/{alias}/{z}/{x}/{y}` serves the same tiles, and
+	/// `/tiles/{alias}/tiles.json` points to the URLs under `name`, so clients
+	/// that load the TileJSON move to the new name.
+	/// `/tiles/index.json` lists only `name`.
+	#[config_demo("[openstreetmap]")]
+	pub aliases: Vec<String>,
 }
 
 impl TileSourceConfig {
@@ -76,16 +85,23 @@ impl<'de> Deserialize<'de> for TileSourceConfig {
 		struct TileSourceConfigHelper {
 			pub name: Option<String>,
 			pub src: String,
+			#[serde(default)]
+			pub aliases: Vec<String>,
 		}
 
 		let helper = super::pair::pair_or_mapping(
 			deserializer,
-			|name, src| TileSourceConfigHelper { name: Some(name), src },
-			"a [name, src] pair, or a mapping with `src` and an optional `name`",
+			|name, src| TileSourceConfigHelper {
+				name: Some(name),
+				src,
+				aliases: Vec::new(),
+			},
+			"a [name, src] pair, or a mapping with `src` and an optional `name` and `aliases`",
 		)?;
 		Ok(TileSourceConfig {
 			name: helper.name,
 			src: DataSource::parse(&helper.src).map_err(|e| serde::de::Error::custom(e.to_string()))?,
+			aliases: helper.aliases,
 		})
 	}
 }
@@ -96,6 +112,7 @@ impl From<(&str, &str)> for TileSourceConfig {
 		Self {
 			name: Some(name.to_string()),
 			src: DataSource::try_from(src).unwrap(),
+			aliases: Vec::new(),
 		}
 	}
 }

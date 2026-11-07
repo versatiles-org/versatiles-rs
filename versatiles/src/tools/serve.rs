@@ -113,7 +113,11 @@ fn effective_config(arguments: &Subcommand) -> Result<Config> {
 
 	for src in &arguments.tile_sources {
 		let src = DataSource::parse(src)?;
-		config.tile_sources.push(TileSourceConfig { name: None, src });
+		config.tile_sources.push(TileSourceConfig {
+			name: None,
+			src,
+			aliases: Vec::new(),
+		});
 	}
 
 	let static_patterns: Vec<Regex> = [

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use anyhow::Result;
+use anyhow::{Result, bail, ensure};
 use versatiles_container::{SharedTileSource, TileSource};
 use versatiles_core::{Blob, CancelToken, TileCompression, TileCoord, TileType};
 use versatiles_derive::context;
@@ -22,6 +22,51 @@ impl ServerTileSource {
 	/// The URL prefix a source named `id` is served under.
 	pub fn prefix_for(id: &str) -> Url {
 		Url::new(format!("/tiles/{id}/")).to_dir()
+	}
+
+	/// Whether sources served under the names `a` and `b` would get in each
+	/// other's way: the same name, or one's URLs inside the other's.
+	pub fn names_collide(a: &str, b: &str) -> bool {
+		let (a, b) = (Self::prefix_for(a), Self::prefix_for(b));
+		a.starts_with(&b) || b.starts_with(&a)
+	}
+
+	/// Every name a source called `name` is served under: `name`, then its
+	/// `aliases`.
+	///
+	/// # Errors
+	/// Returns an error if an alias is empty, or if two of the names would get
+	/// in each other's way.
+	pub fn served_names(name: &str, aliases: &[String]) -> Result<Vec<String>> {
+		let mut names: Vec<String> = vec![name.to_owned()];
+		for alias in aliases {
+			ensure!(!alias.trim().is_empty(), "tile source '{name}' has an empty alias");
+			if alias == name {
+				bail!("tile source '{name}' lists its own name as an alias");
+			}
+			if names.contains(alias) {
+				bail!("tile source '{name}' lists the alias '{alias}' twice");
+			}
+			if let Some(other) = names.iter().find(|other| Self::names_collide(alias, other)) {
+				bail!(
+					"URL prefix collision: alias '{alias}' ({}) of tile source '{name}' conflicts with its name or alias '{other}' ({})",
+					Self::prefix_for(alias),
+					Self::prefix_for(other)
+				);
+			}
+			names.push(alias.clone());
+		}
+		Ok(names)
+	}
+
+	/// How `key`, one of the names of the source called `name`, is named in
+	/// messages: as the source, or as an alias of it.
+	pub fn describe(key: &str, name: &str) -> String {
+		if key == name {
+			format!("tile source '{key}'")
+		} else {
+			format!("alias '{key}' of tile source '{name}'")
+		}
 	}
 
 	// Constructor function for creating a TileSource instance

@@ -211,6 +211,17 @@ mod tests {
 	}
 
 	#[test]
+	fn aliases_parse_and_default_to_none() -> Result<()> {
+		let config = Config::from_string(
+			"tiles:\n  - name: landcover-vector\n    src: landcover-vector.versatiles\n    aliases: [landcover-vectors]\n\
+			 \x20 - src: osm.versatiles\n",
+		)?;
+		assert_eq!(config.tile_sources[0].aliases, ["landcover-vectors"]);
+		assert_eq!(config.tile_sources[1].aliases, Vec::<String>::new());
+		Ok(())
+	}
+
+	#[test]
 	fn parse_example_config() {
 		// Adjust the path to wherever your test YAML lives (matches your workspace layout).
 		let path = Path::new("../testdata/config1.yml");
@@ -296,7 +307,10 @@ mod tests {
 					.map(|(a, b)| (a.to_string(), b.to_string()))
 					.collect::<HashMap<String, String>>(),
 				static_sources: vec![StaticSourceConfig::from(("/", "./frontend.tar")),],
-				tile_sources: vec![TileSourceConfig::from(("osm", "osm.versatiles")),],
+				tile_sources: vec![TileSourceConfig {
+					aliases: vec!["openstreetmap".to_string()],
+					..TileSourceConfig::from(("osm", "osm.versatiles"))
+				}],
 			}
 		);
 	}

@@ -46,8 +46,12 @@ pub struct StaticHandlerState {
 
 /// Core tile serving logic extracted for reuse in dynamic routing.
 /// Takes an `Arc<ServerTileSource>` to support both static and dynamic routing.
+///
+/// `prefix` is what the request path starts with: the source's own prefix, or
+/// that of an alias it is served under.
 pub async fn serve_tile_from_source(
 	path: Url,
+	prefix: &Url,
 	headers: HeaderMap,
 	tile_source: Arc<ServerTileSource>,
 	minimal_recompression: bool,
@@ -60,7 +64,7 @@ pub async fn serve_tile_from_source(
 		target.set_fast_compression();
 	}
 
-	let stripped_path = match path.strip_prefix(&tile_source.prefix) {
+	let stripped_path = match path.strip_prefix(prefix) {
 		Ok(p) => p,
 		Err(err) => {
 			// `/tiles/{id}` without the trailing slash lands here, which is a
@@ -70,7 +74,7 @@ pub async fn serve_tile_from_source(
 			log::debug!(
 				"path '{}' is not under the prefix '{}' of this tile source: {}",
 				path,
-				tile_source.prefix,
+				prefix,
 				format_error_chain(&err)
 			);
 			return error_404();

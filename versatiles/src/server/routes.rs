@@ -58,17 +58,21 @@ pub async fn serve_dynamic_tile(
 	// This used to try every prefix of the path, longest first, joining each
 	// into a new string: quadratic in the segment count. A 64 KB path of
 	// `a/a/a/…` took a second of CPU to answer with a 404 (#287).
-	let tile_source = if let Some(entry) = state.tile_sources.get(source_id) {
-		Arc::clone(entry.value())
-	} else if let Some(source) = [1, 3]
+	//
+	// The key that matched may be an alias, whose source is stored under its
+	// canonical name: the path is under the key's prefix, not the source's.
+	let found = |entry: dashmap::mapref::one::Ref<'_, String, Arc<ServerTileSource>>| {
+		(ServerTileSource::prefix_for(entry.key()), Arc::clone(entry.value()))
+	};
+	let (prefix, tile_source) = if let Some(entry) = state.tile_sources.get(source_id) {
+		found(entry)
+	} else if let Some(found) = [1, 3]
 		.into_iter()
 		.filter_map(|rest| parts.len().checked_sub(rest + 1))
 		.filter(|&last| last >= 2)
-		.find_map(|last| {
-			let entry = state.tile_sources.get(&parts[1..=last].join("/"))?;
-			Some(Arc::clone(entry.value()))
-		}) {
-		source
+		.find_map(|last| state.tile_sources.get(&parts[1..=last].join("/")).map(found))
+	{
+		found
 	} else {
 		log::debug!("no tile source matches path: {path}");
 		return error_404();
@@ -77,6 +81,7 @@ pub async fn serve_dynamic_tile(
 	// Delegate to core serving logic
 	serve_tile_from_source(
 		path,
+		&prefix,
 		headers,
 		tile_source,
 		state.minimal_recompression,
@@ -132,7 +137,12 @@ pub async fn add_api_to_app(app: Router, sources: Arc<DashMap<String, Arc<Server
 		get({
 			let sources = Arc::clone(&sources);
 			move || async move {
-				let mut ids: Vec<_> = sources.iter().map(|entry| entry.key().clone()).collect();
+				// Aliases are stored as extra keys, and only canonical names are listed.
+				let mut ids: Vec<_> = sources
+					.iter()
+					.filter(|entry| *entry.key() == entry.value().id)
+					.map(|entry| entry.key().clone())
+					.collect();
 				ids.sort();
 				let tiles_index_json = format!(
 					"[{}]",

@@ -237,54 +237,92 @@ impl TileServer {
 
 		let reader = self.runtime.reader(tile_config.src.clone()).await?;
 
-		self.add_tile_source(name, reader).await
+		self
+			.add_tile_source_with_aliases(name, &tile_config.aliases, reader)
+			.await
 	}
 
 	/// Add a tile source dynamically while server is running.
 	///
-	/// Returns error if a source with this name already exists or if URL prefix collides.
+	/// Returns error if a source or alias with this name already exists or if URL prefix collides.
 	/// Can be called before or after `start()` - changes take effect immediately.
-	#[context("adding tile source: id='{name}'")]
 	pub async fn add_tile_source(&mut self, name: String, reader: SharedTileSource) -> Result<()> {
-		log::debug!("add source: id='{name}', source={reader:?}");
+		self.add_tile_source_with_aliases(name, &[], reader).await
+	}
+
+	/// Add a tile source that is also served under each of `aliases`, as
+	/// [`add_tile_source`](Self::add_tile_source) does.
+	///
+	/// An alias serves the same tiles from the same reader, and its
+	/// `tiles.json` points to the URLs under `name`. `/tiles/index.json` lists
+	/// only `name`.
+	///
+	/// Returns error if any of the names is already served, or if its URL
+	/// prefix collides with another one's.
+	#[context("adding tile source: id='{name}'")]
+	pub async fn add_tile_source_with_aliases(
+		&mut self,
+		name: String,
+		aliases: &[String],
+		reader: SharedTileSource,
+	) -> Result<()> {
+		log::debug!("add source: id='{name}', aliases={aliases:?}, source={reader:?}");
 
 		// Create ServerTileSource (validates and wraps reader)
 		let source = sources::ServerTileSource::from(reader, &name)?;
 		let source_arc = Arc::new(source);
+		let names = sources::ServerTileSource::served_names(&name, aliases)?;
 
-		// Check for ID collision
-		if self.tile_sources.contains_key(&name) {
-			bail!("tile source '{name}' already exists");
-		}
-
-		// Check URL prefix collision with existing sources
-		let new_prefix = source_arc.prefix.clone();
-		for entry in self.tile_sources.iter() {
-			let (other_id, other_source) = entry.pair();
-			let other_prefix = &other_source.prefix;
-			if other_prefix.starts_with(&new_prefix) || new_prefix.starts_with(other_prefix) {
-				bail!(
-					"URL prefix collision: new source '{name}' ({new_prefix}) conflicts with existing source '{other_id}' ({other_prefix})"
-				);
+		for key in &names {
+			let new_prefix = sources::ServerTileSource::prefix_for(key);
+			let new = sources::ServerTileSource::describe(key, &name);
+			for entry in self.tile_sources.iter() {
+				let (other_key, other_source) = entry.pair();
+				let other = sources::ServerTileSource::describe(other_key, &other_source.id);
+				// Check for ID collision
+				if other_key == key {
+					if new == other {
+						bail!("{new} already exists");
+					}
+					bail!("cannot add {new}: '{key}' already exists as {other}");
+				}
+				// Check URL prefix collision with existing sources
+				if sources::ServerTileSource::names_collide(key, other_key) {
+					let other_prefix = sources::ServerTileSource::prefix_for(other_key);
+					bail!("URL prefix collision: new {new} ({new_prefix}) conflicts with existing {other} ({other_prefix})");
+				}
 			}
 		}
 
-		// Insert into DashMap (lock-free!)
-		self.tile_sources.insert(name.clone(), source_arc);
+		// Insert into DashMap (lock-free!). Aliases are extra keys for the same
+		// source, which is how a request finds it.
+		for key in names {
+			self.tile_sources.insert(key, Arc::clone(&source_arc));
+		}
 
-		log::info!("added tile source: id='{name}', prefix='{new_prefix}'");
+		log::info!("added tile source: id='{name}', prefix='{}'", source_arc.prefix);
+		for alias in aliases {
+			log::info!("added alias: '{alias}' of tile source '{name}'");
+		}
 		Ok(())
 	}
 
-	/// Remove a tile source dynamically while server is running.
+	/// Remove a tile source dynamically while server is running, together
+	/// with its aliases.
 	///
 	/// Returns true if the source was found and removed, false if not found.
+	/// `name` is the name the source was added under: an alias of it removes
+	/// nothing, as that would leave the source half served.
 	/// In-flight requests to the removed source will complete successfully
 	/// due to Arc reference counting.
 	pub fn remove_tile_source(&mut self, name: &str) -> Result<bool> {
-		let removed = self.tile_sources.remove(name);
+		let is_source = self
+			.tile_sources
+			.get(name)
+			.is_some_and(|entry| entry.value().id == name);
 
-		if removed.is_some() {
+		if is_source {
+			self.tile_sources.retain(|_, source| source.id != name);
 			log::info!("removed tile source: id='{name}'");
 			Ok(true)
 		} else {
@@ -565,8 +603,13 @@ impl TileServer {
 	pub fn url_mapping(&self) -> Vec<(super::Url, String)> {
 		let mut result = Vec::new();
 		for entry in self.tile_sources.iter() {
-			let tile_source = entry.value();
-			result.push((tile_source.prefix.clone(), tile_source.source_description()));
+			let (key, tile_source) = entry.pair();
+			let description = if *key == tile_source.id {
+				tile_source.source_description()
+			} else {
+				format!("alias of tile source '{}'", tile_source.id)
+			};
+			result.push((sources::ServerTileSource::prefix_for(key), description));
 		}
 		result
 	}
@@ -1082,6 +1125,126 @@ mod tests {
 				"container 'dummy' ('dummy')".to_string()
 			)]
 		);
+	}
+
+	fn aliases(names: &[&str]) -> Vec<String> {
+		names.iter().map(ToString::to_string).collect()
+	}
+
+	/// An alias serves the same tiles under an old name, and its TileJSON
+	/// points to the new one, so clients that load it move over (#311).
+	#[tokio::test]
+	async fn an_alias_serves_the_tiles_and_points_to_the_new_name() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		let reader = MockReader::new_mock_profile(MRP::Pbf)?.into_shared();
+		server
+			.add_tile_source_with_aliases("osm-vector".to_string(), &aliases(&["osm", "old/osm"]), reader)
+			.await?;
+		server.start().await?;
+		let port = server.port();
+
+		let get = async |path: &str| -> Result<(u16, String)> {
+			let response = reqwest::get(format!("http://{IP}:{port}/{path}")).await?;
+			Ok((response.status().as_u16(), response.text().await?))
+		};
+
+		let (_, tile) = get("tiles/osm-vector/3/4/5").await?;
+		for name in ["osm", "old/osm"] {
+			assert_eq!(
+				get(&format!("tiles/{name}/3/4/5")).await?,
+				(200, tile.clone()),
+				"{name}"
+			);
+			let (status, tilejson) = get(&format!("tiles/{name}/tiles.json")).await?;
+			assert_eq!(status, 200, "{name}");
+			assert!(
+				tilejson.contains(r#""tiles":["/tiles/osm-vector/{z}/{x}/{y}"]"#),
+				"{name}: {tilejson}"
+			);
+		}
+		assert_eq!(get("tiles/index.json").await?, (200, r#"["osm-vector"]"#.to_string()));
+
+		server.stop().await;
+		Ok(())
+	}
+
+	#[rstest]
+	#[case::alias_is_a_name("osm", &[], "x", &["osm"], "cannot add alias 'osm' of tile source 'x': 'osm' already exists as tile source 'osm'")]
+	#[case::name_is_an_alias("osm", &["old"], "old", &[], "cannot add tile source 'old': 'old' already exists as alias 'old' of tile source 'osm'")]
+	#[case::alias_inside_a_name("osm", &[], "x", &["osm/extra"], "URL prefix collision: new alias 'osm/extra' of tile source 'x'")]
+	#[case::name_inside_an_alias("osm", &["old"], "old/extra", &[], "conflicts with existing alias 'old' of tile source 'osm'")]
+	#[case::own_name("osm", &[], "x", &["x"], "tile source 'x' lists its own name as an alias")]
+	#[case::twice("osm", &[], "x", &["y", "y"], "tile source 'x' lists the alias 'y' twice")]
+	#[case::empty("osm", &[], "x", &[""], "tile source 'x' has an empty alias")]
+	#[tokio::test]
+	async fn an_alias_that_collides_is_refused_and_nothing_is_added(
+		#[case] first: &str,
+		#[case] first_aliases: &[&str],
+		#[case] second: &str,
+		#[case] second_aliases: &[&str],
+		#[case] message: &str,
+	) -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		let reader = MockReader::new_mock_profile(MRP::Pbf)?.into_shared();
+		server
+			.add_tile_source_with_aliases(first.to_string(), &aliases(first_aliases), reader)
+			.await?;
+		let before = server.tile_sources.len();
+
+		let reader = MockReader::new_mock_profile(MRP::Pbf)?.into_shared();
+		let error = server
+			.add_tile_source_with_aliases(second.to_string(), &aliases(second_aliases), reader)
+			.await
+			.expect_err("the names collide");
+		assert!(format!("{error:#}").contains(message), "{error:#}");
+		assert_eq!(server.tile_sources.len(), before);
+		Ok(())
+	}
+
+	/// Removing a source removes its aliases, and removing by an alias does
+	/// nothing, which would leave the source half served.
+	#[tokio::test]
+	async fn a_source_is_removed_with_its_aliases() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		let reader = MockReader::new_mock_profile(MRP::Pbf)?.into_shared();
+		server
+			.add_tile_source_with_aliases("osm-vector".to_string(), &aliases(&["osm"]), reader)
+			.await?;
+		let reader = MockReader::new_mock_profile(MRP::Pbf)?.into_shared();
+		server.add_tile_source("other".to_string(), reader).await?;
+
+		assert!(!server.remove_tile_source("osm")?);
+		assert_eq!(server.tile_sources.len(), 3);
+		assert!(server.remove_tile_source("osm-vector")?);
+		let keys: Vec<String> = server.tile_sources.iter().map(|entry| entry.key().clone()).collect();
+		assert_eq!(keys, ["other"]);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn the_url_mapping_shows_an_alias_as_one() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		let reader = MockReader::new_mock_profile(MRP::Pbf)?.into_shared();
+		server
+			.add_tile_source_with_aliases("osm-vector".to_string(), &aliases(&["osm"]), reader)
+			.await?;
+
+		let mut mapping = server.url_mapping();
+		mapping.sort_by(|a, b| a.0.str.cmp(&b.0.str));
+		assert_eq!(
+			mapping,
+			vec![
+				(
+					crate::server::Url::from("/tiles/osm-vector/"),
+					"container 'dummy' ('dummy')".to_string()
+				),
+				(
+					crate::server::Url::from("/tiles/osm/"),
+					"alias of tile source 'osm-vector'".to_string()
+				),
+			]
+		);
+		Ok(())
 	}
 
 	#[rstest]
