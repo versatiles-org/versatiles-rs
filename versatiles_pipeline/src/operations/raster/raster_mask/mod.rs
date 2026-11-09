@@ -14,8 +14,8 @@
 //! from_container file=./tiles.versatiles | raster_mask geojson=./germany.geojson buffer=1000 blur=500 blur_function=cosine
 //! ```
 
-mod blur_function;
-mod mask_geometry;
+pub(crate) mod blur_function;
+pub(crate) mod mask_geometry;
 
 use std::sync::Arc;
 

@@ -216,6 +216,10 @@ vector_filter_properties [transform]
 vector_filter_properties.regex: RegexPattern | required
 vector_filter_properties.invert: Option<bool> | optional | default=false
 
+vector_mask [transform]
+vector_mask.geojson: FileLocation | required | accepts=suggested[geojson,json]
+vector_mask.layer: Option<Vec<String>> | optional | names=layer-of-source
+
 vector_overzoom [transform]
 vector_overzoom.level_max: Option<ZoomLevel> | optional | bounds=[0,30] int
 vector_overzoom.buffer: Option<u32> | optional | default=80 | bounds=[0,4294967295] int

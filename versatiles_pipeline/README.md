@@ -14,7 +14,7 @@ versatiles serve pipeline.vpl
 
 **Read:** [`from_color`](#from_color) · [`from_container`](#from_container) · [`from_csv`](#from_csv) · [`from_debug`](#from_debug) · [`from_gdal_dem`](#from_gdal_dem) · [`from_gdal_raster`](#from_gdal_raster) · [`from_geo`](#from_geo) · [`from_grid`](#from_grid) · [`from_h3`](#from_h3) · [`from_merged_vector`](#from_merged_vector) · [`from_stacked`](#from_stacked) · [`from_stacked_raster`](#from_stacked_raster) · [`from_tile`](#from_tile) · [`from_tilejson`](#from_tilejson)
 
-**Transform:** [`dem_colorize`](#dem_colorize) · [`dem_hillshade`](#dem_hillshade) · [`dem_overscale`](#dem_overscale) · [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_overzoom`](#vector_overzoom) · [`vector_reduce_to_style`](#vector_reduce_to_style) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
+**Transform:** [`dem_colorize`](#dem_colorize) · [`dem_hillshade`](#dem_hillshade) · [`dem_overscale`](#dem_overscale) · [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_mask`](#vector_mask) · [`vector_overzoom`](#vector_overzoom) · [`vector_reduce_to_style`](#vector_reduce_to_style) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
 
 ## Defining a pipeline
 
@@ -856,6 +856,36 @@ A property's name is matched with its layer as a prefix, in the form `layer_name
 
 - **`regex`: regex (required)** - Regular expression matched against each property's prefixed name.
 - _`invert`: bool (optional)_ - Whether to keep the matching properties instead of removing them. Defaults to `false`.
+
+---
+
+## vector_mask
+
+Cuts vector tiles to a GeoJSON polygon, keeping only what lies inside it.
+
+Points outside the polygon are dropped, and lines and polygons are cut at its edge. A point exactly on the edge counts as inside. Properties are kept as they are.
+
+```vpl
+from_container filename="osm.versatiles" | vector_mask geojson="berlin.geojson"
+```
+
+Without `layer`, every layer is cut and tiles outside the polygon are not produced at all. With `layer`, only the named layers are cut and the others pass through everywhere, so this keeps place names inside the region while country and state names stay on the whole map:
+
+```vpl
+from_container filename="osm.versatiles"
+| vector_mask geojson="berlin-brandenburg.geojson" layer=["place_labels"]
+```
+
+Tiles entirely inside the polygon pass through without being decoded. Without `layer`, tiles entirely outside are dropped without being decoded too, so only tiles on the edge are. Geometry in a tile's buffer is cut where it really lies, up to one tile beyond the tile's edge.
+
+Cut geometry is rounded back to the tile grid, and a sliver that rounding collapses is dropped.
+
+The mask is not reprojected: coordinates outside the WGS84 range are refused, as is a `crs` member naming another projection. Overlapping polygons in the GeoJSON are merged first, so an area covered twice stays inside.
+
+### Parameters
+
+- **`geojson`: path or URL (required)** - Path or URL of a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326 lon/lat degrees.
+- _`layer`: [String,...] (optional)_ - Layers to cut, for example `layer=["place_labels"]`. Defaults to every layer.
 
 ---
 

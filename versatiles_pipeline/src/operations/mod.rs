@@ -37,6 +37,7 @@ pub fn transform_operation_factories() -> Vec<Box<dyn TransformOperationFactoryT
 		Box::new(vector::vector_filter_features::Factory {}),
 		Box::new(vector::vector_filter_layers::Factory {}),
 		Box::new(vector::vector_filter_properties::Factory {}),
+		Box::new(vector::vector_mask::Factory {}),
 		Box::new(vector::vector_overzoom::Factory {}),
 		Box::new(vector::vector_reduce_to_style::Factory {}),
 		Box::new(vector::vector_repair::Factory {}),

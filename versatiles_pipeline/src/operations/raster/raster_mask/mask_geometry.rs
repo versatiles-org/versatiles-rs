@@ -178,43 +178,20 @@ impl MaskGeometry {
 		blur_meters: f64,
 		blur_function: BlurFunction,
 	) -> Result<Self> {
-		let collection = read_geojson(geojson)?;
+		let multi_polygon = read_mask_polygons(geojson)?;
+		Self::from_mercator(multi_polygon, buffer_meters, blur_meters, blur_function)
+	}
 
-		// Collect all polygons from the GeoJSON
-		let mut polygons_wgs84: Vec<Polygon<f64>> = Vec::new();
-
-		for feature in collection.features {
-			match feature.geometry {
-				Geometry::Polygon(poly) => {
-					polygons_wgs84.push(poly);
-				}
-				Geometry::MultiPolygon(multi) => {
-					for poly in multi.0 {
-						polygons_wgs84.push(poly);
-					}
-				}
-				_ => {
-					// Skip non-polygon geometries
-					log::warn!("Skipping non-polygon geometry in GeoJSON mask file");
-				}
-			}
-		}
-
-		ensure!(
-			!polygons_wgs84.is_empty(),
-			"No polygon geometries found in GeoJSON file"
-		);
-
-		// Convert to Web Mercator, but only once the coordinates have been shown to
-		// be lon/lat degrees. Projecting first would clamp a northing in metres to
-		// the north edge of the world, and the mask would come out as a shape
-		// nobody drew — either a hard error four layers down in the pyramid clip,
-		// or, for a mask whose numbers happen to be in range, silently the wrong
-		// part of the planet.
-		let multi_polygon = MultiPolygon(polygons_wgs84);
-		ensure_wgs84_degrees(multi_polygon.bounding_rect())?;
-		let multi_polygon = multi_polygon.to_mercator();
-
+	/// Build the mask from polygons already in Web Mercator metres.
+	///
+	/// # Errors
+	/// Returns an error if the geometry is empty.
+	pub fn from_mercator(
+		multi_polygon: MultiPolygon<f64>,
+		buffer_meters: f64,
+		blur_meters: f64,
+		blur_function: BlurFunction,
+	) -> Result<Self> {
 		// Build R-tree from edges
 		let edges = extract_edges(&multi_polygon);
 		let edge_rtree = RTree::bulk_load(edges);
@@ -238,7 +215,56 @@ impl MaskGeometry {
 			outer_threshold,
 		})
 	}
+}
 
+/// Reads the Polygons and MultiPolygons of a GeoJSON document and projects them
+/// to Web Mercator metres.
+///
+/// Other geometry types are skipped with a warning.
+///
+/// # Errors
+/// Returns an error if the document cannot be parsed, holds no polygon, or its
+/// coordinates are not lon/lat degrees.
+pub fn read_mask_polygons(geojson: &[u8]) -> Result<MultiPolygon<f64>> {
+	let collection = read_geojson(geojson)?;
+
+	// Collect all polygons from the GeoJSON
+	let mut polygons_wgs84: Vec<Polygon<f64>> = Vec::new();
+
+	for feature in collection.features {
+		match feature.geometry {
+			Geometry::Polygon(poly) => {
+				polygons_wgs84.push(poly);
+			}
+			Geometry::MultiPolygon(multi) => {
+				for poly in multi.0 {
+					polygons_wgs84.push(poly);
+				}
+			}
+			_ => {
+				// Skip non-polygon geometries
+				log::warn!("Skipping non-polygon geometry in GeoJSON mask file");
+			}
+		}
+	}
+
+	ensure!(
+		!polygons_wgs84.is_empty(),
+		"No polygon geometries found in GeoJSON file"
+	);
+
+	// Convert to Web Mercator, but only once the coordinates have been shown to
+	// be lon/lat degrees. Projecting first would clamp a northing in metres to
+	// the north edge of the world, and the mask would come out as a shape
+	// nobody drew — either a hard error four layers down in the pyramid clip,
+	// or, for a mask whose numbers happen to be in range, silently the wrong
+	// part of the planet.
+	let multi_polygon = MultiPolygon(polygons_wgs84);
+	ensure_wgs84_degrees(multi_polygon.bounding_rect())?;
+	Ok(multi_polygon.to_mercator())
+}
+
+impl MaskGeometry {
 	/// Classify a tile based on its relationship to the mask geometry.
 	///
 	/// # Arguments
