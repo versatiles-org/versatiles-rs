@@ -1,7 +1,7 @@
 use std::{collections::HashSet, sync::Arc};
 
-use anyhow::{Context, Result, bail};
-use geo::{BooleanOps, BoundingRect, MapCoords, Orient, orient::Direction, unary_union};
+use anyhow::{Context, Result};
+use geo::{BooleanOps, BoundingRect, MapCoords};
 use geo_types::{Coord, Geometry, MultiLineString, MultiPoint, MultiPolygon, Polygon, Rect};
 use versatiles_container::{Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileCoord, TilePyramid};
@@ -76,7 +76,8 @@ const CLASSIFY_MARGIN_TILES: f64 = 1.0;
 #[derive(Debug)]
 struct Operation {
 	mask: Arc<MaskGeometry>,
-	/// The mask's polygons in Web Mercator metres, merged into one.
+	/// The mask's polygons in Web Mercator metres, as merged by
+	/// [`read_mask_polygons`].
 	polygons: MultiPolygon<f64>,
 	/// Layers to cut, or `None` for every layer.
 	layer_set: Option<HashSet<String>>,
@@ -154,25 +155,16 @@ impl Operation {
 			read_mask_polygons(geojson.as_slice()).with_context(|| format!("reading the mask {}", args.geojson))?;
 
 		let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();
-		let operation = Self::new(&polygons, args.layer, &mut tile_pyramid)?;
+		let operation = Self::new(polygons, args.layer, &mut tile_pyramid)?;
 		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}
 
 	/// Builds the operation from mask polygons in Web Mercator metres, clipping
 	/// `tile_pyramid` to the mask when every layer is cut.
-	fn new(polygons: &MultiPolygon<f64>, layer: Option<Vec<String>>, tile_pyramid: &mut TilePyramid) -> Result<Self> {
-		// Both the ray casting in `MaskGeometry` and the clipping below count
-		// crossings, so two overlapping polygons would cancel out where they
-		// overlap. Merging them first makes "covered by any polygon" the rule.
-		//
-		// The merge tells holes from outer rings by winding, which GeoJSON in the
-		// wild often gets wrong despite RFC 7946, so the rings are wound by their
-		// role first. Without that, a hole wound like its exterior is filled in.
-		let polygons = unary_union(&polygons.orient(Direction::Default).0);
-		if polygons.0.is_empty() {
-			bail!("the mask polygons have no area");
-		}
-
+	///
+	/// The polygons must not overlap, since the clipping counts crossings:
+	/// [`read_mask_polygons`] merges them.
+	fn new(polygons: MultiPolygon<f64>, layer: Option<Vec<String>>, tile_pyramid: &mut TilePyramid) -> Result<Self> {
 		let mask = MaskGeometry::from_mercator(polygons.clone(), 0.0, 0.0, BlurFunction::default())?;
 
 		let layer_set = layer.map(|l| l.into_iter().collect::<HashSet<_>>());
@@ -372,22 +364,25 @@ mod tests {
 
 	use super::*;
 
-	/// A square from 0° to 10° in both directions, with a hole from 4° to 6°.
+	/// A square from 0° to 10° in both directions, with a hole from 4° to 6°,
+	/// read the way the operation reads it.
 	///
 	/// The hole is wound the same way as the exterior, against RFC 7946, which
 	/// real GeoJSON often is too.
 	fn mask_polygons() -> MultiPolygon<f64> {
-		MultiPolygon(vec![polygon!(
-			exterior: [(x: 0.0, y: 0.0), (x: 10.0, y: 0.0), (x: 10.0, y: 10.0), (x: 0.0, y: 10.0), (x: 0.0, y: 0.0)],
-			interiors: [[(x: 4.0, y: 4.0), (x: 6.0, y: 4.0), (x: 6.0, y: 6.0), (x: 4.0, y: 6.0), (x: 4.0, y: 4.0)]],
-		)])
-		.to_mercator()
+		read_mask_polygons(
+			br#"{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},
+			"geometry":{"type":"Polygon","coordinates":[
+				[[0,0],[10,0],[10,10],[0,10],[0,0]],
+				[[4,4],[6,4],[6,6],[4,6],[4,4]]]}}]}"#,
+		)
+		.unwrap()
 	}
 
 	fn operation(layer: Option<&[&str]>) -> Operation {
 		let mut pyramid = TilePyramid::new_full_up_to(8);
 		Operation::new(
-			&mask_polygons(),
+			mask_polygons(),
 			layer.map(|l| l.iter().map(|s| (*s).to_string()).collect()),
 			&mut pyramid,
 		)

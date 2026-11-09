@@ -10,7 +10,7 @@
 use std::ops::Range;
 
 use anyhow::{Result, ensure};
-use geo::BoundingRect;
+use geo::{BoundingRect, Orient, orient::Direction, unary_union};
 use geo_types::{Geometry, LineString, MultiPolygon, Polygon};
 use rstar::{AABB, RTree, RTreeObject};
 use versatiles_core::{EARTH_RADIUS, GeoBBox};
@@ -217,14 +217,15 @@ impl MaskGeometry {
 	}
 }
 
-/// Reads the Polygons and MultiPolygons of a GeoJSON document and projects them
-/// to Web Mercator metres.
+/// Reads the Polygons and MultiPolygons of a GeoJSON document, projects them
+/// to Web Mercator metres and merges them, so that overlapping polygons cover
+/// their overlap.
 ///
 /// Other geometry types are skipped with a warning.
 ///
 /// # Errors
-/// Returns an error if the document cannot be parsed, holds no polygon, or its
-/// coordinates are not lon/lat degrees.
+/// Returns an error if the document cannot be parsed, holds no polygon with an
+/// area, or its coordinates are not lon/lat degrees.
 pub fn read_mask_polygons(geojson: &[u8]) -> Result<MultiPolygon<f64>> {
 	let collection = read_geojson(geojson)?;
 
@@ -261,7 +262,19 @@ pub fn read_mask_polygons(geojson: &[u8]) -> Result<MultiPolygon<f64>> {
 	// part of the planet.
 	let multi_polygon = MultiPolygon(polygons_wgs84);
 	ensure_wgs84_degrees(multi_polygon.bounding_rect())?;
-	Ok(multi_polygon.to_mercator())
+	let multi_polygon = multi_polygon.to_mercator();
+
+	// Both the inside test and the distance to the edge treat every ring of
+	// every polygon as a boundary, so where two polygons overlap their crossings
+	// cancel out and their inner edges blur. Merging them first makes "covered
+	// by any polygon" the rule.
+	//
+	// The merge tells holes from outer rings by winding, which GeoJSON in the
+	// wild often gets wrong despite RFC 7946, so the rings are wound by their
+	// role first. Without that, a hole wound like its exterior is filled in.
+	let merged = unary_union(&multi_polygon.orient(Direction::Default).0);
+	ensure!(!merged.0.is_empty(), "The mask polygons have no area");
+	Ok(merged)
 }
 
 impl MaskGeometry {

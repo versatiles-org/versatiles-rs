@@ -644,6 +644,8 @@ Makes raster pixels outside a GeoJSON polygon transparent.
 
 The mask is not reprojected: coordinates outside the WGS84 range are refused, as is a `crs` member naming another projection. A mask written lat,lon is in range and cannot be detected — it masks the wrong part of the world.
 
+Overlapping polygons in the GeoJSON are merged first, so an area covered twice stays inside.
+
 ### Parameters
 
 - **`geojson`: path or URL (required)** - Path or URL of a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326 lon/lat degrees.

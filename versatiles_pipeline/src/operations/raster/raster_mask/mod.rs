@@ -40,6 +40,9 @@ use crate::{
 /// The mask is not reprojected: coordinates outside the WGS84 range are refused,
 /// as is a `crs` member naming another projection. A mask written lat,lon is in
 /// range and cannot be detected — it masks the wrong part of the world.
+///
+/// Overlapping polygons in the GeoJSON are merged first, so an area covered
+/// twice stays inside.
 struct Args {
 	/// Path or URL of a GeoJSON file holding a Polygon or MultiPolygon, in
 	/// EPSG:4326 lon/lat degrees.
@@ -368,6 +371,75 @@ mod tests {
 		let (grown_clear, grown_solid, _) = tally(&grown);
 		assert!(grown_solid > plain_solid, "{grown_solid} should exceed {plain_solid}");
 		assert!(grown_clear < plain_clear, "{grown_clear} should be under {plain_clear}");
+	}
+
+	/// A mask from the polygons given as GeoJSON `coordinates`, one feature each.
+	fn mask_of(polygons: &[&str], blur: f64) -> MaskGeometry {
+		let features = polygons
+			.iter()
+			.map(|c| {
+				format!(r#"{{"type":"Feature","properties":{{}},"geometry":{{"type":"Polygon","coordinates":{c}}}}}"#)
+			})
+			.collect::<Vec<_>>()
+			.join(",");
+		let geojson = format!(r#"{{"type":"FeatureCollection","features":[{features}]}}"#);
+		MaskGeometry::from_geojson(geojson.as_bytes(), 0.0, blur, BlurFunction::default()).unwrap()
+	}
+
+	/// The tally of the z8 tile at `lon`, `lat`.
+	fn tally_at(mask: &MaskGeometry, lon: f64, lat: f64) -> (usize, usize, usize) {
+		let coord = TileCoord::from_geo(lon, lat, 8).unwrap();
+		tally(&mask.compute_alpha_grid(coord.to_mercator_bbox(), 256, 256))
+	}
+
+	/// Two squares, 0°–10° and 5°–15°, overlapping from 5° to 10°.
+	const OVERLAPPING_SQUARES: [&str; 2] = [
+		"[[[0,0],[10,0],[10,10],[0,10],[0,0]]]",
+		"[[[5,5],[15,5],[15,15],[5,15],[5,5]]]",
+	];
+
+	#[test]
+	fn overlapping_polygons_cover_their_overlap() {
+		let mask = mask_of(&OVERLAPPING_SQUARES, 0.0);
+		assert_eq!(tally_at(&mask, 2.5, 2.5), (0, 65536, 0), "first square only");
+		assert_eq!(tally_at(&mask, 7.5, 7.5), (0, 65536, 0), "both squares");
+		assert_eq!(tally_at(&mask, 12.5, 12.5), (0, 65536, 0), "second square only");
+		assert_eq!(tally_at(&mask, 18.0, 18.0), (65536, 0, 0), "neither");
+	}
+
+	#[test]
+	fn blur_leaves_no_seam_where_overlapping_polygons_meet() {
+		// Each tile is covered by one square only and lies within the blur of an
+		// edge of the other square that is inside the first, but more than the
+		// blur away from the edge of both together.
+		let mask = mask_of(&OVERLAPPING_SQUARES, 150_000.0);
+		assert_eq!(tally_at(&mask, 7.5, 11.5), (0, 65536, 0), "above the first square");
+		assert_eq!(tally_at(&mask, 3.5, 7.5), (0, 65536, 0), "left of the second square");
+	}
+
+	#[test]
+	fn a_hole_wound_like_its_exterior_stays_a_hole() {
+		// Both rings counterclockwise, against RFC 7946.
+		let mask = mask_of(
+			&["[[[0,0],[10,0],[10,10],[0,10],[0,0]],[[4,4],[6,4],[6,6],[4,6],[4,4]]]"],
+			0.0,
+		);
+		assert_eq!(tally_at(&mask, 5.0, 5.0), (65536, 0, 0), "the hole");
+		assert_eq!(tally_at(&mask, 2.5, 2.5), (0, 65536, 0), "around the hole");
+	}
+
+	#[test]
+	fn an_island_in_a_lake_stays_opaque() {
+		let mask = mask_of(
+			&[
+				"[[[0,0],[20,0],[20,20],[0,20],[0,0]],[[5,5],[5,15],[15,15],[15,5],[5,5]]]",
+				"[[[8,8],[12,8],[12,12],[8,12],[8,8]]]",
+			],
+			0.0,
+		);
+		assert_eq!(tally_at(&mask, 10.0, 10.0), (0, 65536, 0), "the island");
+		assert_eq!(tally_at(&mask, 6.5, 6.5), (65536, 0, 0), "the lake");
+		assert_eq!(tally_at(&mask, 2.5, 2.5), (0, 65536, 0), "the land around the lake");
 	}
 
 	#[test]
