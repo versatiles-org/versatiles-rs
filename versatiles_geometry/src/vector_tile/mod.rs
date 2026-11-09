@@ -30,6 +30,7 @@ mod tile;
 mod validator;
 mod value;
 
+pub use feature::VectorTileFeature;
 pub use geometry_type::GeomType;
 pub use layer::VectorTileLayer;
 pub use repair::repair_tile;

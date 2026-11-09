@@ -15,11 +15,19 @@ use crate::{
 	geo::{GeoFeature, GeoProperties, GeoValue},
 };
 
+/// One feature of a vector tile layer, with its geometry still encoded.
+///
+/// Properties are indices into the layer's key and value tables, so a feature is
+/// only meaningful together with the [`VectorTileLayer`] it belongs to.
 #[derive(Clone, Debug, PartialEq)]
 pub struct VectorTileFeature {
+	/// Feature id (MVT field 1), if the tile carries one.
 	pub id: Option<u64>,
+	/// Alternating key and value indices into the layer's tables (MVT field 2).
 	pub tag_ids: Vec<u32>,
+	/// Geometry type (MVT field 3).
 	pub geom_type: GeomType,
+	/// Geometry as an MVT command stream in tile coordinates (MVT field 4).
 	pub geom_data: Blob,
 }
 
@@ -212,6 +220,7 @@ impl VectorTileFeature {
 		Ok(f)
 	}
 
+	/// Encodes the feature as an MVT `Feature` message.
 	pub fn to_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_le();
 
@@ -282,6 +291,11 @@ impl VectorTileFeature {
 		total
 	}
 
+	/// Decodes the geometry in tile coordinates.
+	///
+	/// MVT has no singular types, so this returns a `MultiPoint`,
+	/// `MultiLineString` or `MultiPolygon`, or an empty `GeometryCollection` for a
+	/// feature without geometry.
 	pub fn to_geometry(&self) -> Result<Geometry<f64>> {
 		let coordinates = parse_geom_command_stream(&self.geom_data)?;
 
@@ -380,10 +394,12 @@ impl VectorTileFeature {
 		}
 	}
 
+	/// Decodes the properties from the tables of `layer`.
 	pub fn decode_properties(&self, layer: &VectorTileLayer) -> Result<GeoProperties> {
 		layer.decode_tag_ids(&self.tag_ids)
 	}
 
+	/// Decodes geometry, id and properties, the latter from the tables of `layer`.
 	pub fn to_feature(&self, layer: &VectorTileLayer) -> Result<GeoFeature> {
 		let mut feature = GeoFeature::new(self.to_geometry().context("Failed to convert to geometry")?);
 
@@ -511,6 +527,12 @@ impl VectorTileFeature {
 		Ok(Geometry::MultiPolygon(MultiPolygon(polygons)))
 	}
 
+	/// Encodes a geometry in tile coordinates as a feature.
+	///
+	/// Coordinates are rounded to the integer grid, and polygon rings are wound as
+	/// MVT 2.1 requires whatever their winding was. Rings that rounding collapses
+	/// are skipped. `tag_ids` must index the tables of the layer the feature is
+	/// added to.
 	#[expect(
 		clippy::too_many_lines,
 		reason = "one match over the geometry variants; splitting it would separate the encoder from its cases"
@@ -690,7 +712,9 @@ impl VectorTileFeature {
 		})
 	}
 
+	/// A feature with id 3, two tag ids and the example geometry, for tests.
 	#[cfg(test)]
+	#[must_use]
 	pub fn new_example() -> Self {
 		VectorTileFeature::from_geometry(Some(3), vec![1, 2], crate::geo::example_geometry()).unwrap()
 	}
