@@ -12,7 +12,7 @@ use std::ops::Range;
 use anyhow::{Result, ensure};
 use geo::{BoundingRect, Orient, orient::Direction, unary_union};
 use geo_types::{Geometry, LineString, MultiPolygon, Polygon};
-use rstar::{AABB, RTree, RTreeObject};
+use rstar::{AABB, PointDistance, RTree, RTreeObject};
 use versatiles_core::{EARTH_RADIUS, GeoBBox};
 use versatiles_derive::context;
 use versatiles_geometry::{
@@ -116,6 +116,14 @@ impl RTreeObject for EdgeSegment {
 			[self.start[0].min(self.end[0]), self.start[1].min(self.end[1])],
 			[self.start[0].max(self.end[0]), self.start[1].max(self.end[1])],
 		)
+	}
+}
+
+/// Lets the R-tree find the nearest edge itself, by its real distance rather
+/// than by its bounding box.
+impl PointDistance for EdgeSegment {
+	fn distance_2(&self, point: &[f64; 2]) -> f64 {
+		self.distance_squared_to_point(*point)
 	}
 }
 
@@ -645,38 +653,16 @@ impl MaskGeometry {
 	}
 
 	/// Find the distance to the nearest edge using the R-tree.
-	#[expect(
-		clippy::float_cmp,
-		reason = "`f64::MAX` is a not-found sentinel here, so the comparison is exact on purpose"
-	)]
 	fn distance_to_nearest_edge(&self, point: [f64; 2]) -> f64 {
-		// Use the R-tree to find nearby edges efficiently
-		let search_radius = self.outer_threshold.max(1000.0); // At least 1km search radius
-		let envelope = AABB::from_corners(
-			[point[0] - search_radius, point[1] - search_radius],
-			[point[0] + search_radius, point[1] + search_radius],
-		);
-
-		let mut min_dist_sq = f64::MAX;
-
-		for edge in self.edge_rtree.locate_in_envelope_intersecting(envelope) {
-			let dist_sq = edge.distance_squared_to_point(point);
-			if dist_sq < min_dist_sq {
-				min_dist_sq = dist_sq;
-			}
-		}
-
-		// If no edges found in search radius, do a full search
-		if min_dist_sq == f64::MAX {
-			for edge in &self.edge_rtree {
-				let dist_sq = edge.distance_squared_to_point(point);
-				if dist_sq < min_dist_sq {
-					min_dist_sq = dist_sq;
-				}
-			}
-		}
-
-		min_dist_sq.sqrt()
+		// The search has to be exact. Measuring only the edges whose bounding
+		// boxes lie near the point misses a closer edge whenever a long diagonal
+		// edge's box covers the point, and the distance then comes out too
+		// large: large enough for `classify_tile` to call a tile that the
+		// boundary crosses fully inside or outside.
+		self
+			.edge_rtree
+			.nearest_neighbor_with_distance_2(point)
+			.map_or(f64::INFINITY, |(_, dist_sq)| dist_sq.sqrt())
 	}
 }
 
@@ -926,6 +912,68 @@ mod tests {
 						}
 						TileClassification::Partial => unreachable!(),
 					}
+				}
+			}
+		}
+	}
+
+	/// A right triangle with a narrow notch reaching up from its bottom edge to
+	/// (10°, 8°). The hypotenuse's bounding box covers the whole triangle, while
+	/// the notch's edges are short.
+	fn notched_triangle() -> MaskGeometry {
+		MaskGeometry::from_geojson(
+			br#"{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},
+			"geometry":{"type":"Polygon","coordinates":[
+				[[0,0],[9,0],[10,8],[11,0],[40,0],[0,40],[0,0]]]}}]}"#,
+			0.0,
+			0.0,
+			BlurFunction::default(),
+		)
+		.unwrap()
+	}
+
+	/// The nearest edge is not always among the edges whose bounding boxes lie
+	/// near the point: here the hypotenuse's box covers every point inside, while
+	/// the notch is closer.
+	#[test]
+	fn the_distance_is_to_the_nearest_edge_even_beside_a_long_diagonal_one() {
+		let mask = notched_triangle();
+		for (lon, lat) in [(8.0, 8.0), (12.0, 6.0), (5.0, 20.0), (30.0, 5.0)] {
+			let point = geo_types::Point::new(lon, lat).to_mercator();
+			let point = [point.x(), point.y()];
+			let brute = mask
+				.edge_rtree
+				.iter()
+				.map(|e| e.distance_squared_to_point(point))
+				.fold(f64::INFINITY, f64::min)
+				.sqrt();
+			assert!(
+				(mask.distance_to_nearest_edge(point) - brute).abs() < 1e-6,
+				"({lon}, {lat})"
+			);
+		}
+	}
+
+	/// A tile with the notch's tip in it must not be passed through as inside.
+	#[test]
+	fn a_notch_beside_a_long_diagonal_edge_is_not_missed() {
+		let mask = notched_triangle();
+		let coord = TileCoord::from_geo(8.0, 8.0, 6).unwrap();
+		assert_eq!(
+			mask.classify_tile(coord.to_mercator_bbox()),
+			TileClassification::Partial
+		);
+
+		// And no tile around the triangle is classified against its pixels.
+		for x in 32..40 {
+			for y in 23..33 {
+				let coord = TileCoord::new(6, x, y).unwrap();
+				let bbox = coord.to_mercator_bbox();
+				let alpha = mask.compute_alpha_grid(bbox, 32, 32);
+				match mask.classify_tile(bbox) {
+					TileClassification::FullyInside => assert!(alpha.iter().all(|&a| a == 255), "{coord:?}"),
+					TileClassification::FullyOutside => assert!(alpha.iter().all(|&a| a == 0), "{coord:?}"),
+					TileClassification::Partial => {}
 				}
 			}
 		}
