@@ -552,6 +552,92 @@ mod tests {
 		assert!((rect.min().y - corner.y).abs() <= 1.0, "{rect:?}");
 	}
 
+	/// Converts a geometry in lon/lat degrees into the coordinates of `coord`'s tile.
+	fn in_tile<G: MapCoords<f64, f64, Output = G>>(coord: &TileCoord, g: &G) -> G {
+		g.map_coords(|c| to_tile(coord, c.x, c.y))
+	}
+
+	/// Cuts one feature on the edge tile and decodes what is left of it.
+	fn cut_one(geometry: Geometry<f64>) -> Option<Geometry<f64>> {
+		let c = edge_coord();
+		let input = tile(vec![("l", vec![feature(geometry, "f")])]);
+		let out = operation(None).cut_tile(&c, input).unwrap()?;
+		Some(out.layers[0].features[0].to_geometry().unwrap())
+	}
+
+	#[test]
+	fn a_line_through_the_hole_is_split_in_two() {
+		let c = edge_coord();
+		let line = in_tile(&c, &LineString::from(vec![(5.0, 2.0), (5.0, 8.0)]));
+		let Some(Geometry::MultiLineString(mls)) = cut_one(Geometry::LineString(line)) else {
+			panic!("expected lines");
+		};
+		assert_eq!(mls.0.len(), 2);
+	}
+
+	#[test]
+	fn a_line_along_the_edge_is_kept() {
+		// As a point on the edge is.
+		let c = edge_coord();
+		let line = in_tile(&c, &LineString::from(vec![(10.0, 2.0), (10.0, 8.0)]));
+		let Some(Geometry::MultiLineString(mls)) = cut_one(Geometry::LineString(line.clone())) else {
+			panic!("expected lines");
+		};
+		let (rect, expected) = (mls.bounding_rect().unwrap(), line.bounding_rect().unwrap());
+		assert!(
+			(rect.height() - expected.height()).abs() <= 1.0,
+			"{rect:?} != {expected:?}"
+		);
+	}
+
+	#[test]
+	fn a_polygon_covering_the_tile_becomes_the_mask() {
+		let c = edge_coord();
+		let p = in_tile(
+			&c,
+			&polygon![(x: -20.0, y: -20.0), (x: 80.0, y: -20.0), (x: 80.0, y: 60.0), (x: -20.0, y: 60.0)],
+		);
+		let Some(Geometry::MultiPolygon(mp)) = cut_one(Geometry::Polygon(p)) else {
+			panic!("expected a polygon");
+		};
+		assert_eq!(mp.0.len(), 1);
+		assert_eq!(mp.0[0].interiors().len(), 1, "the mask's hole");
+		let rect = mp.bounding_rect().unwrap();
+		let corner = to_tile(&c, 10.0, 10.0);
+		assert!((rect.max().x - corner.x).abs() <= 1.0, "{rect:?}");
+		assert!((rect.min().y - corner.y).abs() <= 1.0, "{rect:?}");
+	}
+
+	#[test]
+	fn a_polygon_keeps_its_own_hole() {
+		let c = edge_coord();
+		let p = in_tile(
+			&c,
+			&polygon!(
+				exterior: [(x: 2.0, y: 2.0), (x: 20.0, y: 2.0), (x: 20.0, y: 20.0), (x: 2.0, y: 20.0)],
+				interiors: [[(x: 7.0, y: 7.0), (x: 8.0, y: 7.0), (x: 8.0, y: 8.0), (x: 7.0, y: 8.0)]],
+			),
+		);
+		let Some(Geometry::MultiPolygon(mp)) = cut_one(Geometry::Polygon(p)) else {
+			panic!("expected a polygon");
+		};
+		assert_eq!(mp.0.len(), 1);
+		assert_eq!(mp.0[0].interiors().len(), 2, "its own hole and the mask's");
+	}
+
+	#[test]
+	fn a_band_across_the_hole_is_split_in_two() {
+		let c = edge_coord();
+		let p = in_tile(
+			&c,
+			&polygon![(x: 2.0, y: 4.5), (x: 8.0, y: 4.5), (x: 8.0, y: 5.5), (x: 2.0, y: 5.5)],
+		);
+		let Some(Geometry::MultiPolygon(mp)) = cut_one(Geometry::Polygon(p)) else {
+			panic!("expected a polygon");
+		};
+		assert_eq!(mp.0.len(), 2);
+	}
+
 	#[test]
 	fn the_pyramid_is_clipped_only_when_every_layer_is_cut() {
 		assert!(operation(None).tile_pyramid.count_tiles() < TilePyramid::new_full_up_to(8).count_tiles());
