@@ -39,6 +39,7 @@ VersaTiles is a Rust-based tool for processing and serving tile data efficiently
 - [Versioning](#versioning)
 - [Additional Information](#additional-information)
 - [For Maintainers](#for-maintainers)
+- [Sponsors](#sponsors)
 - [License](#license)
 
 ---
@@ -1360,6 +1361,14 @@ The GitHub Actions workflow will automatically:
 ## Contributing
 
 VersaTiles is actively developed, and contributions are welcome! If you find bugs, need features, or want to contribute, please check the [GitHub repository](https://github.com/versatiles-org/versatiles-rs) and submit an issue or pull request.
+
+---
+
+## Sponsors
+
+VersaTiles is free and open source, and its sponsors fund its servers and development. If you or your organisation rely on it, please support it through [GitHub Sponsors](https://github.com/sponsors/versatiles-org) or [Open Collective](https://opencollective.com/versatiles).
+
+[![VersaTiles sponsors](https://versatiles.org/sponsors/sponsors.png)](https://versatiles.org/sponsors/)
 
 ---
 
