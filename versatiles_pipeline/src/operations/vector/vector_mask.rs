@@ -465,6 +465,31 @@ mod tests {
 	}
 
 	#[test]
+	fn a_multipoint_keeps_only_its_points_inside() {
+		let c = edge_coord();
+		let points = MultiPoint(vec![
+			Point(to_tile(&c, 2.0, 2.0)),
+			Point(to_tile(&c, 20.0, 20.0)),
+			Point(to_tile(&c, 5.0, 5.0)),
+			Point(to_tile(&c, 8.0, 3.0)),
+		]);
+		let input = tile(vec![("places", vec![feature(Geometry::MultiPoint(points), "group")])]);
+		let out = operation(None).cut_tile(&c, input).unwrap().unwrap();
+		assert_eq!(out.layers[0].features.len(), 1);
+		let Geometry::MultiPoint(kept) = out.layers[0].features[0].to_geometry().unwrap() else {
+			panic!("expected a MultiPoint");
+		};
+		let expected = [to_tile(&c, 2.0, 2.0), to_tile(&c, 8.0, 3.0)];
+		assert_eq!(kept.0.len(), expected.len());
+		for (p, e) in kept.0.iter().zip(expected) {
+			assert!(
+				(p.x() - e.x).abs() <= 1.0 && (p.y() - e.y).abs() <= 1.0,
+				"{p:?} != {e:?}"
+			);
+		}
+	}
+
+	#[test]
 	fn a_point_on_the_edge_counts_as_inside() {
 		let mask = MaskGeometry::from_mercator(mask_polygons(), 0.0, 0.0, BlurFunction::default()).unwrap();
 		let on_edge = Point::new(10.0, 3.0).to_mercator();
