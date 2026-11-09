@@ -52,6 +52,10 @@
     "directory": "versatiles_node"
   },
   "license": "MIT",
+  "funding": [
+    { "type": "github", "url": "https://github.com/sponsors/versatiles-org" },
+    { "type": "opencollective", "url": "https://opencollective.com/versatiles" }
+  ],
   "author": "Michael Kreil <versatiles@michael-kreil.de>",
   "engines": {
     "node": ">= 22"
