@@ -42,7 +42,9 @@ bounded_number! {
 /// encoded lossily: with a following `raster_format format=webp quality=70`, a
 /// mountain tile at zoom 8 comes out about a quarter smaller than the elevation
 /// tile it is computed from, and with `format=avif quality=50` about 60 %
-/// smaller.
+/// smaller. Flat land is the exception: its faint alpha comes out smaller
+/// lossless, so for a large area add `lossless_if_smaller=true` to the WebP
+/// one, which picks lossy or lossless tile by tile.
 ///
 /// The shading is MapLibre's default `standard` method, including the slope
 /// exaggeration it applies below zoom 15 and its correction for latitude, so a

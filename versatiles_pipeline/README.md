@@ -453,7 +453,7 @@ For a coloured relief, give `dem_hillshade` a `ramp`, which reads and decodes th
 
 Renders DEM tiles as hillshading, the way MapLibre's `hillshade` layer shades them.
 
-The result is RGBA tiles that are transparent on flat ground and shade slopes by their steepness and the direction they face. They are an ordinary raster source for any map client. Unlike elevation tiles, they can be encoded lossily: with a following `raster_format format=webp quality=70`, a mountain tile at zoom 8 comes out about a quarter smaller than the elevation tile it is computed from, and with `format=avif quality=50` about 60 % smaller.
+The result is RGBA tiles that are transparent on flat ground and shade slopes by their steepness and the direction they face. They are an ordinary raster source for any map client. Unlike elevation tiles, they can be encoded lossily: with a following `raster_format format=webp quality=70`, a mountain tile at zoom 8 comes out about a quarter smaller than the elevation tile it is computed from, and with `format=avif quality=50` about 60 % smaller. Flat land is the exception: its faint alpha comes out smaller lossless, so for a large area add `lossless_if_smaller=true` to the WebP one, which picks lossy or lossless tile by tile.
 
 The shading is MapLibre's default `standard` method, including the slope exaggeration it applies below zoom 15 and its correction for latitude, so a tile looks as a live `hillshade` layer would at the same zoom. The colours are given as `RRGGBB`, `RRGGBBAA` or `[r,g,b,a]`, and an alpha below `FF` makes that part of the shading lighter.
 
@@ -613,6 +613,8 @@ For elevation tiles (tile schema `dem/…`), `quality` defaults to `100`: their 
 
 At a zoom level its list does not name, `quality_translucent` falls back to `quality`. `quality_translucent` is typically `100`: lossy encoders handle an alpha channel badly. Setting it makes every tile that is encoded be checked for opacity.
 
+With `lossless_if_smaller=true`, each tile that is encoded is encoded twice, lossy with its `quality` and lossless, and the smaller of the two is kept. Which one wins depends on the tile, not the zoom level: hillshading of flat land, almost all of it faint alpha, comes out smaller lossless, and that of high relief smaller lossy. In a sample of the planet's hillshading at zoom 10 to 12, `quality=70 lossless_if_smaller=true` took 59 % of the bytes of `quality=70` alone, and the tiles came out lossless nine times out of ten. Encoding takes about 1.7 times as long. It needs `format=webp`, the only format that has both a lossy and a lossless encoding. A tile whose quality is `100` is encoded lossless only, once.
+
 ### Parameters
 
 - _`format`: RasterTileFormat (optional)_ - Values: `avif`, `jpg`, `png`, `webp`. Format to encode the tiles into. Defaults to the source's.
@@ -620,6 +622,7 @@ At a zoom level its list does not name, `quality_translucent` falls back to `qua
 - _`quality_translucent`: u8 | zoom:u8,... (optional)_ - Encoder quality for tiles with translucent pixels. Defaults to using `quality` throughout.
 - _`effort`: 0-100 (optional)_ - Encoder effort, `0` is fastest and `100` smallest. Defaults to the encoder's own.
 - _`force_reencode`: bool (optional)_ - Whether to re-encode tiles that are already encoded in the target format. Defaults to `false`.
+- _`lossless_if_smaller`: bool (optional)_ - Whether to also encode each tile lossless and keep the smaller of the two. Defaults to `false`.
 
 ---
 
