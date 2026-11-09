@@ -18,6 +18,7 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+avif-parse = "2.1.0"
 fast_image_resize = { version = "6.1.0", default-features = false, features = [
 	"image",
 ] }
@@ -28,6 +29,9 @@ image = { version = "0.25.10", default-features = false, features = [
 ] }
 imageproc.workspace = true
 libwebp-sys = "0.14.4"
+# AVIF decoding. No assembly, so building needs no assembler.
+rav1d = { version = "1.1.0", default-features = false, features = ["bitdepth_8"] }
+yuv = "0.8.20"
 
 versatiles_core.workspace = true
 versatiles_derive.workspace = true

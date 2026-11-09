@@ -119,10 +119,12 @@ allow = [
 # Per-crate exceptions to the list above.
 #
 # MPL-2.0 is file-level copyleft: it obliges us to publish modifications to the
-# licensed files themselves, and we use both crates unmodified. That is
+# licensed files themselves, and we use these crates unmodified. That is
 # compatible with an MIT binary, but it is a licence we want to know about
 # crate by crate rather than blanket-allow.
 exceptions = [
+	# Reads the AVIF container for the AVIF decoder in `versatiles_image`.
+	{ name = "avif-parse", allow = ["MPL-2.0"] },
 	{ name = "colored", allow = ["MPL-2.0"] },
 	{ name = "option-ext", allow = ["MPL-2.0"] },
 ]

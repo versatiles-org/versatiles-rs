@@ -1,8 +1,8 @@
-//! AVIF (AV1 Image File Format) encoder bridges for `DynamicImage`.
+//! AVIF (AV1 Image File Format) encoding and decoding for `DynamicImage`.
 //!
 //! This module exposes small helpers to encode images into AVIF blobs with configurable
-//! **quality** (lossy) and **effort**. Decoding is intentionally **not implemented** here; the
-//! rest of the crate treats AVIF as a write-only target for web tile pipelines.
+//! **quality** (lossy) and **effort**, and [`blob2image`] to decode them again. Decoding uses
+//! rav1d, a Rust port of dav1d, see the `decode` module.
 //!
 //! Notes:
 //! - Only **8‑bit** images are supported; higher bit depths are rejected early.
@@ -27,6 +27,8 @@ use versatiles_core::Blob;
 use versatiles_derive::context;
 
 use crate::traits::DynamicImageTraitInfo;
+
+mod decode;
 
 /// Quality used when the caller passes `None`.
 const DEFAULT_QUALITY: u8 = 92;
@@ -109,12 +111,13 @@ pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
 	encode(image, Some(100), None)
 }
 
-/// AVIF decoding is **not implemented** in this crate.
+/// Decode an AVIF [`Blob`] into an 8-bit [`DynamicImage`].
 ///
-/// Returned error explains the rationale; callers should decode via another backend if needed.
-#[context("decoding AVIF blob ({} bytes)", _blob.len())]
-pub fn blob2image(_blob: &Blob) -> Result<DynamicImage> {
-	bail!("AVIF decoding not implemented")
+/// Colour images become `Rgb8` or `Rgba8`, monochrome ones `Luma8` or `LumaA8`. Returns an error
+/// for images with more than 8 bits per channel and for images over the crate's size limits.
+#[context("decoding AVIF blob ({} bytes)", blob.len())]
+pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
+	decode::decode(blob.as_slice())
 }
 
 #[cfg(test)]
@@ -251,14 +254,42 @@ mod tests {
 	}
 
 	#[test]
-	fn blob2image_not_implemented() {
-		let blob = Blob::from(vec![1, 2, 3]);
-		let result = blob2image(&blob);
-		assert!(result.is_err());
-		let err_msg = result.unwrap_err().chain().last().unwrap().to_string();
-		assert!(
-			err_msg.contains("AVIF decoding not implemented"),
-			"Expected 'AVIF decoding not implemented' in: {err_msg}"
-		);
+	fn blob2image_rejects_garbage() {
+		let err = blob2image(&Blob::from(vec![1, 2, 3])).unwrap_err();
+		let msg = format!("{err:#}");
+		assert!(msg.contains("invalid AVIF file"), "got: {msg}");
+	}
+
+	/* ---------- Round trips ---------- */
+
+	/// Largest difference of any channel of any pixel.
+	fn max_diff(a: &DynamicImage, b: &DynamicImage) -> u8 {
+		a.as_bytes()
+			.iter()
+			.zip(b.as_bytes())
+			.map(|(x, y)| x.abs_diff(*y))
+			.max()
+			.unwrap()
+	}
+
+	/// Encoding and decoding keeps size and alpha. Grey images come back as RGB, because the
+	/// encoder writes them as colour images. At quality 99 no channel may drift far.
+	#[rstest]
+	#[case::grey(DynamicImage::new_test_grey(), image::ColorType::Rgb8)]
+	#[case::greya(DynamicImage::new_test_greya(), image::ColorType::Rgba8)]
+	#[case::rgb(DynamicImage::new_test_rgb(), image::ColorType::Rgb8)]
+	#[case::rgba(DynamicImage::new_test_rgba(), image::ColorType::Rgba8)]
+	fn round_trip(#[case] img: DynamicImage, #[case] color: image::ColorType) -> Result<()> {
+		let decoded = blob2image(&encode(&img, Some(99), None)?)?;
+		assert_eq!((decoded.width(), decoded.height()), (img.width(), img.height()));
+		assert_eq!(decoded.color(), color);
+
+		let expected = match color {
+			image::ColorType::Rgb8 => DynamicImage::ImageRgb8(img.to_rgb8()),
+			_ => DynamicImage::ImageRgba8(img.to_rgba8()),
+		};
+		let diff = max_diff(&expected, &decoded);
+		assert!(diff <= 8, "max channel difference {diff}");
+		Ok(())
 	}
 }
