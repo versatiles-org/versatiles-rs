@@ -16,12 +16,15 @@ mod reader;
 mod sink;
 mod writer;
 
-use std::sync::{Arc, LazyLock};
+use std::{
+	path::{Path, PathBuf},
+	sync::{Arc, LazyLock},
+};
 
 use anyhow::{Result, bail};
 use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
 pub use reader::MBTilesReader;
+use rusqlite::{Connection, OpenFlags};
 use scheduled_thread_pool::ScheduledThreadPool;
 pub use sink::MBTilesTileSink;
 use versatiles_core::{TileCompression, TileFormat};
@@ -43,6 +46,55 @@ static POOL_SCHEDULER: LazyLock<Arc<ScheduledThreadPool>> = LazyLock::new(|| {
 			.build(),
 	)
 });
+
+/// Opens the `SQLite` connections of a pool, all to one file and with the same
+/// flags.
+///
+/// What `r2d2_sqlite` provided, and all of it this module used. That crate
+/// lags `rusqlite` releases, and its 0.35 held `rusqlite` at 0.40, whose
+/// bundled `SQLite` has RUSTSEC-2026-0459: a crafted `-wal` file next to an
+/// `MBTiles` file made queries return stale process memory, which `serve`
+/// would have sent out as tiles. With this, `rusqlite` updates on its own.
+#[derive(Debug)]
+pub(crate) struct SqliteConnectionManager {
+	path: PathBuf,
+	flags: OpenFlags,
+}
+
+impl SqliteConnectionManager {
+	/// Connections to the file at `path`, read-write and created if missing,
+	/// as `rusqlite` opens a file by default.
+	pub(crate) fn file(path: impl AsRef<Path>) -> Self {
+		Self {
+			path: path.as_ref().to_path_buf(),
+			flags: OpenFlags::default(),
+		}
+	}
+
+	/// The same connections, opened with `flags` instead.
+	pub(crate) fn with_flags(self, flags: OpenFlags) -> Self {
+		Self { flags, ..self }
+	}
+}
+
+impl r2d2::ManageConnection for SqliteConnectionManager {
+	type Connection = Connection;
+	type Error = rusqlite::Error;
+
+	fn connect(&self) -> rusqlite::Result<Connection> {
+		Connection::open_with_flags(&self.path, self.flags)
+	}
+
+	/// The check r2d2 runs on every checkout: an empty batch, which fails
+	/// only if the connection is unusable.
+	fn is_valid(&self, connection: &mut Connection) -> rusqlite::Result<()> {
+		connection.execute_batch("")
+	}
+
+	fn has_broken(&self, _connection: &mut Connection) -> bool {
+		false
+	}
+}
 
 /// Build the connection pool for one `MBTiles` file, on the shared scheduler.
 pub(crate) fn build_pool(manager: SqliteConnectionManager) -> Result<Pool<SqliteConnectionManager>> {

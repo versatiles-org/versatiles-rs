@@ -9,10 +9,11 @@ use std::{path::Path, sync::Mutex};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use r2d2::Pool;
-use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
+use rusqlite::params;
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON, json::JsonObject};
 use versatiles_derive::context;
 
+use super::SqliteConnectionManager;
 use crate::TileSink;
 
 const BUFFER_SIZE: usize = 4096;
@@ -253,7 +254,7 @@ mod tests {
 		assert!(reader.tile(&coord).await?.is_some());
 
 		// Stored as TMS: row 2^3 - 1 - 2.
-		let row: u32 = r2d2_sqlite::rusqlite::Connection::open(temp.path())?.query_row(
+		let row: u32 = rusqlite::Connection::open(temp.path())?.query_row(
 			"SELECT tile_row FROM tiles WHERE zoom_level = 3 AND tile_column = 1",
 			[],
 			|row| row.get(0),

@@ -49,10 +49,11 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use r2d2::Pool;
-use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
+use rusqlite::params;
 use versatiles_core::{Blob, TileCoord, json::JsonObject};
 use versatiles_derive::context;
 
+use super::SqliteConnectionManager;
 use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
 
 /// Writer for `MBTiles` (`SQLite`) containers.

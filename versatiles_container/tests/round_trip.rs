@@ -876,7 +876,7 @@ async fn convert_strictly(source: &std::path::Path, dir: &std::path::Path) -> St
 /// stream by dropping the row — so the conversion ended with exit code 0.
 #[tokio::test]
 async fn an_mbtiles_row_without_tile_data_is_an_error() -> Result<()> {
-	use r2d2_sqlite::rusqlite::Connection;
+	use rusqlite::Connection;
 
 	let dir = TempDir::new()?;
 	let path = dir.path().join("broken.mbtiles");

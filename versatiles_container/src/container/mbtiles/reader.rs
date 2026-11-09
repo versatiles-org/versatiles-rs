@@ -61,10 +61,7 @@ use std::{path::Path, sync::Arc};
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
-use r2d2_sqlite::{
-	SqliteConnectionManager,
-	rusqlite::{self, OpenFlags, OptionalExtension},
-};
+use rusqlite::{OpenFlags, OptionalExtension};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
@@ -78,6 +75,7 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
+use super::SqliteConnectionManager;
 use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal};
 
 /// Reader for `MBTiles` (`SQLite`) containers.
@@ -860,7 +858,7 @@ mod read_only_tests {
 
 		{
 			// A minimal WAL-mode MBTiles, written with the sink's own stack.
-			let conn = r2d2_sqlite::rusqlite::Connection::open(&path)?;
+			let conn = rusqlite::Connection::open(&path)?;
 			conn.pragma_update(None, "journal_mode", "WAL")?;
 			conn.execute("CREATE TABLE metadata (name text, value text)", [])?;
 			conn.execute("INSERT INTO metadata VALUES ('format','pbf')", [])?;
@@ -884,7 +882,7 @@ mod read_only_tests {
 	/// A minimal MBTiles with the given metadata rows and one tile at 0/0/0.
 	fn mbtiles_with(dir: &Path, metadata: &[(&str, &str)], tile: &[u8]) -> Result<std::path::PathBuf> {
 		let path = dir.join("test.mbtiles");
-		let conn = r2d2_sqlite::rusqlite::Connection::open(&path)?;
+		let conn = rusqlite::Connection::open(&path)?;
 		conn.execute("CREATE TABLE metadata (name text, value text)", [])?;
 		for (name, value) in metadata {
 			conn.execute("INSERT INTO metadata VALUES (?1, ?2)", [name, value])?;
@@ -922,7 +920,7 @@ mod read_only_tests {
 		let raw_mlt = vec![0x05, 0x01, 0x02, 0x03, 0x04, 0x05];
 		let path = mbtiles_with(dir, &[("format", format)], &raw_mlt)?;
 		let gzipped = versatiles_core::compression::compress_gzip(&Blob::from(raw_mlt.clone()))?;
-		let conn = r2d2_sqlite::rusqlite::Connection::open(&path)?;
+		let conn = rusqlite::Connection::open(&path)?;
 		conn.execute("INSERT INTO tiles VALUES (1, 0, 1, ?1)", [gzipped.as_slice()])?;
 		Ok((path, raw_mlt))
 	}
@@ -968,7 +966,7 @@ mod read_only_tests {
 		let output = dir.path().join("written.mbtiles");
 		<crate::MBTilesWriter as crate::TilesWriter>::write_to_path(&source, &output, TilesRuntime::default()).await?;
 
-		let conn = r2d2_sqlite::rusqlite::Connection::open(&output)?;
+		let conn = rusqlite::Connection::open(&output)?;
 		let format: String = conn.query_row("SELECT value FROM metadata WHERE name = 'format'", [], |row| row.get(0))?;
 		assert_eq!(format, "application/vnd.maplibre-tile");
 		let mut stmt = conn.prepare("SELECT tile_data FROM tiles")?;
