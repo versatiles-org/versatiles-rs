@@ -48,7 +48,7 @@ pub fn check_pipeline(pipeline: &VPLPipeline) -> Vec<VplProblem> {
 
 fn check_against(pipeline: &VPLPipeline, read: &Registry, transform: &Registry) -> Vec<VplProblem> {
 	let mut problems = Vec::new();
-	check_pipeline_at(pipeline, read, transform, &mut Vec::new(), &mut problems);
+	check_pipeline_at(pipeline, false, read, transform, &mut Vec::new(), &mut problems);
 	problems
 }
 
@@ -124,6 +124,7 @@ impl PipelineFactory {
 
 fn check_pipeline_at(
 	pipeline: &VPLPipeline,
+	is_branch: bool,
 	read: &Registry,
 	transform: &Registry,
 	path: &mut Vec<usize>,
@@ -136,8 +137,17 @@ fn check_pipeline_at(
 
 	for (index, node) in pipeline.pipeline.iter().enumerate() {
 		path.push(index);
-		// The head reads; everything after it transforms.
-		check_node(node, index == 0, read, transform, path, problems);
+		// The head reads; everything after it transforms. A branch has no head: it starts from
+		// the input of the operation it belongs to, so every node of it transforms.
+		check_node(
+			node,
+			index == 0 && !is_branch,
+			index == 0 && is_branch,
+			read,
+			transform,
+			path,
+			problems,
+		);
 		path.pop();
 	}
 }
@@ -145,6 +155,7 @@ fn check_pipeline_at(
 fn check_node(
 	node: &VPLNode,
 	is_head: bool,
+	starts_branch: bool,
 	read: &Registry,
 	transform: &Registry,
 	path: &mut Vec<usize>,
@@ -170,7 +181,13 @@ fn check_node(
 		(false, true, false) => {
 			problems.push(VplProblem::new(
 				path,
-				format!("'{name}' is a read operation, so it can only be the first node of a pipeline"),
+				if starts_branch {
+					format!(
+						"'{name}' is a read operation, but a branch starts from the tiles of the operation it belongs to, so it begins with a transform"
+					)
+				} else {
+					format!("'{name}' is a read operation, so it can only be the first node of a pipeline")
+				},
 			));
 			None
 		}
@@ -186,9 +203,11 @@ fn check_node(
 	}
 
 	// Nested pipelines are checked whether or not the parent was understood.
+	// Without the parent's fields, a source is taken for an ordinary pipeline.
+	let are_branches = fields.is_some_and(|fields| fields.iter().any(|f| f.is_sources && f.sources_are_branches));
 	for (source_index, source) in node.sources.iter().enumerate() {
 		path.push(source_index);
-		check_pipeline_at(source, read, transform, path, problems);
+		check_pipeline_at(source, are_branches, read, transform, path, problems);
 		path.pop();
 	}
 }
@@ -261,6 +280,20 @@ fn check_sources(node: &VPLNode, fields: &[VPLFieldMeta], path: &[usize], proble
 			format!("'{}' needs at least {needed}", node.name),
 		));
 	}
+
+	if let Some(max) = sources.max_sources
+		&& node.sources.len() > max
+	{
+		let allowed = match max {
+			1 => "one source".to_string(),
+			2 => "two sources".to_string(),
+			n => format!("{n} sources"),
+		};
+		problems.push(VplProblem::new(
+			path,
+			format!("'{}' takes at most {allowed}", node.name),
+		));
+	}
 }
 
 #[cfg(test)]
@@ -276,6 +309,36 @@ mod tests {
 			.into_iter()
 			.map(|p| p.message)
 			.collect()
+	}
+
+	#[test]
+	fn a_branch_starts_with_a_transform() {
+		assert_eq!(
+			problems(
+				r#"from_debug format=mvt | vector_branch expr="$zoom > 1" [ vector_filter_layers filter=["a"], vector_repair | vector_repair ]"#
+			),
+			Vec::<String>::new()
+		);
+		assert_eq!(
+			problems(r#"from_debug format=mvt | vector_branch expr="$zoom > 1" [ from_debug format=mvt ]"#),
+			[
+				"'from_debug' is a read operation, but a branch starts from the tiles of the operation it belongs to, so it begins with a transform"
+			]
+		);
+	}
+
+	#[test]
+	fn a_branch_takes_at_most_two_sources() {
+		assert_eq!(
+			problems(
+				r#"from_debug format=mvt | vector_branch expr="$zoom > 1" [ vector_repair, vector_repair, vector_repair ]"#
+			),
+			["'vector_branch' takes at most two sources"]
+		);
+		assert_eq!(
+			problems(r#"from_debug format=mvt | vector_branch expr="$zoom > 1""#),
+			["'vector_branch' needs at least one source"]
+		);
 	}
 
 	#[test]

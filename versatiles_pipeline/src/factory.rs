@@ -83,13 +83,6 @@ pub(crate) trait TileTransformFactoryTrait: OperationFactoryTrait {
 	///
 	/// `input` is asked about, for its metadata, `TileJSON` or pyramid, but no
 	/// tile is read from it, so it can describe tiles that come from elsewhere.
-	#[cfg_attr(
-		not(test),
-		expect(
-			dead_code,
-			reason = "vector_branch, its first caller, is the next step of this change"
-		)
-	)]
 	async fn build_tile_transform<'a>(
 		&self,
 		vpl_node: VPLNode,
@@ -582,13 +575,6 @@ impl PipelineFactory {
 	/// `Ok(None)` for a transform operation that is not a single per-tile
 	/// transform, such as `vector_overzoom`, which reads tiles other than the one
 	/// it produces. See [`TileTransformFactoryTrait`].
-	#[cfg_attr(
-		not(test),
-		expect(
-			dead_code,
-			reason = "vector_branch, its first caller, is the next step of this change"
-		)
-	)]
 	#[context("Failed to create tile transform from VPL node")]
 	pub(crate) async fn tile_transform_from_node(
 		&self,

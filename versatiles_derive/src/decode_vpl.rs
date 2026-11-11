@@ -1160,12 +1160,21 @@ fn collapse_paragraphs(docs: &str) -> String {
 /// collapses blank `///` lines to `None`; here we promote them to empty strings
 /// so `join("\n")` yields real paragraph breaks, and
 /// [`collapse_paragraphs`] then folds each paragraph back onto one line.
+///
+/// Only the one space after `///` is removed, not the indentation after it,
+/// which is meaningful inside a fenced example: a nested pipeline is unreadable
+/// flush left. Every line outside a fence is trimmed by `collapse_paragraphs`.
 fn extract_struct_docs(attrs: &[Attribute]) -> String {
 	let joined = attrs
 		.iter()
 		.filter_map(|a| {
-			if a.path().is_ident("doc") {
-				Some(extract_comment(a).unwrap_or_default())
+			if a.path().is_ident("doc")
+				&& let Meta::NameValue(meta) = &a.meta
+				&& let syn::Expr::Lit(lit) = &meta.value
+				&& let syn::Lit::Str(lit_str) = &lit.lit
+			{
+				let value = lit_str.value();
+				Some(value.strip_prefix(' ').unwrap_or(&value).trim_end().to_string())
 			} else {
 				None
 			}
@@ -1249,6 +1258,11 @@ struct FieldMeta {
 	/// For the `sources` field, how many sources the operation needs, from
 	/// `#[vpl(min_sources = N)]`, 1 when unset; 0 for every other field.
 	min_sources: usize,
+	/// For the `sources` field, `#[vpl(max_sources = N)]`; `None` when unset, and for every other
+	/// field.
+	max_sources: Option<usize>,
+	/// For the `sources` field, whether `#[vpl(branches)]` is set; `false` for every other field.
+	sources_are_branches: bool,
 }
 
 /// Processed field information returned by `process_field`.
@@ -1277,7 +1291,11 @@ fn process_sources_field(
 			format!("type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'"),
 		));
 	}
-	let min_sources = extract_sources_attrs(&field.attrs)?;
+	let SourcesAttrs {
+		min_sources,
+		max_sources,
+		branches,
+	} = extract_sources_attrs(&field.attrs)?;
 	let doc = format!("### Sources\n\n{raw_comment}");
 	let parser = quote! { sources: node.sources.clone() };
 	let meta = FieldMeta {
@@ -1298,18 +1316,32 @@ fn process_sources_field(
 		default: None,
 		refers_to: None,
 		min_sources,
+		max_sources,
+		sources_are_branches: branches,
 	};
 	Ok((field_str, ProcessedField::Sources { doc, parser }, meta))
 }
 
-/// Reads `#[vpl(min_sources = N)]` off the `sources` field: how many sources
-/// the operation needs, 1 when unset.
+/// What the `#[vpl(…)]` attributes on the `sources` field say.
+struct SourcesAttrs {
+	/// `min_sources = N`, 1 when unset.
+	min_sources: usize,
+	/// `max_sources = N`, `None` when unset.
+	max_sources: Option<usize>,
+	/// `branches`: each source is a chain of transforms on this operation's input.
+	branches: bool,
+}
+
+/// Reads `#[vpl(min_sources = N, max_sources = N, branches)]` off the `sources`
+/// field.
 ///
 /// Every other `#[vpl(…)]` key is an error here. They describe a value, and a
 /// list of pipelines is not one — before this, a `default` or `accepts` on
 /// `sources` was accepted and then ignored.
-fn extract_sources_attrs(attrs: &[Attribute]) -> Result<usize, syn::Error> {
+fn extract_sources_attrs(attrs: &[Attribute]) -> Result<SourcesAttrs, syn::Error> {
 	let mut min_sources = 1;
+	let mut max_sources = None;
+	let mut branches = false;
 	for attr in attrs {
 		if !attr.path().is_ident("vpl") {
 			continue;
@@ -1322,12 +1354,33 @@ fn extract_sources_attrs(attrs: &[Attribute]) -> Result<usize, syn::Error> {
 					return Err(meta.error("`min_sources` must be at least 1; `sources` is always required"));
 				}
 				Ok(())
+			} else if meta.path.is_ident("max_sources") {
+				let value: syn::LitInt = meta.value()?.parse()?;
+				max_sources = Some(value.base10_parse()?);
+				Ok(())
+			} else if meta.path.is_ident("branches") {
+				branches = true;
+				Ok(())
 			} else {
-				Err(meta.error("the `sources` field takes only `#[vpl(min_sources = N)]`"))
+				Err(meta.error(
+					"the `sources` field takes only `#[vpl(min_sources = N)]`, `#[vpl(max_sources = N)]` and `#[vpl(branches)]`",
+				))
 			}
 		})?;
 	}
-	Ok(min_sources)
+	if let Some(max) = max_sources
+		&& max < min_sources
+	{
+		return Err(syn::Error::new(
+			proc_macro2::Span::call_site(),
+			format!("`max_sources = {max}` is below `min_sources = {min_sources}`"),
+		));
+	}
+	Ok(SourcesAttrs {
+		min_sources,
+		max_sources,
+		branches,
+	})
 }
 
 /// Which files an argument takes, from its type and its own declaration.
@@ -1466,6 +1519,8 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		refers_to,
 		accepts,
 		min_sources: 0,
+		max_sources: None,
+		sources_are_branches: false,
 	};
 
 	Ok((
@@ -1619,6 +1674,19 @@ fn value_check_expr(m: &FieldMeta) -> TokenStream {
 	}
 }
 
+/// The fields of a `VPLFieldMeta` that describe an operation's `sources`, which every other
+/// field leaves at 0, `None` and `false`.
+fn sources_fields_expr(m: &FieldMeta) -> TokenStream {
+	let min_sources = m.min_sources;
+	let max_sources = m.max_sources.map_or_else(|| quote! { None }, |n| quote! { Some(#n) });
+	let branches = m.sources_are_branches;
+	quote! {
+		min_sources: #min_sources,
+		max_sources: #max_sources,
+		sources_are_branches: #branches,
+	}
+}
+
 /// Build the `VPLFieldMeta` literal the derive emits for one field.
 ///
 /// Everything in it is fixed at expansion time except the two run-time calls
@@ -1630,7 +1698,7 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 	let rtype = &m.rust_type;
 	let required = m.is_required;
 	let is_sources = m.is_sources;
-	let min_sources = m.min_sources;
+	let sources_fields = sources_fields_expr(m);
 	let fdoc = &m.doc;
 	// For enum-typed fields, ask the enum itself for its accepted
 	// variants — single source of truth, kept in sync with the
@@ -1739,7 +1807,7 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 			accepts: #accepts_expr,
 			validate: #validate_expr,
 			default: #default_expr,
-			min_sources: #min_sources,
+			#sources_fields
 		}
 	}
 }
@@ -2223,6 +2291,20 @@ mod tests {
 		let code = decode_sources_field(&quote::quote!(#[vpl(min_sources = 2)])).unwrap();
 		assert!(code.contains("min_sources:2usize"), "{code}");
 		assert!(decode_sources_field(&quote::quote!(#[vpl(min_sources = 0)])).is_err());
+	}
+
+	/// `max_sources` and `branches` reach the metadata, and are off by default.
+	#[test]
+	fn test_sources_maximum_and_branches() {
+		let plain = decode_sources_field(&quote::quote!()).unwrap();
+		assert!(plain.contains("max_sources:None"), "{plain}");
+		assert!(plain.contains("sources_are_branches:false"), "{plain}");
+
+		let code = decode_sources_field(&quote::quote!(#[vpl(max_sources = 2, branches)])).unwrap();
+		assert!(code.contains("max_sources:Some(2usize)"), "{code}");
+		assert!(code.contains("sources_are_branches:true"), "{code}");
+
+		assert!(decode_sources_field(&quote::quote!(#[vpl(min_sources = 2, max_sources = 1)])).is_err());
 	}
 
 	/// An attribute meant for a value used to be accepted on `sources` and

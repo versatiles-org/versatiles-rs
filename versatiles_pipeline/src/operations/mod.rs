@@ -61,6 +61,7 @@ fn transform_operations() -> Vec<Registered> {
 		plain(raster::raster_overscale::Factory {}),
 		plain(raster::raster_overview::Factory {}),
 		plain(raster::raster_tile_resize::Factory {}),
+		per_tile(vector::vector_branch::Factory {}),
 		per_tile(vector::vector_filter_features::Factory {}),
 		per_tile(vector::vector_filter_layers::Factory {}),
 		per_tile(vector::vector_filter_properties::Factory {}),

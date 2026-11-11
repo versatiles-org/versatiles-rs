@@ -74,6 +74,12 @@ fn render_field(op: &str, field: &VPLFieldMeta) -> String {
 	);
 	if field.is_sources {
 		line.push_str(" | sources");
+		if let Some(max) = field.max_sources {
+			let _ = write!(line, " max={max}");
+		}
+		if field.sources_are_branches {
+			line.push_str(" branches");
+		}
 	}
 	if let Some(default) = &field.default {
 		let _ = write!(line, " | default={default}");

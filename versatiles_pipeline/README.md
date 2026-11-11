@@ -14,7 +14,7 @@ versatiles serve pipeline.vpl
 
 **Read:** [`from_color`](#from_color) · [`from_container`](#from_container) · [`from_csv`](#from_csv) · [`from_debug`](#from_debug) · [`from_gdal_dem`](#from_gdal_dem) · [`from_gdal_raster`](#from_gdal_raster) · [`from_geo`](#from_geo) · [`from_grid`](#from_grid) · [`from_h3`](#from_h3) · [`from_merged_vector`](#from_merged_vector) · [`from_stacked`](#from_stacked) · [`from_stacked_raster`](#from_stacked_raster) · [`from_tile`](#from_tile) · [`from_tilejson`](#from_tilejson)
 
-**Transform:** [`dem_colorize`](#dem_colorize) · [`dem_hillshade`](#dem_hillshade) · [`dem_overscale`](#dem_overscale) · [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_mask`](#vector_mask) · [`vector_overzoom`](#vector_overzoom) · [`vector_reduce_to_style`](#vector_reduce_to_style) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
+**Transform:** [`dem_colorize`](#dem_colorize) · [`dem_hillshade`](#dem_hillshade) · [`dem_overscale`](#dem_overscale) · [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_branch`](#vector_branch) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_mask`](#vector_mask) · [`vector_overzoom`](#vector_overzoom) · [`vector_reduce_to_style`](#vector_reduce_to_style) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
 
 ## Defining a pipeline
 
@@ -732,6 +732,47 @@ Unlike a global `--flip-y` flag, this applies to one source, so a pipeline can c
 
 ---
 
+## vector_branch
+
+Runs part of each vector tile through other operations, chosen by an expression.
+
+The features for which `expr` is true go through the first source, the `then` branch. The others go through the second, the `else` branch, or pass through unchanged when there is none. Both halves are then put back together into one tile, with the features of each layer in their original order.
+
+```vpl
+from_container filename="osm.versatiles"
+  | vector_branch expr="$layer == 'place_labels'" [
+      vector_mask geojson="berlin.geojson"
+    ]
+```
+
+That cuts the place labels to Berlin and leaves every other layer as it was.
+
+`expr` is written as in `vector_filter_features`, with `$zoom`, `$layer` and `$props` beside the feature's own properties. It is answered for as much of a tile at once as it can be: an expression reading only `$zoom` sends each tile to one branch without decoding it, and one reading `$layer` but no property sends whole layers.
+
+A branch begins with a transform rather than a read, because it starts from the tiles arriving here. It may only contain operations that make each tile from that tile alone, such as filtering, masking or changing properties. An operation that reads other tiles, such as `vector_overzoom`, is refused; put it before or after the branch.
+
+Branches nest, which is how to write an "else if". This keeps motorways in Germany, other streets in Berlin, and everything else everywhere:
+
+```vpl
+from_container filename="osm.versatiles"
+  | vector_branch expr="$layer == 'streets' && kind == 'motorway'" [
+      vector_mask geojson="germany.geojson",
+      vector_branch expr="$layer == 'streets'" [
+        vector_mask geojson="berlin.geojson"
+      ]
+    ]
+```
+
+### Sources
+
+The branch for the features `expr` chooses, then optionally the branch for the others. Each begins with a transform and starts from the tiles arriving at this operation.
+
+### Parameters
+
+- **`expr`: CEL expression (required)** - Boolean expression choosing the features for the first branch.
+
+---
+
 ## vector_filter_features
 
 Drops vector features in selected layers that do not satisfy a boolean expression.
@@ -881,7 +922,7 @@ Without `layer`, every layer is cut and tiles outside the polygon are not produc
 
 ```vpl
 from_container filename="osm.versatiles"
-| vector_mask geojson="berlin-brandenburg.geojson" layer=["place_labels"]
+  | vector_mask geojson="berlin-brandenburg.geojson" layer=["place_labels"]
 ```
 
 Tiles entirely inside the polygon pass through without being decoded. Without `layer`, tiles entirely outside are dropped without being decoded too, so only tiles on the edge are. Geometry in a tile's buffer is cut where it really lies, up to one tile beyond the tile's edge.

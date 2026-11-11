@@ -58,13 +58,6 @@ pub trait TileTransform: Debug + Send + Sync + 'static {
 /// `TileTransform` cannot be one itself because of its `TAG` constant. The
 /// methods have their own names so that a type implementing both traits, which
 /// every transform does, never leaves a call ambiguous.
-#[cfg_attr(
-	not(test),
-	expect(
-		dead_code,
-		reason = "vector_branch, its first caller, is the next step of this change"
-	)
-)]
 pub(crate) trait DynTileTransform: Debug + Send + Sync {
 	/// [`TileTransform::TAG`].
 	fn tag(&self) -> &'static str;

@@ -204,6 +204,10 @@ remap_coords.flip_x: Option<bool> | optional | default=false
 remap_coords.flip_y: Option<bool> | optional | default=false
 remap_coords.swap_xy: Option<bool> | optional | default=false
 
+vector_branch [transform]
+vector_branch.expr: CelExpression | required
+vector_branch.sources: Vec<VPLPipeline> | required | sources max=2 branches
+
 vector_filter_features [transform]
 vector_filter_features.layer: Vec<String> | required | names=layer-of-source
 vector_filter_features.expr: CelExpression | required

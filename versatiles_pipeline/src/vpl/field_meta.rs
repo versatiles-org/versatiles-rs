@@ -219,4 +219,17 @@ pub struct VPLFieldMeta {
 	/// `from_merged_vector` need two, and `check` used to pass a single one
 	/// that building then refused.
 	pub min_sources: usize,
+	/// For the `sources` field, at most how many sources the operation takes;
+	/// `None` when there is no limit, and for every other field.
+	///
+	/// From `#[vpl(max_sources = N)]`. `vector_branch` takes a `then` and an
+	/// optional `else`, so a third source is an error rather than ignored.
+	pub max_sources: Option<usize>,
+	/// For the `sources` field, whether each source is a branch: a chain of
+	/// transforms that starts from this operation's own input, rather than a
+	/// pipeline that starts by reading. `false` for every other field.
+	///
+	/// From `#[vpl(branches)]`. An editor offers transforms for the first node
+	/// of such a source, and `check` refuses a read operation there.
+	pub sources_are_branches: bool,
 }
