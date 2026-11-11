@@ -657,10 +657,12 @@ mod tests {
 			&mask,
 			r#"{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[-180,60],[-90,60],[-90,85.06],[-180,85.06],[-180,60]]]}}]}"#,
 		)?;
+		// Single-quoted in the VPL, where a backslash is literal: a Windows temp path
+		// (`C:\Users\…`) in double quotes reads as escape sequences and does not parse.
 		let mask = mask.display();
 
 		let by_branch = build(&format!(
-			r#"vector_branch expr="$layer == 'poi'" [ vector_mask geojson="{mask}" ]"#
+			r#"vector_branch expr="$layer == 'poi'" [ vector_mask geojson='{mask}' ]"#
 		))
 		.await?;
 
