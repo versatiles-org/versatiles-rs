@@ -112,6 +112,15 @@ impl TileSource for Operation {
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		self.source.tile_coord_stream(bbox).await
 	}
+
+	/// The container's own sizes, which its index holds.
+	///
+	/// Without this, the trait's default read every tile body to measure it, so
+	/// measuring a container through a pipeline cost a full read of its tiles
+	/// where its index would do.
+	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		self.source.tile_size_stream(bbox).await
+	}
 }
 
 crate::operations::macros::define_read_factory!("from_container", Args, Operation);
@@ -135,11 +144,76 @@ mod tests {
 		sync::{Arc, Mutex},
 	};
 
+	use anyhow::bail;
 	use futures::future::BoxFuture;
-	use versatiles_container::{DataLocation, TilesRuntime};
-	use versatiles_core::TileCompression::Uncompressed;
+	use versatiles_container::{DataLocation, SourceType, TileSourceMetadata, TilesRuntime, Traversal};
+	use versatiles_core::{TileCompression::Uncompressed, TileCoord, TileFormat};
 
 	use super::*;
+
+	/// A container that knows its tile sizes from its index but cannot read a
+	/// tile body.
+	#[derive(Debug)]
+	struct IndexOnly {
+		metadata: TileSourceMetadata,
+		tilejson: TileJSON,
+	}
+
+	impl IndexOnly {
+		fn new() -> Self {
+			let pyramid = TilePyramid::new_full_up_to(3);
+			IndexOnly {
+				metadata: TileSourceMetadata::new(TileFormat::MVT, Uncompressed, Traversal::ANY, Some(pyramid)),
+				tilejson: TileJSON::default(),
+			}
+		}
+
+		/// The size the index records for `coord`.
+		fn size(coord: TileCoord) -> u32 {
+			100 + coord.x * 10 + coord.y
+		}
+	}
+
+	#[async_trait]
+	impl TileSource for IndexOnly {
+		fn source_type(&self) -> Arc<SourceType> {
+			SourceType::new_container("index only", "test")
+		}
+
+		fn metadata(&self) -> &TileSourceMetadata {
+			&self.metadata
+		}
+
+		fn tilejson(&self) -> &TileJSON {
+			&self.tilejson
+		}
+
+		async fn tile_stream(&self, _bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+			bail!("this container cannot read a tile body")
+		}
+
+		async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+			Ok(TileStream::from_vec(
+				bbox.iter_coords().map(|coord| (coord, Self::size(coord))).collect(),
+			))
+		}
+	}
+
+	/// Sizes come from the container's index. The trait's default would read
+	/// every tile body instead, which this container refuses.
+	#[tokio::test]
+	async fn tile_sizes_come_from_the_container_without_reading_a_tile() -> Result<()> {
+		let operation = operation_from_reader(Box::new(IndexOnly::new()));
+		let bbox = TileBBox::new_full(2)?;
+
+		let mut sizes = operation.tile_size_stream(bbox).await?.to_vec().await;
+		sizes.sort_by_key(|(coord, _)| (coord.y, coord.x));
+
+		let mut expected: Vec<(TileCoord, u32)> = bbox.iter_coords().map(|c| (c, IndexOnly::size(c))).collect();
+		expected.sort_by_key(|(coord, _)| (coord.y, coord.x));
+		assert_eq!(sizes, expected);
+		Ok(())
+	}
 	use crate::helpers::dummy_vector_source::DummyVectorSource;
 
 	/// A factory whose reader records the identity it was handed.
