@@ -180,7 +180,7 @@ struct Args {
 	y_field: Option<String>,
 
 	/// How far a cell edge may stray from its true curve, in tile pixels. Defaults to `0.5`.
-	#[vpl(default = "0.5")]
+	#[vpl(default = "0.5", step = "0.1")]
 	densify_tolerance: Option<f64>,
 
 	/// Name of the layer to write into. Defaults to `grid`.

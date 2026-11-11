@@ -24,10 +24,10 @@ use crate::{PipelineFactory, operations::transform::TileTransform, vpl::VPLNode}
 /// downward bias at no cost in size. Single-pass: no scan of the data first.
 struct Args {
 	/// Allowed elevation error as a fraction of the pixel's ground size. Defaults to `0.1`.
-	#[vpl(default = "0.1")]
+	#[vpl(default = "0.1", step = "0.01")]
 	elevation_error: Option<f64>,
 	/// Largest slope change in degrees, as MapLibre shades it, quantization may add. Defaults to `1.0`.
-	#[vpl(default = "1.0")]
+	#[vpl(default = "1.0", step = "0.1")]
 	slope_error: Option<f64>,
 	/// DEM encoding of the source. Defaults to the encoding its tile schema implies.
 	encoding: Option<DemEncoding>,

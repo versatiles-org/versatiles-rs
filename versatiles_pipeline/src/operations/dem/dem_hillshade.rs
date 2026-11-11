@@ -69,7 +69,7 @@ struct Args {
 	#[vpl(default = "335")]
 	azimuth: Option<f64>,
 	/// Intensity of the shading, from 0 to 1. Defaults to `0.5`.
-	#[vpl(default = "0.5")]
+	#[vpl(default = "0.5", step = "0.05")]
 	exaggeration: Option<Exaggeration>,
 	/// Colour of slopes facing away from the light. Defaults to `000000`.
 	#[vpl(default = "000000")]

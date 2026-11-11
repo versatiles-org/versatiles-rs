@@ -23,10 +23,10 @@ struct Args {
 	#[vpl(default = "0.0")]
 	brightness: Option<Brightness>,
 	/// Factor applied around mid-grey. Defaults to `1.0`.
-	#[vpl(default = "1.0")]
+	#[vpl(default = "1.0", step = "0.1")]
 	contrast: Option<Contrast>,
 	/// Gamma exponent. Defaults to `1.0`.
-	#[vpl(default = "1.0")]
+	#[vpl(default = "1.0", step = "0.1")]
 	gamma: Option<Gamma>,
 }
 

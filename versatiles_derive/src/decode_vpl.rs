@@ -984,6 +984,8 @@ enum FieldReference {
 struct VplFieldAttrs {
 	/// `default = "…"`, as it would be written in VPL.
 	default: Option<String>,
+	/// `step = "…"`: how far a form's arrow keys move a number field.
+	step: Option<f64>,
 	/// What the argument names in the data, when it names something there.
 	refers_to: Option<FieldReference>,
 	/// `accepts = "…"` or `accepts_any`; `None` when the field said nothing,
@@ -996,6 +998,7 @@ struct VplFieldAttrs {
 /// once, with the whole vocabulary.
 fn extract_vpl_attrs(attrs: &[Attribute]) -> Result<VplFieldAttrs, syn::Error> {
 	let mut default = None;
+	let mut step: Option<f64> = None;
 	let mut refers_to: Option<FieldReference> = None;
 	let mut accepts: Option<AcceptsSpec> = None;
 
@@ -1016,6 +1019,15 @@ fn extract_vpl_attrs(attrs: &[Attribute]) -> Result<VplFieldAttrs, syn::Error> {
 				let value: syn::LitStr = meta.value()?.parse()?;
 				default = Some(value.value());
 				Ok(())
+			} else if meta.path.is_ident("step") {
+				let value: syn::LitStr = meta.value()?.parse()?;
+				match value.value().trim().parse::<f64>() {
+					Ok(parsed) if parsed.is_finite() && parsed > 0.0 => {
+						step = Some(parsed);
+						Ok(())
+					}
+					_ => Err(meta.error("`step` must be a positive number, for example `step = \"0.05\"`")),
+				}
 			} else if meta.path.is_ident("accepts") {
 				if accepts.is_some() {
 					return Err(meta.error("an argument takes one set of files; only one of these may be given"));
@@ -1051,7 +1063,7 @@ fn extract_vpl_attrs(attrs: &[Attribute]) -> Result<VplFieldAttrs, syn::Error> {
 				set_reference(FieldReference::NewField)
 			} else {
 				Err(meta.error(
-					"unknown VPLDecode field attribute; expected `default = \"…\"`, `accepts = \"…\"`, \
+					"unknown VPLDecode field attribute; expected `default = \"…\"`, `step = \"…\"`, `accepts = \"…\"`, \
 					 `accepts_any`, `field_of = \"…\"`, `field_of_source`, `layer_of_source`, `new_layer` or \
 					 `new_field`",
 				))
@@ -1061,6 +1073,7 @@ fn extract_vpl_attrs(attrs: &[Attribute]) -> Result<VplFieldAttrs, syn::Error> {
 
 	Ok(VplFieldAttrs {
 		default,
+		step,
 		refers_to,
 		accepts,
 	})
@@ -1244,6 +1257,8 @@ struct FieldMeta {
 	/// How many values the accessor takes: `Some(1)` for a scalar, `Some(N)` for
 	/// a fixed-size array, `None` for a list that takes any number.
 	arity: Option<usize>,
+	/// `#[vpl(step = "…")]`, for a number field; `None` when unset.
+	step: Option<f64>,
 	/// `Some(T)` when the field's own type describes its range through
 	/// `fn bounds() -> Bounds`; `None` when it does not, in which case a scalar
 	/// number falls back to the range of `number_type`.
@@ -1313,6 +1328,7 @@ fn process_sources_field(
 		number_type: None,
 		arity: None,
 		bounds_type: None,
+		step: None,
 		default: None,
 		refers_to: None,
 		min_sources,
@@ -1484,9 +1500,18 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 
 	let VplFieldAttrs {
 		default,
+		step,
 		refers_to,
 		accepts: declared_accepts,
 	} = extract_vpl_attrs(&field.attrs)?;
+	let describes_a_range =
+		(mapping.has_bounds && mapping.generic_param.is_some()) || (arity == Some(1) && number_type.is_some());
+	if step.is_some() && !describes_a_range {
+		return Err(syn::Error::new_spanned(
+			field,
+			format!("`{field_str}` is not a number with a range, so it cannot have a step"),
+		));
+	}
 	if default.is_some() && mapping.is_required {
 		return Err(syn::Error::new_spanned(
 			field,
@@ -1516,6 +1541,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		arity,
 		bounds_type: mapping.has_bounds.then_some(mapping.generic_param).flatten(),
 		default,
+		step,
 		refers_to,
 		accepts,
 		min_sources: 0,
@@ -1674,6 +1700,32 @@ fn value_check_expr(m: &FieldMeta) -> TokenStream {
 	}
 }
 
+/// The fields of a `VPLFieldMeta` that describe a number's range to a form:
+/// `bounds` and `step`.
+fn range_fields_expr(m: &FieldMeta) -> TokenStream {
+	// The describing half of a range, beside `variants()` above. A type that
+	// owns its range answers for itself; a plain number falls back to what its
+	// Rust type accepts, which is still worth saying — `Option<u8>` is whole
+	// numbers from 0 to 255, and a form can step it by one.
+	let bounds: TokenStream = match (m.bounds_type, m.arity, m.number_type) {
+		(Some(bounds_ty), _, _) => {
+			let ty = format_ident!("{}", bounds_ty);
+			quote! { Some(#ty::bounds()) }
+		}
+		(None, Some(1), Some(number_ty)) => {
+			let ty = format_ident!("{}", number_ty);
+			quote! { Some(<#ty as crate::vpl::NumberBounds>::BOUNDS) }
+		}
+		// An array's bound would be per element, and nothing consumes that yet.
+		_ => quote! { None },
+	};
+	let step = m.step.map_or_else(|| quote! { None }, |step| quote! { Some(#step) });
+	quote! {
+		bounds: #bounds,
+		step: #step,
+	}
+}
+
 /// The fields of a `VPLFieldMeta` that describe an operation's `sources`, which every other
 /// field leaves at 0, `None` and `false`.
 fn sources_fields_expr(m: &FieldMeta) -> TokenStream {
@@ -1709,22 +1761,7 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 	} else {
 		quote! { Vec::new() }
 	};
-	// The describing half of a range, beside `variants()` above. A type that
-	// owns its range answers for itself; a plain number falls back to what its
-	// Rust type accepts, which is still worth saying — `Option<u8>` is whole
-	// numbers from 0 to 255, and a form can step it by one.
-	let bounds_expr: TokenStream = match (m.bounds_type, m.arity, m.number_type) {
-		(Some(bounds_ty), _, _) => {
-			let ty = format_ident!("{}", bounds_ty);
-			quote! { Some(#ty::bounds()) }
-		}
-		(None, Some(1), Some(number_ty)) => {
-			let ty = format_ident!("{}", number_ty);
-			quote! { Some(<#ty as crate::vpl::NumberBounds>::BOUNDS) }
-		}
-		// An array's bound would be per element, and nothing consumes that yet.
-		_ => quote! { None },
-	};
+	let range_fields = range_fields_expr(m);
 	// Which files a path argument takes. `Only` reads the list off the type that
 	// enforces it, so the metadata and the parser are one fact; the others are
 	// the field's own declaration, for sets nothing enforces.
@@ -1802,7 +1839,7 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 			is_sources: #is_sources,
 			doc: #fdoc.to_string(),
 			enum_variants: #variants_expr,
-			bounds: #bounds_expr,
+			#range_fields
 			refers_to: #refers_to_expr,
 			accepts: #accepts_expr,
 			validate: #validate_expr,
@@ -2291,6 +2328,40 @@ mod tests {
 		let code = decode_sources_field(&quote::quote!(#[vpl(min_sources = 2)])).unwrap();
 		assert!(code.contains("min_sources:2usize"), "{code}");
 		assert!(decode_sources_field(&quote::quote!(#[vpl(min_sources = 0)])).is_err());
+	}
+
+	fn decode_number_field(field: &proc_macro2::TokenStream) -> Result<String, syn::Error> {
+		let input: DeriveInput = parse_quote!(
+			struct Args {
+				#field
+			}
+		);
+		let syn::Data::Struct(data_struct) = &input.data else {
+			panic!("Expected struct data")
+		};
+		decode_struct(input.clone(), data_struct.clone()).map(|ts| ts.to_string().replace(' ', ""))
+	}
+
+	/// `step` reaches the metadata, is off by default, and is refused where a
+	/// form has no number to step.
+	#[test]
+	fn test_step() {
+		let plain = decode_number_field(&quote::quote!(level: Option<f64>,)).unwrap();
+		assert!(plain.contains("step:None"), "{plain}");
+
+		let code = decode_number_field(&quote::quote!(#[vpl(step = "0.05")] level: Option<f64>,)).unwrap();
+		assert!(code.contains("step:Some(0.05f64)"), "{code}");
+
+		for bad in ["0", "-1", "inf", "a lot"] {
+			assert!(
+				decode_number_field(&quote::quote!(#[vpl(step = #bad)] level: Option<f64>,)).is_err(),
+				"step = {bad:?} should be refused"
+			);
+		}
+		assert!(
+			decode_number_field(&quote::quote!(#[vpl(step = "1")] name: Option<String>,)).is_err(),
+			"a text field has nothing to step"
+		);
 	}
 
 	/// `max_sources` and `branches` reach the metadata, and are off by default.

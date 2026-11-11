@@ -90,6 +90,9 @@ fn render_field(op: &str, field: &VPLFieldMeta) -> String {
 	if let Some(bounds) = &field.bounds {
 		let _ = write!(line, " | bounds={}", render_bounds(bounds));
 	}
+	if let Some(step) = field.step {
+		let _ = write!(line, " | step={step}");
+	}
 	if let Some(reference) = &field.refers_to {
 		let _ = write!(line, " | names={}", render_reference(*reference));
 	}

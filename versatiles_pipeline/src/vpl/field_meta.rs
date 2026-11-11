@@ -147,6 +147,14 @@ pub struct VPLFieldMeta {
 	/// answers `0..=255`). Both come from the same place the parser does, so
 	/// what a form offers and what building accepts cannot drift (#260).
 	pub bounds: Option<Bounds>,
+	/// How far one press of an arrow key should move a number field, for a
+	/// form; `None` to leave it to the form.
+	///
+	/// A browser steps a float field by 1, which crosses the whole useful range
+	/// of a field such as `dem_hillshade.exaggeration`, from 0 to 1. Only the
+	/// operation knows what a useful increment is. From `#[vpl(step = "…")]`,
+	/// which is refused on a field without [`bounds`](Self::bounds).
+	pub step: Option<f64>,
 	/// What this argument names in the data, when it names something there.
 	///
 	/// `None` for a value that stands on its own. See [`FieldReference`] for
