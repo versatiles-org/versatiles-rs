@@ -317,18 +317,7 @@ impl PMTilesReader {
 						*tile_format,
 					)));
 				}
-				let range = entry.range;
-				let leaves = Arc::clone(leaves_bytes);
-				let compression = *internal_compression;
-				entries = leaves_cache
-					.try_get_with(range, async move {
-						let mut blob = leaves.read_range(&range)?;
-						blob = decompress(blob, &compression)?;
-						let parsed = EntriesV3::from_blob(&blob)?;
-						anyhow::Ok(Arc::new(parsed))
-					})
-					.await
-					.map_err(|e: Arc<anyhow::Error>| anyhow::anyhow!("{e:#}"))?;
+				entries = Self::load_leaf(entry.range, leaves_cache, leaves_bytes, *internal_compression).await?;
 			} else {
 				return Ok(None);
 			}
@@ -364,19 +353,141 @@ impl PMTilesReader {
 				return Ok(Some(entry.range.shifted_forward(tile_data_offset)?));
 			}
 
-			let range = entry.range;
-			let leaves = Arc::clone(leaves_bytes);
-			entries = leaves_cache
-				.try_get_with(range, async move {
-					let mut blob = leaves.read_range(&range)?;
-					blob = decompress(blob, &internal_compression)?;
-					anyhow::Ok(Arc::new(EntriesV3::from_blob(&blob)?))
-				})
-				.await
-				.map_err(|e: Arc<anyhow::Error>| anyhow::anyhow!("{e:#}"))?;
+			entries = Self::load_leaf(entry.range, leaves_cache, leaves_bytes, internal_compression).await?;
 		}
 
 		Err(too_deep())
+	}
+
+	/// A leaf directory's entries, decompressed once and then taken from the cache.
+	async fn load_leaf(
+		range: ByteRange,
+		leaves_cache: &Cache<ByteRange, Arc<EntriesV3>>,
+		leaves_bytes: &Arc<Blob>,
+		internal_compression: TileCompression,
+	) -> Result<Arc<EntriesV3>> {
+		let leaves = Arc::clone(leaves_bytes);
+		leaves_cache
+			.try_get_with(range, async move {
+				let mut blob = leaves.read_range(&range)?;
+				blob = decompress(blob, &internal_compression)?;
+				anyhow::Ok(Arc::new(EntriesV3::from_blob(&blob)?))
+			})
+			.await
+			.map_err(|e: Arc<anyhow::Error>| anyhow::anyhow!("{e:#}"))
+	}
+
+	/// Every tile whose ID lies in `lo..=hi`, with the byte range of its data,
+	/// found by walking the directories once rather than looking up each ID.
+	///
+	/// Entries are sorted by tile ID, so a directory is left at the first entry
+	/// past `hi`, and a leaf directory is only opened when the IDs it holds,
+	/// up to the next entry's, reach into the range. A run of tiles sharing one
+	/// entry is expanded only as far as it overlaps the range.
+	async fn tiles_in_id_range(
+		lo: u64,
+		hi: u64,
+		root_entries: Arc<EntriesV3>,
+		leaves_cache: &Cache<ByteRange, Arc<EntriesV3>>,
+		leaves_bytes: &Arc<Blob>,
+		tile_data_offset: u64,
+		internal_compression: TileCompression,
+	) -> Result<Vec<(u64, ByteRange)>> {
+		let mut tiles = Vec::new();
+		let mut pending = vec![(root_entries, 0usize)];
+
+		while let Some((entries, depth)) = pending.pop() {
+			if depth >= MAX_DIRECTORY_DEPTH {
+				return Err(too_deep());
+			}
+			let entries: Vec<_> = entries.iter().copied().collect();
+			for (index, entry) in entries.iter().enumerate() {
+				if entry.tile_id > hi {
+					break;
+				}
+				if entry.range.length == 0 {
+					continue;
+				}
+				if entry.run_length > 0 {
+					let last = entry
+						.tile_id
+						.saturating_add(u64::from(entry.run_length.saturating_sub(1)));
+					if last < lo {
+						continue;
+					}
+					let range = entry.range.shifted_forward(tile_data_offset)?;
+					for id in entry.tile_id.max(lo)..=last.min(hi) {
+						tiles.push((id, range));
+					}
+				} else if entries
+					.get(index..)
+					.and_then(|rest| rest.get(1))
+					.is_none_or(|next| next.tile_id > lo)
+				{
+					let leaf = Self::load_leaf(entry.range, leaves_cache, leaves_bytes, internal_compression).await?;
+					pending.push((leaf, depth.saturating_add(1)));
+				}
+			}
+		}
+
+		Ok(tiles)
+	}
+
+	/// The size of each tile in `bbox`, by looking up every coordinate.
+	///
+	/// Cheapest for a bbox with few coordinates in a file with many tiles.
+	async fn sizes_by_lookup(&self, bbox: &TileBBox) -> Result<Vec<(TileCoord, u32)>> {
+		let mut sizes = Vec::new();
+		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
+		for coord in coords {
+			let Ok(tile_id) = coord.get_hilbert_index() else {
+				continue;
+			};
+			if let Some(range) = Self::resolve_tile_range(
+				tile_id,
+				Arc::clone(&self.root_entries),
+				&self.leaves_cache,
+				&self.leaves_bytes,
+				self.header.tile_data.offset,
+				self.internal_compression,
+			)
+			.await? && let Ok(size) = u32::try_from(range.length)
+			{
+				sizes.push((coord, size));
+			}
+		}
+		Ok(sizes)
+	}
+
+	/// The size of each tile in `bbox`, by walking the directory entries whose
+	/// IDs could belong to it.
+	///
+	/// Cheapest for a bbox with many coordinates and few tiles, such as a whole
+	/// level of a sparse file, which the lookups would visit coordinate by
+	/// coordinate.
+	async fn sizes_by_walk(&self, bbox: &TileBBox) -> Result<Vec<(TileCoord, u32)>> {
+		let (lo, hi) = hilbert_id_range(bbox)?;
+		let tiles = Self::tiles_in_id_range(
+			lo,
+			hi,
+			Arc::clone(&self.root_entries),
+			&self.leaves_cache,
+			&self.leaves_bytes,
+			self.header.tile_data.offset,
+			self.internal_compression,
+		)
+		.await?;
+
+		let mut sizes = Vec::new();
+		for (tile_id, range) in tiles {
+			let coord = TileCoord::from_hilbert_index(tile_id)?;
+			if bbox.includes_coord(&coord)
+				&& let Ok(size) = u32::try_from(range.length)
+			{
+				sizes.push((coord, size));
+			}
+		}
+		Ok(sizes)
 	}
 
 	/// Build read chunks by resolving tile byte ranges and coalescing nearby ones.
@@ -405,6 +516,57 @@ impl PMTilesReader {
 
 		Ok(Chunks::from_tile_ranges(tile_ranges))
 	}
+}
+
+/// The tile IDs the tiles of `bbox` can have, as one range: those of every
+/// descendant of the smallest quadtree tile that contains the bbox.
+///
+/// The Hilbert curve visits all descendants of a quadtree tile in one unbroken
+/// run, ordered as their ancestors are, so at level `z` the descendants of
+/// the tile at position `p` of level `k` are the `4^(z-k)` IDs starting at
+/// `p · 4^(z-k)` past the first ID of level `z`. The range is exact for a bbox
+/// that is such a tile, such as a whole level, and never misses a tile of any
+/// other bbox.
+fn hilbert_id_range(bbox: &TileBBox) -> Result<(u64, u64)> {
+	/// `4^n`: how many tiles a level `n` levels below a tile has under it.
+	fn tiles_below(n: u8) -> Result<u64> {
+		u32::from(n)
+			.checked_mul(2)
+			.and_then(|bits| 1u64.checked_shl(bits))
+			.context("zoom level too deep for a tile ID")
+	}
+
+	/// The first ID of level `z`: the IDs of all levels before it, `(4^z - 1) / 3`.
+	fn level_start(z: u8) -> Result<u64> {
+		tiles_below(z)?
+			.checked_sub(1)
+			.and_then(|before| before.checked_div(3))
+			.context("zoom level too deep for a tile ID")
+	}
+
+	let level = bbox.level();
+	let (x_min, y_min, x_max, y_max) = (bbox.x_min()?, bbox.y_min()?, bbox.x_max()?, bbox.y_max()?);
+	let mut shift = 0u8;
+	while shift < level && ((x_min >> shift) != (x_max >> shift) || (y_min >> shift) != (y_max >> shift)) {
+		// At most `level`, which is below 32.
+		shift = shift.saturating_add(1);
+	}
+
+	let ancestor_level = level.checked_sub(shift).context("the ancestor lies above level 0")?;
+	let ancestor = TileCoord::new(ancestor_level, x_min >> shift, y_min >> shift)?;
+	let block = tiles_below(shift)?;
+	let lo = ancestor
+		.get_hilbert_index()?
+		.checked_sub(level_start(ancestor_level)?)
+		.and_then(|position| position.checked_mul(block))
+		.zip(Some(level_start(level)?))
+		.and_then(|(offset, start)| start.checked_add(offset))
+		.context("tile ID out of range")?;
+	let hi = block
+		.checked_sub(1)
+		.and_then(|last| lo.checked_add(last))
+		.context("tile ID out of range")?;
+	Ok((lo, hi))
 }
 
 /// Build the per‑zoom tile pyramid by traversing `PMTiles` directory entries.
@@ -641,29 +803,31 @@ impl TileSource for PMTilesReader {
 	}
 
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
+	/// The sizes from the directories, without reading a tile.
+	///
+	/// Two ways to get them, and this picks the cheaper. Looking up each
+	/// coordinate costs one lookup per coordinate of the bbox, whether a tile is
+	/// there or not: a whole level at z14 is 268 million lookups. Walking the
+	/// directory entries costs at most one step per tile whose ID could belong
+	/// to the bbox, which is never more than the tiles in the file.
 	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
 		let bbox = self.metadata.intersection_bbox(&bbox);
-		let mut tile_sizes: Vec<(TileCoord, u32)> = Vec::new();
-
-		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
-		for coord in coords {
-			let Ok(tile_id) = coord.get_hilbert_index() else {
-				continue;
-			};
-			if let Some(range) = Self::resolve_tile_range(
-				tile_id,
-				Arc::clone(&self.root_entries),
-				&self.leaves_cache,
-				&self.leaves_bytes,
-				self.header.tile_data.offset,
-				self.internal_compression,
-			)
-			.await? && let Ok(size) = u32::try_from(range.length)
-			{
-				tile_sizes.push((coord, size));
-			}
+		if bbox.is_empty() {
+			return Ok(TileStream::from_vec(Vec::new()));
 		}
 
+		let (lo, hi) = hilbert_id_range(&bbox)?;
+		let tiles_in_file = match self.header.addressed_tiles_count {
+			0 => u64::MAX,
+			count => count,
+		};
+		let walk_steps = hi.saturating_sub(lo).saturating_add(1).min(tiles_in_file);
+
+		let tile_sizes = if bbox.count_tiles() <= walk_steps {
+			self.sizes_by_lookup(&bbox).await?
+		} else {
+			self.sizes_by_walk(&bbox).await?
+		};
 		Ok(TileStream::from_vec(tile_sizes))
 	}
 
@@ -778,9 +942,92 @@ mod tests {
 		Ok(())
 	}
 
-	/// The same self-referential directory, met by the two tile lookups. One
-	/// used to say "not found" without context, the other to drop the tile as a
-	/// gap; both now say what the pyramid walk says.
+	/// The ID range of a bbox, checked against every tile in it. An aligned
+	/// quadtree tile's descendants must be exactly its range; any other bbox
+	/// must not have a tile outside it.
+	#[test]
+	fn the_id_range_of_a_bbox_holds_every_tile_of_it() -> Result<()> {
+		for level in 0..=6u8 {
+			let size = 1u32 << level;
+			let mut bboxes = vec![TileBBox::new_full(level)?];
+			for (x0, y0, x1, y1) in [(0, 0, 0, 0), (1, 0, 2, 1), (0, 1, 3, 3), (2, 2, 5, 6), (3, 0, 3, 7)] {
+				if x1 < size && y1 < size {
+					bboxes.push(TileBBox::from_min_and_max(level, x0, y0, x1, y1)?);
+				}
+			}
+			for quad_level in 0..=level {
+				let side = 1u32 << (level - quad_level);
+				for qx in 0..(1u32 << quad_level).min(4) {
+					let (x0, y0) = (qx * side, (qx % 2) * side);
+					bboxes.push(TileBBox::from_min_and_max(level, x0, y0, x0 + side - 1, y0 + side - 1)?);
+				}
+			}
+
+			for bbox in bboxes {
+				let (lo, hi) = hilbert_id_range(&bbox)?;
+				let ids: Vec<u64> = bbox.iter_coords().map(|c| c.get_hilbert_index().unwrap()).collect();
+				assert!(
+					ids.iter().all(|id| (lo..=hi).contains(id)),
+					"{bbox:?} has a tile outside {lo}..={hi}"
+				);
+
+				let aligned = bbox.count_tiles().is_power_of_two()
+					&& bbox.width() == bbox.height()
+					&& bbox.x_min()? % bbox.width() == 0
+					&& bbox.y_min()? % bbox.height() == 0;
+				if aligned {
+					assert_eq!(hi - lo + 1, bbox.count_tiles(), "{bbox:?} is a quadtree tile");
+				}
+			}
+		}
+		Ok(())
+	}
+
+	/// Walking the directory entries and looking up each coordinate are two ways to
+	/// the same sizes, for whole levels and for parts of them.
+	#[tokio::test]
+	async fn walking_the_directories_gives_the_sizes_the_lookups_give() -> Result<()> {
+		let reader = PMTilesReader::open(&PATH, TilesRuntime::default()).await?;
+		let pyramid = reader.tile_pyramid().await?;
+
+		let mut bboxes = Vec::new();
+		for level in pyramid.level_min().unwrap_or(0)..=pyramid.level_max().unwrap_or(0) {
+			bboxes.push(TileBBox::new_full(level)?);
+			let tiles = pyramid.level_bbox(level);
+			if !tiles.is_empty() {
+				bboxes.push(tiles);
+				let (x, y) = (tiles.x_min()?, tiles.y_min()?);
+				let max = (1u32 << level) - 1;
+				bboxes.push(TileBBox::from_min_and_max(
+					level,
+					x,
+					y,
+					(x + 1).min(max),
+					(y + 2).min(max),
+				)?);
+			}
+		}
+
+		let mut compared = 0;
+		for bbox in bboxes {
+			let bbox = reader.metadata().intersection_bbox(&bbox);
+			if bbox.is_empty() {
+				continue;
+			}
+			let mut by_walk = reader.sizes_by_walk(&bbox).await?;
+			let mut by_lookup = reader.sizes_by_lookup(&bbox).await?;
+			by_walk.sort_by_key(|(c, _)| (c.y, c.x));
+			by_lookup.sort_by_key(|(c, _)| (c.y, c.x));
+			assert_eq!(by_walk, by_lookup, "{bbox:?}");
+			compared += by_walk.len();
+		}
+		assert!(compared > 0, "the comparison saw no tiles");
+		Ok(())
+	}
+
+	/// The same self-referential directory, met by the tile lookups and the walk.
+	/// One lookup used to say "not found" without context, the other to drop the
+	/// tile as a gap; all three now say what the pyramid walk says.
 	#[tokio::test]
 	async fn the_tile_lookups_refuse_a_self_referential_leaf_directory() -> Result<()> {
 		let mut blob = leaf_pointer_dir(5)?;
@@ -809,7 +1056,7 @@ mod tests {
 		let tile = PMTilesReader::lookup_tile_by_id(
 			0,
 			&data_reader,
-			root,
+			Arc::clone(&root),
 			&cache,
 			&leaves,
 			0,
@@ -820,6 +1067,11 @@ mod tests {
 		.await
 		.expect_err("the tile path must say why");
 		assert!(format!("{tile:#}").contains("nest more than 3 levels deep"), "{tile:#}");
+
+		let walk = PMTilesReader::tiles_in_id_range(0, 100, root, &cache, &leaves, 0, TileCompression::Uncompressed)
+			.await
+			.expect_err("the walk must neither loop nor drop the tiles");
+		assert!(format!("{walk:#}").contains("nest more than 3 levels deep"), "{walk:#}");
 		Ok(())
 	}
 
