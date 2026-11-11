@@ -747,7 +747,7 @@ from_container filename="osm.versatiles"
 
 That cuts the place labels to Berlin and leaves every other layer as it was.
 
-`expr` is written as in `vector_filter_features`, with `$zoom`, `$layer` and `$props` beside the feature's own properties. It is answered for as much of a tile at once as it can be: an expression reading only `$zoom` sends each tile to one branch without decoding it, and one reading `$layer` but no property sends whole layers.
+`expr` is written as in `vector_filter_features`, with names such as `$zoom`, `$layer`, `$type` and `$props` beside the feature's own properties; see there for the full list. It is answered for as much of a tile at once as it can be: an expression reading only `$zoom`, `$x` and `$y` sends each tile to one branch without decoding it, and one that also reads `$layer` but nothing of the feature sends whole layers.
 
 A branch begins with a transform rather than a read, because it starts from the tiles arriving here. It may only contain operations that make each tile from that tile alone, such as filtering, masking or changing properties. An operation that reads other tiles, such as `vector_overzoom`, is refused; put it before or after the branch.
 
@@ -825,11 +825,16 @@ vector_filter_features expr="$props['addr:street'] == 'Hauptstr.'"
 
 ### Names starting with `$`
 
-Three names describe where a feature is rather than what it carries. They start with `$`, which no property name can, so they never collide with one:
+Some names describe a feature and where it is rather than the properties it carries. They start with `$`, which no property name can, so they never collide with one:
 
 - `$zoom` — the zoom level of the tile being filtered, as an integer.
+- `$x` and `$y` — the column and row of that tile, as integers.
 - `$layer` — the name of the feature's layer, as a string.
+- `$type` — the feature's geometry type: `'Point'`, `'LineString'` or `'Polygon'`, as in MapLibre's `geometry-type`, or `null` if the tile does not say. A tile does not tell one point from several, so a multipoint is `'Point'` too.
+- `$id` — the feature's id, as an integer, or `null` if it has none.
 - `$props` — all of the feature's properties, as a map.
+
+`$type` and `$id` are stored beside the feature's geometry, so reading them does not decode it.
 
 `$zoom` lets one expression keep different features at different zooms — which is how cartography actually reads a layer:
 
@@ -837,13 +842,13 @@ Three names describe where a feature is rather than what it carries. They start 
 vector_filter_features expr="kind in ['motorway','trunk'] || $zoom >= 12"
 ```
 
-That keeps motorways everywhere and every other street only from z12. An expression reading no property is answered once per tile, or once per layer if it reads `$layer`, rather than once per feature, so a plain zoom range is cheap:
+That keeps motorways everywhere and every other street only from z12. An expression that reads only `$zoom`, `$x` and `$y` is answered once per tile, and one that also reads `$layer` once per layer, rather than once per feature, so a plain zoom range is cheap:
 
 ```vpl
 vector_filter_features expr="$zoom >= 14"
 ```
 
-The bare words `zoom` and `props` are refused, because they meant `$zoom` and `$props` before the `$` was required. A feature property of either name is `$props.zoom` or `$props.props`. So are `_zoom`, `_layer` and `_props`, which are reserved for the same reason. Any other property, including one named `layer`, is a bare identifier as usual.
+The bare words `zoom` and `props` are refused, because they meant `$zoom` and `$props` before the `$` was required. A feature property of either name is `$props.zoom` or `$props.props`. So are `_zoom`, `_x`, `_y`, `_layer`, `_type`, `_id` and `_props`, which are reserved because the names starting with `$` are read through them. Any other property, including ones named `layer`, `type`, `id`, `x` or `y`, is a bare identifier as usual.
 
 ### Missing keys
 

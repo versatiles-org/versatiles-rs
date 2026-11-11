@@ -15,7 +15,10 @@ use cel_interpreter::{
 	objects::{Key as CelKey, Map as CelMap},
 };
 use versatiles_core::TileCoord;
-use versatiles_geometry::geo::{GeoProperties, GeoValue};
+use versatiles_geometry::{
+	geo::{GeoProperties, GeoValue},
+	vector_tile::{GeomType, VectorTileFeature},
+};
 
 /// A CEL expression, compiled where the value is decoded.
 ///
@@ -203,28 +206,101 @@ fn ensure_cel_nesting_is_bounded(expr: &str) -> Result<()> {
 	Ok(())
 }
 
-/// The names an expression reads besides a feature's own properties, each
-/// written with a leading `$`: `$zoom`, `$layer`, `$props`.
+/// A name an expression reads besides a feature's own properties, written
+/// with a leading `$`.
 ///
 /// The `$` is what keeps them apart from properties. A property is a top-level
 /// variable only if its name is a CEL identifier, and no identifier starts with
 /// `$`, so no property can ever hide one of these or be hidden by one. They used
 /// to be bare words, and `zoom` and `props` shadowed any property of that name.
-const SPECIAL_NAMES: [&str; 3] = ["zoom", "layer", "props"];
-
-/// What `$zoom` becomes before compiling, because CEL has no `$` in identifiers.
 ///
-/// Each `$` becomes a `_`, so the compiled text is exactly as long as the one
-/// written and a parser error points at the right column. That needs
+/// CEL has no `$` in identifiers, so each `$` becomes a `_` before compiling:
+/// `$zoom` is compiled as `_zoom`. The compiled text is then exactly as long as
+/// the one written, so a parser error points at the right column. That needs
 /// [`rewrite_special_names`] to refuse a bare `_zoom`, which would otherwise
 /// read the zoom level without saying so.
-const ZOOM_VAR: &str = "_zoom";
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Special {
+	/// `$zoom`: the zoom level of the tile.
+	Zoom,
+	/// `$x`: the column of the tile.
+	X,
+	/// `$y`: the row of the tile.
+	Y,
+	/// `$layer`: the name of the feature's layer.
+	Layer,
+	/// `$type`: the feature's geometry type, `'Point'`, `'LineString'` or `'Polygon'`.
+	Type,
+	/// `$id`: the feature's id, or `null`.
+	Id,
+	/// `$props`: all of the feature's properties, as a map.
+	Props,
+}
 
-/// What `$layer`, the name of the feature's layer, becomes before compiling.
-const LAYER_VAR: &str = "_layer";
+impl Special {
+	const ALL: [Special; 7] = [
+		Special::Zoom,
+		Special::X,
+		Special::Y,
+		Special::Layer,
+		Special::Type,
+		Special::Id,
+		Special::Props,
+	];
 
-/// What `$props`, the feature's full property map, becomes before compiling.
-const PROPS_VAR: &str = "_props";
+	/// The name as written after the `$`.
+	fn name(self) -> &'static str {
+		match self {
+			Special::Zoom => "zoom",
+			Special::X => "x",
+			Special::Y => "y",
+			Special::Layer => "layer",
+			Special::Type => "type",
+			Special::Id => "id",
+			Special::Props => "props",
+		}
+	}
+
+	/// The identifier it is compiled as.
+	fn var(self) -> &'static str {
+		match self {
+			Special::Zoom => "_zoom",
+			Special::X => "_x",
+			Special::Y => "_y",
+			Special::Layer => "_layer",
+			Special::Type => "_type",
+			Special::Id => "_id",
+			Special::Props => "_props",
+		}
+	}
+
+	/// How much of a tile the name's value depends on.
+	fn scope(self) -> ExprScope {
+		match self {
+			Special::Zoom | Special::X | Special::Y => ExprScope::Tile,
+			Special::Layer => ExprScope::Layer,
+			Special::Type | Special::Id | Special::Props => ExprScope::Feature,
+		}
+	}
+
+	fn from_name(name: &str) -> Option<Special> {
+		Special::ALL.into_iter().find(|special| special.name() == name)
+	}
+
+	fn from_var(var: &str) -> Option<Special> {
+		Special::ALL.into_iter().find(|special| special.var() == var)
+	}
+
+	/// Every name, as a reader would list them: "`$zoom`, `$x`, … and `$props`".
+	fn listed() -> String {
+		let names: Vec<String> = Special::ALL
+			.iter()
+			.map(|special| format!("`${}`", special.name()))
+			.collect();
+		let (last, rest) = names.split_last().expect("there are special names");
+		format!("{} and {last}", rest.join(", "))
+	}
+}
 
 /// The bare words that meant `$zoom` and `$props` before the `$` was required.
 ///
@@ -241,10 +317,9 @@ const FORMER_SPECIAL_NAMES: [&str; 2] = ["zoom", "props"];
 ///
 /// # Errors
 ///
-/// For a `$` not followed by one of [`SPECIAL_NAMES`], and for a bare
+/// For a `$` not followed by the name of a [`Special`], and for a bare
 /// identifier that is one of the compiled names, such as `_zoom`.
 fn rewrite_special_names(expr: &str) -> Result<String> {
-	let compiled_names = [ZOOM_VAR, LAYER_VAR, PROPS_VAR];
 	let chars: Vec<char> = expr.chars().collect();
 	let mut out = String::with_capacity(expr.len());
 	// The last character of code that is not white space. After a `.`, a name
@@ -268,13 +343,14 @@ fn rewrite_special_names(expr: &str) -> Result<String> {
 		if c == '$' {
 			let name: String = chars[i + 1..].iter().take_while(|c| is_identifier_char(**c)).collect();
 			ensure!(
-				SPECIAL_NAMES.contains(&name.as_str()),
-				"`${name}` is not a name an expression can read. The names starting with `$` are \
-				 `$zoom`, `$layer` and `$props`; a feature property is written without one."
+				Special::from_name(&name).is_some(),
+				"`${name}` is not a name an expression can read. The names starting with `$` are {}; \
+				 a feature property is written without one.",
+				Special::listed()
 			);
 			ensure!(
 				previous != Some('.'),
-				"`${name}` cannot follow a `.`: `$zoom`, `$layer` and `$props` stand on their own."
+				"`${name}` cannot follow a `.`: the names starting with `$` stand on their own."
 			);
 			out.push('_');
 			out.push_str(&name);
@@ -300,7 +376,7 @@ fn rewrite_special_names(expr: &str) -> Result<String> {
 				i = end_of_string(&chars, i, word.contains(['r', 'R']));
 			} else {
 				ensure!(
-					previous == Some('.') || !compiled_names.contains(&word.as_str()),
+					previous == Some('.') || Special::from_var(&word).is_none(),
 					"`{word}` is reserved, because `${}` is compiled to it. \
 					 For a feature property of that name, use `$props.{word}`.",
 					&word[1..]
@@ -398,25 +474,21 @@ fn is_num(This(this): This<CelValue>) -> bool {
 	matches!(this, CelValue::Int(_) | CelValue::UInt(_) | CelValue::Float(_))
 }
 
-/// How much of a tile an expression's answer depends on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// How much of a tile an expression's answer depends on, narrowest first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum ExprScope {
-	/// One answer for the whole tile: the expression reads at most `$zoom`.
+	/// One answer for the whole tile: the expression reads at most `$zoom`, `$x` and `$y`.
 	Tile,
-	/// One answer per layer: it reads `$layer`, and perhaps `$zoom`.
+	/// One answer per layer: it also reads `$layer`.
 	Layer,
-	/// An answer per feature: it reads a property.
+	/// An answer per feature: it reads a property, `$props`, `$type` or `$id`.
 	Feature,
 }
 
 /// A compiled feature expression, evaluated against one feature at a time.
 ///
 /// Knows which names the expression reads, so each evaluation binds only those:
-/// `$zoom`, `$layer` and `$props`, and the feature properties it mentions.
-#[expect(
-	clippy::struct_excessive_bools,
-	reason = "one flag per name the expression may read, each independent of the others; a bit set would only rename them"
-)]
+/// the [`Special`] names it uses, and the feature properties it mentions.
 pub(crate) struct FeatureExpr {
 	program: Program,
 	/// The functions every evaluation needs, registered once.
@@ -434,12 +506,9 @@ pub(crate) struct FeatureExpr {
 	/// Top-level identifiers referenced by the expression, other than the special names.
 	/// Bound to the feature's property value (or `Null` if absent) on each evaluation.
 	referenced_vars: Vec<String>,
-	/// Whether the expression reads `$props`. The map is only built per feature when needed.
-	binds_props: bool,
-	/// Whether the expression reads `$zoom`.
-	binds_zoom: bool,
-	/// Whether the expression reads `$layer`.
-	binds_layer: bool,
+	/// The special names the expression reads. `$props` is the expensive one: its map is only
+	/// built per feature when it is read.
+	specials: Vec<Special>,
 	/// Whether the expression calls [`is_num`], which is only registered when it does.
 	binds_is_num: bool,
 }
@@ -450,9 +519,7 @@ impl std::fmt::Debug for FeatureExpr {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("FeatureExpr")
 			.field("referenced_vars", &self.referenced_vars)
-			.field("binds_props", &self.binds_props)
-			.field("binds_zoom", &self.binds_zoom)
-			.field("binds_layer", &self.binds_layer)
+			.field("specials", &self.specials)
 			.field("binds_is_num", &self.binds_is_num)
 			.finish_non_exhaustive()
 	}
@@ -469,14 +536,15 @@ impl FeatureExpr {
 		let program = compile_cel(expr)?;
 
 		let refs = program.references();
-		let binds_props = refs.has_variable(PROPS_VAR);
-		let binds_zoom = refs.has_variable(ZOOM_VAR);
-		let binds_layer = refs.has_variable(LAYER_VAR);
+		let specials: Vec<Special> = Special::ALL
+			.into_iter()
+			.filter(|special| refs.has_variable(special.var()))
+			.collect();
 		let binds_is_num = refs.has_function(IS_NUM_FN);
 		let referenced_vars: Vec<String> = refs
 			.variables()
 			.into_iter()
-			.filter(|v| ![PROPS_VAR, ZOOM_VAR, LAYER_VAR].contains(v))
+			.filter(|v| Special::from_var(v).is_none())
 			.map(String::from)
 			.collect();
 
@@ -489,14 +557,14 @@ impl FeatureExpr {
 			program,
 			context,
 			referenced_vars,
-			binds_props,
-			binds_zoom,
-			binds_layer,
+			specials,
 			binds_is_num,
 		})
 	}
 
-	/// How much of a tile the expression's answer depends on.
+	/// How much of a tile the expression's answer depends on: the widest
+	/// [`Special::scope`] of the names it reads, or a feature's when it reads a
+	/// property.
 	///
 	/// `$zoom >= 12` reads nothing about the feature, so evaluating it per feature asks the same
 	/// question thousands of times — and a zoom range with no predicate is the shape a generated
@@ -504,44 +572,79 @@ impl FeatureExpr {
 	/// layers, which also skips decoding and re-encoding their properties. An expression reading
 	/// `$layer` as well is answered once per layer, the same way.
 	pub(crate) fn scope(&self) -> ExprScope {
-		if self.binds_props || !self.referenced_vars.is_empty() {
-			ExprScope::Feature
-		} else if self.binds_layer {
-			ExprScope::Layer
-		} else {
-			ExprScope::Tile
+		if !self.referenced_vars.is_empty() {
+			return ExprScope::Feature;
 		}
+		self
+			.specials
+			.iter()
+			.map(|special| special.scope())
+			.max()
+			.unwrap_or(ExprScope::Tile)
 	}
 
-	/// Whether a feature with `props`, in the layer named `layer` of the tile at
-	/// `coord`, passes.
-	///
-	/// An evaluation error or a result that is not a boolean is `false`. For an
-	/// expression whose [`scope`](Self::scope) is wider than a feature, `props`
-	/// is not read, and for [`ExprScope::Tile`] neither is `layer`.
-	pub(crate) fn evaluate(&self, coord: &TileCoord, layer: &str, props: &GeoProperties) -> bool {
+	/// The answer for a whole tile, for an expression whose [`scope`](Self::scope)
+	/// is [`ExprScope::Tile`].
+	pub(crate) fn evaluate_tile(&self, coord: &TileCoord) -> bool {
+		self.evaluate(coord, "", None, &GeoProperties::new())
+	}
+
+	/// The answer for a whole layer, for an expression whose [`scope`](Self::scope)
+	/// is [`ExprScope::Tile`] or [`ExprScope::Layer`].
+	pub(crate) fn evaluate_layer(&self, coord: &TileCoord, layer: &str) -> bool {
+		self.evaluate(coord, layer, None, &GeoProperties::new())
+	}
+
+	/// Whether `feature`, with its decoded `properties`, in the layer named
+	/// `layer` of the tile at `coord`, passes.
+	pub(crate) fn evaluate_feature(
+		&self,
+		coord: &TileCoord,
+		layer: &str,
+		feature: &VectorTileFeature,
+		properties: &GeoProperties,
+	) -> bool {
+		self.evaluate(coord, layer, Some(feature), properties)
+	}
+
+	/// An evaluation error or a result that is not a boolean is `false`. A name
+	/// the caller has nothing for — `$type` without a feature — is `null`.
+	fn evaluate(
+		&self,
+		coord: &TileCoord,
+		layer: &str,
+		feature: Option<&VectorTileFeature>,
+		props: &GeoProperties,
+	) -> bool {
 		// A child of the prepared context: it carries only this feature's variables and resolves
 		// functions through its parent, so the builtins are not reinstalled per feature.
 		let mut ctx = self.context.new_inner_scope();
 
-		if self.binds_zoom {
-			// `Int` because CEL's integer literals are signed, so `$zoom` and the `12` in
-			// `$zoom >= 12` are the same type. `cel-interpreter` compares `UInt` against a signed
-			// literal correctly too, so this is a matter of matching the literal rather than a
-			// correctness requirement.
-			ctx.add_variable_from_value(ZOOM_VAR, CelValue::Int(i64::from(coord.level)));
-		}
-
-		if self.binds_layer {
-			ctx.add_variable_from_value(LAYER_VAR, CelValue::String(Arc::new(layer.to_string())));
-		}
-
-		if self.binds_props {
-			let mut map: HashMap<CelKey, CelValue> = HashMap::with_capacity(props.len());
-			for (key, value) in props.iter() {
-				map.insert(CelKey::from(key.clone()), geo_to_cel(value));
-			}
-			ctx.add_variable_from_value(PROPS_VAR, CelValue::Map(CelMap { map: Arc::new(map) }));
+		for special in &self.specials {
+			let value = match special {
+				// `Int` because CEL's integer literals are signed, so `$zoom` and the `12` in
+				// `$zoom >= 12` are the same type. `cel-interpreter` compares `UInt` against a
+				// signed literal correctly too, so this is a matter of matching the literal rather
+				// than a correctness requirement.
+				Special::Zoom => CelValue::Int(i64::from(coord.level)),
+				Special::X => CelValue::Int(i64::from(coord.x)),
+				Special::Y => CelValue::Int(i64::from(coord.y)),
+				Special::Layer => CelValue::String(Arc::new(layer.to_string())),
+				Special::Type => feature.map_or(CelValue::Null, |feature| geom_type_to_cel(feature.geom_type)),
+				// Signed where it fits, like `$zoom`, so `$id == 42` compares like with like.
+				Special::Id => match feature.and_then(|feature| feature.id) {
+					Some(id) => i64::try_from(id).map_or(CelValue::UInt(id), CelValue::Int),
+					None => CelValue::Null,
+				},
+				Special::Props => {
+					let mut map: HashMap<CelKey, CelValue> = HashMap::with_capacity(props.len());
+					for (key, value) in props.iter() {
+						map.insert(CelKey::from(key.clone()), geo_to_cel(value));
+					}
+					CelValue::Map(CelMap { map: Arc::new(map) })
+				}
+			};
+			ctx.add_variable_from_value(special.var(), value);
 		}
 
 		for name in &self.referenced_vars {
@@ -551,6 +654,21 @@ impl FeatureExpr {
 
 		matches!(self.program.execute(&ctx), Ok(CelValue::Bool(true)))
 	}
+}
+
+/// `$type` as the strings MapLibre's `geometry-type` uses.
+///
+/// An MVT feature only says point, line or polygon, never whether there is one
+/// or several, so these are the singular names, which is what MapLibre reports
+/// for a tile's features too. A feature of unknown type is `null`.
+fn geom_type_to_cel(geom_type: GeomType) -> CelValue {
+	let name = match geom_type {
+		GeomType::MultiPoint => "Point",
+		GeomType::MultiLineString => "LineString",
+		GeomType::MultiPolygon => "Polygon",
+		GeomType::Unknown => return CelValue::Null,
+	};
+	CelValue::String(Arc::new(name.to_string()))
 }
 
 fn geo_to_cel(v: &GeoValue) -> CelValue {
@@ -644,7 +762,10 @@ mod tests {
 	fn an_unknown_special_name_is_refused() {
 		let message = rewrite_error("$zooom > 1");
 		assert!(message.contains("`$zooom`"), "{message}");
-		assert!(message.contains("`$zoom`, `$layer` and `$props`"), "{message}");
+		assert!(
+			message.contains("`$zoom`, `$x`, `$y`, `$layer`, `$type`, `$id` and `$props`"),
+			"{message}"
+		);
 		assert!(rewrite_error("$ > 1").contains("`$`"));
 	}
 
@@ -657,6 +778,10 @@ mod tests {
 	fn the_compiled_names_are_reserved_but_reachable_as_fields() {
 		let message = rewrite_error("_zoom > 1");
 		assert!(message.contains("`$props._zoom`"), "{message}");
+		for reserved in ["_x", "_y", "_type", "_id"] {
+			let message = rewrite_error(&format!("{reserved} == 1"));
+			assert!(message.contains(&format!("`$props.{reserved}`")), "{message}");
+		}
 		assert!(
 			rewrite_special_names("_layerx == 1").is_ok(),
 			"only the exact names are reserved"
@@ -693,6 +818,55 @@ mod tests {
 		assert_eq!(scope("$layer == 'a' && $zoom > 1"), ExprScope::Layer);
 		assert_eq!(scope("$layer == 'a' && kind == 'b'"), ExprScope::Feature);
 		assert_eq!(scope("has($props.a)"), ExprScope::Feature);
+		assert_eq!(scope("$x == 1 && $y < 4 && $zoom > 2"), ExprScope::Tile);
+		assert_eq!(scope("$layer == 'a' && $x == 1"), ExprScope::Layer);
+		assert_eq!(scope("$type == 'Point'"), ExprScope::Feature);
+		assert_eq!(scope("$id == 1"), ExprScope::Feature);
+	}
+
+	fn passes(expr: &str, feature: &VectorTileFeature) -> bool {
+		let coord = TileCoord::new(5, 3, 7).unwrap();
+		FeatureExpr::new(expr)
+			.unwrap()
+			.evaluate_feature(&coord, "poi", feature, &GeoProperties::new())
+	}
+
+	#[test]
+	fn x_and_y_are_the_tile_column_and_row() {
+		let expr = FeatureExpr::new("$x == 3 && $y == 7 && $zoom == 5").unwrap();
+		assert!(expr.evaluate_tile(&TileCoord::new(5, 3, 7).unwrap()));
+		assert!(!expr.evaluate_tile(&TileCoord::new(5, 7, 3).unwrap()));
+	}
+
+	#[test]
+	fn type_is_the_maplibre_name_of_the_geometry_type() {
+		for (geom_type, name) in [
+			(GeomType::MultiPoint, "Point"),
+			(GeomType::MultiLineString, "LineString"),
+			(GeomType::MultiPolygon, "Polygon"),
+		] {
+			let feature = VectorTileFeature {
+				geom_type,
+				..VectorTileFeature::default()
+			};
+			assert!(passes(&format!("$type == '{name}'"), &feature), "{geom_type:?}");
+		}
+		assert!(
+			passes("$type == null", &VectorTileFeature::default()),
+			"unknown is null"
+		);
+	}
+
+	#[test]
+	fn id_is_the_feature_id_or_null() {
+		let with_id = |id| VectorTileFeature {
+			id: Some(id),
+			..VectorTileFeature::default()
+		};
+		assert!(passes("$id == 42", &with_id(42)), "compares with a signed literal");
+		assert!(passes("$id > 41 && $id < 43", &with_id(42)));
+		assert!(passes("$id == 18446744073709551615u", &with_id(u64::MAX)), "beyond i64");
+		assert!(passes("$id == null", &VectorTileFeature::default()));
 	}
 
 	/// `Program::execute` runs per feature on the tiling thread, with none of

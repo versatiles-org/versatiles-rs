@@ -207,6 +207,15 @@ impl VectorTileLayer {
 	where
 		F: Fn(GeoProperties) -> Option<GeoProperties>,
 	{
+		self.filter_map_features(|_, properties| filter_fn(properties))
+	}
+
+	/// Like [`Self::filter_map_properties`], with the feature itself beside its
+	/// properties, for a filter that also looks at its id or geometry type.
+	pub fn filter_map_features<F>(&mut self, filter_fn: F) -> Result<()>
+	where
+		F: Fn(&VectorTileFeature, GeoProperties) -> Option<GeoProperties>,
+	{
 		let mut features: Vec<VectorTileFeature> = vec![];
 		swap(&mut features, &mut self.features);
 
@@ -215,7 +224,7 @@ impl VectorTileLayer {
 			.into_iter()
 			.filter_map(
 				|feature: VectorTileFeature| match self.decode_tag_ids(&feature.tag_ids) {
-					Ok(p) => filter_fn(p).map(|properties| Ok((feature, properties))),
+					Ok(p) => filter_fn(&feature, p).map(|properties| Ok((feature, properties))),
 					Err(e) => Some(Err(
 						e.context(format!("Failed to decode properties in layer {:?}", self.name)),
 					)),

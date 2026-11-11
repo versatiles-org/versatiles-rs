@@ -5,10 +5,7 @@ use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
-use versatiles_geometry::{
-	geo::GeoProperties,
-	vector_tile::{VectorTile, VectorTileLayer},
-};
+use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
 use crate::{
 	PipelineFactory, build_error,
@@ -35,11 +32,12 @@ use crate::{
 ///
 /// That cuts the place labels to Berlin and leaves every other layer as it was.
 ///
-/// `expr` is written as in `vector_filter_features`, with `$zoom`, `$layer`
-/// and `$props` beside the feature's own properties. It is answered for as much
-/// of a tile at once as it can be: an expression reading only `$zoom` sends
-/// each tile to one branch without decoding it, and one reading `$layer` but no
-/// property sends whole layers.
+/// `expr` is written as in `vector_filter_features`, with names such as
+/// `$zoom`, `$layer`, `$type` and `$props` beside the feature's own properties;
+/// see there for the full list. It is answered for as much of a tile at once as
+/// it can be: an expression reading only `$zoom`, `$x` and `$y` sends each tile
+/// to one branch without decoding it, and one that also reads `$layer` but
+/// nothing of the feature sends whole layers.
 ///
 /// A branch begins with a transform rather than a read, because it starts from
 /// the tiles arriving here. It may only contain operations that make each tile
@@ -287,7 +285,7 @@ impl Operation {
 
 		for mut layer in tile.layers {
 			if by_layer || layer.features.is_empty() {
-				if !layer.features.is_empty() && self.expr.evaluate(coord, &layer.name, &GeoProperties::new()) {
+				if !layer.features.is_empty() && self.expr.evaluate_layer(coord, &layer.name) {
 					chosen_layers.push(layer);
 				} else {
 					other_layers.push(layer);
@@ -307,7 +305,7 @@ impl Operation {
 			let mut others = Vec::new();
 			for feature in std::mem::take(&mut layer.features) {
 				let properties = layer.decode_tag_ids(&feature.tag_ids)?;
-				if self.expr.evaluate(coord, &layer.name, &properties) {
+				if self.expr.evaluate_feature(coord, &layer.name, &feature, &properties) {
 					chosen.push(feature);
 				} else {
 					others.push(feature);
@@ -406,7 +404,7 @@ impl TileTransform for Operation {
 	fn run(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
 		// One answer for the whole tile: it goes to one branch as it arrived.
 		if self.expr.scope() == ExprScope::Tile {
-			let branch = if self.expr.evaluate(coord, "", &GeoProperties::new()) {
+			let branch = if self.expr.evaluate_tile(coord) {
 				&self.then
 			} else {
 				&self.otherwise
@@ -539,6 +537,20 @@ mod tests {
 			[
 				layer("poi", &["1 kind=a", "2 name=two", "3 kind=a", "4 name=four"]),
 				layer("roads", &["5 kind=a"]),
+			]
+		);
+		Ok(())
+	}
+
+	/// The dummy features are all points, so `$type` sends every one of them to the branch.
+	#[tokio::test]
+	async fn the_geometry_type_reaches_the_expression() -> Result<()> {
+		let tile = tile(r#"vector_branch expr="$type == 'Point'" [ vector_filter_properties regex="/kind$" ]"#).await?;
+		assert_eq!(
+			describe(&tile),
+			[
+				layer("poi", &["1 name=one", "2 name=two", "3 name=three", "4 name=four"]),
+				layer("roads", &["5 name=five"]),
 			]
 		);
 		Ok(())

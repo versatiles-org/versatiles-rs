@@ -4,7 +4,7 @@ use anyhow::Result;
 use versatiles_container::{Tile, TileSource};
 use versatiles_core::{TileCoord, TileJSON};
 use versatiles_derive::context;
-use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
+use versatiles_geometry::vector_tile::VectorTile;
 
 use crate::{
 	PipelineFactory,
@@ -78,12 +78,22 @@ use crate::{
 ///
 /// ### Names starting with `$`
 ///
-/// Three names describe where a feature is rather than what it carries. They
-/// start with `$`, which no property name can, so they never collide with one:
+/// Some names describe a feature and where it is rather than the properties it
+/// carries. They start with `$`, which no property name can, so they never
+/// collide with one:
 ///
 /// - `$zoom` — the zoom level of the tile being filtered, as an integer.
+/// - `$x` and `$y` — the column and row of that tile, as integers.
 /// - `$layer` — the name of the feature's layer, as a string.
+/// - `$type` — the feature's geometry type: `'Point'`, `'LineString'` or
+///   `'Polygon'`, as in MapLibre's `geometry-type`, or `null` if the tile does
+///   not say. A tile does not tell one point from several, so a multipoint is
+///   `'Point'` too.
+/// - `$id` — the feature's id, as an integer, or `null` if it has none.
 /// - `$props` — all of the feature's properties, as a map.
+///
+/// `$type` and `$id` are stored beside the feature's geometry, so reading them
+/// does not decode it.
 ///
 /// `$zoom` lets one expression keep different features at different zooms —
 /// which is how cartography actually reads a layer:
@@ -93,9 +103,9 @@ use crate::{
 /// ```
 ///
 /// That keeps motorways everywhere and every other street only from z12. An
-/// expression reading no property is answered once per tile, or once per layer
-/// if it reads `$layer`, rather than once per feature, so a plain zoom range is
-/// cheap:
+/// expression that reads only `$zoom`, `$x` and `$y` is answered once per tile,
+/// and one that also reads `$layer` once per layer, rather than once per
+/// feature, so a plain zoom range is cheap:
 ///
 /// ```vpl
 /// vector_filter_features expr="$zoom >= 14"
@@ -103,9 +113,10 @@ use crate::{
 ///
 /// The bare words `zoom` and `props` are refused, because they meant `$zoom` and
 /// `$props` before the `$` was required. A feature property of either name is
-/// `$props.zoom` or `$props.props`. So are `_zoom`, `_layer` and `_props`, which
-/// are reserved for the same reason. Any other property, including one named
-/// `layer`, is a bare identifier as usual.
+/// `$props.zoom` or `$props.props`. So are `_zoom`, `_x`, `_y`, `_layer`,
+/// `_type`, `_id` and `_props`, which are reserved because the names starting
+/// with `$` are read through them. Any other property, including ones named
+/// `layer`, `type`, `id`, `x` or `y`, is a bare identifier as usual.
 ///
 /// ### Missing keys
 ///
@@ -224,7 +235,7 @@ impl TileTransform for Runner {
 	fn run(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
 		// An expression reading at most `$zoom` has one answer for the whole tile, and it can be
 		// had without looking inside.
-		if self.expr.scope() == ExprScope::Tile && self.expr.evaluate(coord, "", &GeoProperties::new()) {
+		if self.expr.scope() == ExprScope::Tile && self.expr.evaluate_tile(coord) {
 			// Every feature is kept, so there is nothing to rewrite. Hand back the original bytes.
 			//
 			// The `false` case is not symmetrical: dropping the in-scope layers means knowing
@@ -248,7 +259,7 @@ impl Runner {
 		// Still worth asking: a zoom-only expression that answered `false` reaches here, and then
 		// every in-scope layer goes rather than being walked feature by feature.
 		let scope = self.expr.scope();
-		let same_for_the_tile = (scope == ExprScope::Tile).then(|| self.expr.evaluate(coord, "", &GeoProperties::new()));
+		let same_for_the_tile = (scope == ExprScope::Tile).then(|| self.expr.evaluate_tile(coord));
 
 		// Not `retain_mut`: filtering can fail, and a closure returning `bool` has nowhere to put
 		// the error but the floor. A tile whose properties do not decode is reported and dropped
@@ -260,16 +271,15 @@ impl Runner {
 				continue;
 			}
 			// An expression reading `$layer` but no property has one answer per layer.
-			let same_for_the_layer = same_for_the_tile.or_else(|| {
-				(scope == ExprScope::Layer).then(|| self.expr.evaluate(coord, &layer.name, &GeoProperties::new()))
-			});
+			let same_for_the_layer = same_for_the_tile
+				.or_else(|| (scope == ExprScope::Layer).then(|| self.expr.evaluate_layer(coord, &layer.name)));
 			match same_for_the_layer {
 				Some(true) => kept.push(layer),
 				Some(false) => (),
 				None => {
 					let name = layer.name.clone();
-					layer.filter_map_properties(|props| {
-						if self.expr.evaluate(coord, &name, &props) {
+					layer.filter_map_features(|feature, props| {
+						if self.expr.evaluate_feature(coord, &name, feature, &props) {
 							Some(props)
 						} else {
 							None
@@ -308,7 +318,7 @@ mod tests {
 	use pretty_assertions::assert_eq;
 	use versatiles_core::{Blob, TileBBox, TileCompression, TileFormat};
 	use versatiles_geometry::{
-		geo::{GeoFeature, GeoValue, example_geometry},
+		geo::{GeoFeature, GeoProperties, GeoValue, example_geometry},
 		vector_tile::VectorTileLayer,
 	};
 
@@ -666,6 +676,31 @@ mod tests {
 		assert!(
 			format!("{error:#}").contains("`zoom` is written `$zoom` now"),
 			"unhelpful message: {error:#}"
+		);
+	}
+
+	/// `$id` and `$type` come from the feature rather than its properties, so this checks they
+	/// reach the expression through the filter.
+	#[test]
+	fn test_id_and_type_come_from_the_feature() {
+		let with_id = |id: u64| {
+			let mut f = feature(vec![]);
+			f.id = Some(GeoValue::from(id));
+			f
+		};
+		let tile = || VectorTile::new(vec![layer("poi", vec![with_id(1), with_id(2), feature(vec![])])]);
+
+		assert_eq!(
+			summarise(&run_expr(&["poi"], "$id == 2", tile()).unwrap().unwrap()),
+			vec![("poi".to_string(), 1)]
+		);
+		assert_eq!(
+			summarise(&run_expr(&["poi"], "$id == null", tile()).unwrap().unwrap()),
+			vec![("poi".to_string(), 1)]
+		);
+		assert!(
+			run_expr(&["poi"], "$type == null", tile()).unwrap().is_none(),
+			"every feature has a type"
 		);
 	}
 
