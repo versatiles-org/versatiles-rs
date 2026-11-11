@@ -8,8 +8,43 @@ use versatiles_image::color::HexColor;
 pub const DEFAULT_RAMP: &str = "-11000:24507e,-200:8cb4d8,0:bcd8ec,\
 	0.01:a8c896,300:cad6a2,800:e4dcae,1500:d6bf98,2500:bea58a,4000:e4e0dc,6000:ffffff";
 
-/// Colours for elevations, as a list of `elevation:colour` stops, or `default`
-/// for [`DEFAULT_RAMP`].
+/// Every name `ramp=` accepts, with the stops it stands for.
+///
+/// One table, read both by [`ColorRamp::try_from`] and by [`named_ramps`], so
+/// the names an editor offers and the names that parse cannot differ. Each is
+/// muted like `default`, so that a hillshade on top of it stays legible.
+const NAMED_RAMPS: [(&str, &str); 4] = [
+	("default", DEFAULT_RAMP),
+	// Land only, for mountains: valley green, meadows, the treeline in brown,
+	// rock grey, and snow from about 3800 m. Below sea level it holds the
+	// valley green rather than turning blue.
+	(
+		"alpine",
+		"0:a9c39a,500:c6d4a4,1000:dcd9a8,1500:cdbb8f,2000:b7a184,2500:a99c93,3000:cfcbc7,3800:f4f3f1,4500:ffffff",
+	),
+	// Sea only, light at the coast to dark in the deep sea, and transparent on
+	// land, to stack under a ramp for the land. Sea level counts as sea, as in
+	// `default`, for DEMs that store the sea as exactly 0 m.
+	(
+		"bathymetry",
+		"-11000:0b2545,-6000:13315c,-4000:1d4e89,-2000:3a74b0,-500:6fa3d4,-200:9cc3e6,0:cfe3f3,0.01:cfe3f300",
+	),
+	// Black in the deep sea, dark grey at sea level, white from 4000 m.
+	("grayscale", "-11000:000000,0:333333,4000:ffffff"),
+];
+
+/// Every name `ramp=` accepts in `dem_colorize` and `dem_hillshade`, with the
+/// stops it stands for, `default` first.
+///
+/// For an editor offering the names as presets: choosing one writes the name,
+/// and the stops show what it looks like and are where editing it starts.
+#[must_use]
+pub fn named_ramps() -> &'static [(&'static str, &'static str)] {
+	&NAMED_RAMPS
+}
+
+/// Colours for elevations, as a list of `elevation:colour` stops, or the name
+/// of one of the [`named_ramps`].
 ///
 /// Carries the format of `ramp=` in its type, so that a bad stop is judged
 /// where a value is decoded, including by `check` (#257).
@@ -79,8 +114,8 @@ impl TryFrom<&str> for ColorRamp {
 	type Error = anyhow::Error;
 
 	fn try_from(text: &str) -> Result<Self> {
-		if text.trim() == "default" {
-			return ColorRamp::try_from(DEFAULT_RAMP);
+		if let Some((_, stops)) = NAMED_RAMPS.iter().find(|(name, _)| *name == text.trim()) {
+			return ColorRamp::try_from(*stops);
 		}
 		let mut stops: Vec<Stop> = Vec::new();
 		for part in text.split(',').map(str::trim).filter(|part| !part.is_empty()) {
@@ -166,6 +201,32 @@ mod tests {
 	fn default_stands_for_the_default_ramp() {
 		assert_eq!(ramp("default"), ramp(DEFAULT_RAMP));
 		assert!(ramp("default").is_opaque());
+	}
+
+	/// What an editor offers is what parses: each name gives the ramp its listed
+	/// stops give.
+	#[test]
+	fn every_name_parses_to_the_ramp_of_its_stops() {
+		let names: Vec<&str> = named_ramps().iter().map(|(name, _)| *name).collect();
+		assert_eq!(names.first(), Some(&"default"));
+		let mut unique = names.clone();
+		unique.sort_unstable();
+		unique.dedup();
+		assert_eq!(unique.len(), names.len(), "a name is listed twice: {names:?}");
+
+		for (name, stops) in named_ramps() {
+			assert_eq!(ramp(name), ramp(stops), "{name}");
+		}
+	}
+
+	#[test]
+	fn bathymetry_leaves_the_land_transparent() {
+		let bathymetry = ramp("bathymetry");
+		assert_eq!(bathymetry.color_at(0.0)[3], 255, "sea level is sea");
+		assert_eq!(bathymetry.color_at(100.0)[3], 0);
+		assert!(!bathymetry.is_opaque());
+		assert!(ramp("alpine").is_opaque());
+		assert!(ramp("grayscale").is_opaque());
 	}
 
 	#[test]

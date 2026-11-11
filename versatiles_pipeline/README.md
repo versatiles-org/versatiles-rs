@@ -438,13 +438,18 @@ Colours DEM tiles by elevation, the way MapLibre's `color-relief` layer colours 
 
 The ramp is a list of stops, `elevation:colour`, ascending by elevation in meters, such as `ramp="0:00a000,1000:c8b464,3000:ffffff"`. Between two stops the colour is interpolated linearly, and outside the ramp it is the colour of the nearest end. A colour is `RRGGBB` or, translucent, `RRGGBBAA`; a ramp with a translucent stop gives RGBA tiles, and one without gives RGB tiles. A JPEG source becomes PNG when the ramp is translucent.
 
-The default ramp, which `ramp=default` also names, is a hypsometric tint: shades of blue up to sea level, then green, yellow and brown up to white peaks. Sea level itself is blue, for DEMs that store the sea as 0 m, and so is land below it: `-11000:24507e,-200:8cb4d8,0:bcd8ec,0.01:a8c896,300:cad6a2,800:e4dcae,1500:d6bf98,2500:bea58a,4000:e4e0dc,6000:ffffff`.
+Instead of stops, `ramp` takes the name of a ready-made ramp. Each is muted, so that a hillshade on top of it stays legible:
+
+- `default`, the default: a hypsometric tint, shades of blue up to sea level, then green, yellow and brown up to white peaks. Sea level itself is blue, for DEMs that store the sea as 0 m, and so is land below it: `-11000:24507e,-200:8cb4d8,0:bcd8ec,0.01:a8c896,300:cad6a2,800:e4dcae,1500:d6bf98,2500:bea58a,4000:e4e0dc,6000:ffffff`.
+- `alpine`: land only, for mountains, from valley green over meadows and brown rock to snow from about 3800 m, and valley green below sea level: `0:a9c39a,500:c6d4a4,1000:dcd9a8,1500:cdbb8f,2000:b7a184,2500:a99c93,3000:cfcbc7,3800:f4f3f1,4500:ffffff`.
+- `bathymetry`: sea only, pale blue at the coast to dark blue in the deep sea, and transparent on land, to lie under a ramp for the land: `-11000:0b2545,-6000:13315c,-4000:1d4e89,-2000:3a74b0,-500:6fa3d4,-200:9cc3e6,0:cfe3f3,0.01:cfe3f300`.
+- `grayscale`: black in the deep sea, dark grey at sea level and white from 4000 m: `-11000:000000,0:333333,4000:ffffff`.
 
 For a coloured relief, give `dem_hillshade` a `ramp`, which reads and decodes the source once. To draw something between the colours and the shading, stack this under a `dem_hillshade` with `from_stacked_raster`, which lays its first source over the others.
 
 ### Parameters
 
-- _`ramp`: elevation:RRGGBB,... (optional)_ - Colour stops, as `elevation:colour,…`, or `default` for a hypsometric tint. Defaults to `default`.
+- _`ramp`: elevation:RRGGBB,... (optional)_ - Colour stops, as `elevation:colour,…`, or a ramp name such as `alpine`. Defaults to `default`.
 - _`encoding`: DemEncoding (optional)_ - Values: `mapbox`, `terrarium`. DEM encoding of the source. Defaults to the encoding its tile schema implies.
 
 ---
@@ -457,7 +462,7 @@ The result is RGBA tiles that are transparent on flat ground and shade slopes by
 
 The shading is MapLibre's default `standard` method, including the slope exaggeration it applies below zoom 15 and its correction for latitude, so a tile looks as a live `hillshade` layer would at the same zoom. The colours are given as `RRGGBB`, `RRGGBBAA` or `[r,g,b,a]`, and an alpha below `FF` makes that part of the shading lighter.
 
-With a `ramp`, each pixel is the colour for its elevation with the shading drawn over it, which gives a coloured relief in one step. The ramp is written as in `dem_colorize`, and `ramp=default` is its hypsometric tint. A ramp with only opaque stops gives RGB tiles, and a JPEG source stays JPEG; one with a translucent stop gives RGBA tiles, and a JPEG source becomes PNG.
+With a `ramp`, each pixel is the colour for its elevation with the shading drawn over it, which gives a coloured relief in one step. The ramp is written as in `dem_colorize`, which lists the ramps it can name, such as `default`, a hypsometric tint, or `alpine`. A ramp with only opaque stops gives RGB tiles, and a JPEG source stays JPEG; one with a translucent stop gives RGBA tiles, and a JPEG source becomes PNG.
 
 The slopes at a tile's edge are computed with the pixels of the adjacent tiles, so there are no seams. The tiles are read in chunks, several ahead of the ones being shaded, and the edges of every tile are kept for the chunks next to it. Across the antimeridian the neighbour wraps around. Where there is none, at the poles or the edge of the data, the edge pixels are repeated.
 
@@ -468,7 +473,7 @@ The slopes at a tile's edge are computed with the pixels of the adjacent tiles, 
 - _`shadow_color`: RRGGBB | [r,g,b] (optional)_ - Colour of slopes facing away from the light. Defaults to `000000`.
 - _`highlight_color`: RRGGBB | [r,g,b] (optional)_ - Colour of slopes facing the light. Defaults to `FFFFFF`.
 - _`accent_color`: RRGGBB | [r,g,b] (optional)_ - Colour that accentuates steep terrain, such as cliffs and gorges. Defaults to `000000`.
-- _`ramp`: elevation:RRGGBB,... (optional)_ - Colours under the shading, as `elevation:colour,…` or `default`. Defaults to none.
+- _`ramp`: elevation:RRGGBB,... (optional)_ - Colours under the shading, as `elevation:colour,…` or a ramp name. Defaults to none.
 - _`encoding`: DemEncoding (optional)_ - Values: `mapbox`, `terrarium`. DEM encoding of the source. Defaults to the encoding its tile schema implies.
 
 ---

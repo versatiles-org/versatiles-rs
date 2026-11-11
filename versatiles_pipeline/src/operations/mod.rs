@@ -14,6 +14,8 @@ pub(crate) mod removed;
 pub(crate) mod transform;
 mod vector;
 
+pub use dem::named_ramps;
+
 use crate::factory::{ReadOperationFactoryTrait, TileTransformFactoryTrait, TransformOperationFactoryTrait};
 
 /// A transform operation, and the same operation as a per-tile transform if it is one.

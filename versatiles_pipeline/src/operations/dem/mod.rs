@@ -1,4 +1,5 @@
 mod color_ramp;
+pub use color_ramp::named_ramps;
 pub mod dem_colorize;
 pub mod dem_hillshade;
 pub mod dem_overscale;

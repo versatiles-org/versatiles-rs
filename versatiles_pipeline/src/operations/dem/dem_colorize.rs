@@ -21,18 +21,28 @@ use crate::{PipelineFactory, operations::transform::TileTransform, vpl::VPLNode}
 /// `RRGGBBAA`; a ramp with a translucent stop gives RGBA tiles, and one without
 /// gives RGB tiles. A JPEG source becomes PNG when the ramp is translucent.
 ///
-/// The default ramp, which `ramp=default` also names, is a hypsometric tint:
-/// shades of blue up to sea level, then green, yellow and brown up to white
-/// peaks. Sea level itself is blue, for DEMs that store the sea as 0 m, and so
-/// is land below it:
-/// `-11000:24507e,-200:8cb4d8,0:bcd8ec,0.01:a8c896,300:cad6a2,800:e4dcae,1500:d6bf98,2500:bea58a,4000:e4e0dc,6000:ffffff`.
+/// Instead of stops, `ramp` takes the name of a ready-made ramp. Each is muted,
+/// so that a hillshade on top of it stays legible:
+///
+/// - `default`, the default: a hypsometric tint, shades of blue up to sea level,
+///   then green, yellow and brown up to white peaks. Sea level itself is blue,
+///   for DEMs that store the sea as 0 m, and so is land below it:
+///   `-11000:24507e,-200:8cb4d8,0:bcd8ec,0.01:a8c896,300:cad6a2,800:e4dcae,1500:d6bf98,2500:bea58a,4000:e4e0dc,6000:ffffff`.
+/// - `alpine`: land only, for mountains, from valley green over meadows and
+///   brown rock to snow from about 3800 m, and valley green below sea level:
+///   `0:a9c39a,500:c6d4a4,1000:dcd9a8,1500:cdbb8f,2000:b7a184,2500:a99c93,3000:cfcbc7,3800:f4f3f1,4500:ffffff`.
+/// - `bathymetry`: sea only, pale blue at the coast to dark blue in the deep
+///   sea, and transparent on land, to lie under a ramp for the land:
+///   `-11000:0b2545,-6000:13315c,-4000:1d4e89,-2000:3a74b0,-500:6fa3d4,-200:9cc3e6,0:cfe3f3,0.01:cfe3f300`.
+/// - `grayscale`: black in the deep sea, dark grey at sea level and white from
+///   4000 m: `-11000:000000,0:333333,4000:ffffff`.
 ///
 /// For a coloured relief, give `dem_hillshade` a `ramp`, which reads and decodes
 /// the source once. To draw something between the colours and the shading, stack
 /// this under a `dem_hillshade` with `from_stacked_raster`, which lays its first
 /// source over the others.
 struct Args {
-	/// Colour stops, as `elevation:colour,…`, or `default` for a hypsometric tint. Defaults to `default`.
+	/// Colour stops, as `elevation:colour,…`, or a ramp name such as `alpine`. Defaults to `default`.
 	#[vpl(default = "default")]
 	ramp: Option<ColorRamp>,
 	/// DEM encoding of the source. Defaults to the encoding its tile schema implies.
@@ -168,6 +178,20 @@ mod tests {
 		let docs = Factory {}.docs();
 		for name in ["ramp", "encoding"] {
 			assert!(docs.contains(name), "{name} missing from {docs}");
+		}
+	}
+
+	/// The reference describes each named ramp with its stops, so a ramp added to
+	/// the table without a description, or changed without its stops, fails here.
+	#[test]
+	fn factory_docs_list_every_named_ramp_with_its_stops() {
+		let docs = Factory {}.docs();
+		for (name, stops) in crate::operations::named_ramps() {
+			assert!(docs.contains(&format!("`{name}`")), "`{name}` missing from the docs");
+			assert!(
+				docs.contains(&format!("`{stops}`")),
+				"the stops of `{name}` differ from the docs"
+			);
 		}
 	}
 

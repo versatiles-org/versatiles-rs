@@ -54,7 +54,8 @@ bounded_number! {
 ///
 /// With a `ramp`, each pixel is the colour for its elevation with the shading
 /// drawn over it, which gives a coloured relief in one step. The ramp is written
-/// as in `dem_colorize`, and `ramp=default` is its hypsometric tint. A ramp with
+/// as in `dem_colorize`, which lists the ramps it can name, such as `default`, a
+/// hypsometric tint, or `alpine`. A ramp with
 /// only opaque stops gives RGB tiles, and a JPEG source stays JPEG; one with a
 /// translucent stop gives RGBA tiles, and a JPEG source becomes PNG.
 ///
@@ -80,7 +81,7 @@ struct Args {
 	/// Colour that accentuates steep terrain, such as cliffs and gorges. Defaults to `000000`.
 	#[vpl(default = "000000")]
 	accent_color: Option<HexColor>,
-	/// Colours under the shading, as `elevation:colour,…` or `default`. Defaults to none.
+	/// Colours under the shading, as `elevation:colour,…` or a ramp name. Defaults to none.
 	ramp: Option<ColorRamp>,
 	/// DEM encoding of the source. Defaults to the encoding its tile schema implies.
 	encoding: Option<DemEncoding>,
