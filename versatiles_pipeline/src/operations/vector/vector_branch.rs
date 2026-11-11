@@ -546,8 +546,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn a_branch_can_drop_features() -> Result<()> {
-		let tile =
-			tile(r#"vector_branch expr="kind == 'a'" [ vector_filter_features layer=["poi"] expr="false" ]"#).await?;
+		let tile = tile(r#"vector_branch expr="kind == 'a'" [ vector_filter_features expr="$layer != 'poi'" ]"#).await?;
 		assert_eq!(
 			describe(&tile),
 			[
@@ -589,8 +588,7 @@ mod tests {
 	/// An expression reading only `$zoom` sends the tile to one branch as it arrived.
 	#[tokio::test]
 	async fn a_zoom_only_expression_passes_tiles_through_unopened() -> Result<()> {
-		const VPL: &str =
-			r#"vector_branch expr="$zoom >= 5" [ vector_filter_features layer=["poi","roads"] expr="false" ]"#;
+		const VPL: &str = r#"vector_branch expr="$zoom >= 5" [ vector_filter_features expr="false" ]"#;
 		assert!(tile_at(VPL, TileCoord::new(6, 0, 0)?).await?.is_none());
 
 		let coord = TileCoord::new(3, 1, 2)?;
@@ -634,10 +632,11 @@ mod tests {
 		Ok(())
 	}
 
-	/// The point of `vector_branch`: what `vector_mask layer=` does, without the
-	/// parameter.
+	/// The point of `vector_branch`: one layer masked, the others left alone. Before
+	/// `vector_mask` lost its `layer` parameter, this was checked to give what
+	/// `vector_mask layer=["poi"]` gave.
 	#[tokio::test]
-	async fn masking_one_layer_in_a_branch_is_what_vector_mask_layer_does() -> Result<()> {
+	async fn masking_one_layer_in_a_branch_leaves_the_others_alone() -> Result<()> {
 		// The dummy points sit in the top left corner of each tile, so this keeps
 		// them in the tiles at the top left of the world and nowhere else.
 		let dir = tempfile::tempdir()?;
@@ -648,29 +647,11 @@ mod tests {
 		)?;
 		let mask = mask.display();
 
-		let by_parameter = build(&format!(r#"vector_mask geojson="{mask}" layer=["poi"]"#)).await?;
 		let by_branch = build(&format!(
 			r#"vector_branch expr="$layer == 'poi'" [ vector_mask geojson="{mask}" ]"#
 		))
 		.await?;
 
-		for coord in [
-			TileCoord::new(1, 0, 0)?,
-			TileCoord::new(1, 1, 1)?,
-			TileCoord::new(3, 0, 0)?,
-			TileCoord::new(3, 5, 2)?,
-		] {
-			let describe_at = |tile: Option<Tile>| -> Result<Option<Layers>> {
-				Ok(tile.map(Tile::into_vector).transpose()?.as_ref().map(describe))
-			};
-			assert_eq!(
-				describe_at(by_branch.tile(&coord).await?)?,
-				describe_at(by_parameter.tile(&coord).await?)?,
-				"at {coord:?}"
-			);
-		}
-
-		// And the comparison is not between two tiles the mask left alone.
 		let layers_at = |tile: Option<Tile>| -> Result<Vec<String>> {
 			let tile = tile.expect("a tile").into_vector()?;
 			Ok(tile.layers.iter().map(|layer| layer.name.clone()).collect())
@@ -680,6 +661,24 @@ mod tests {
 			["poi", "roads"]
 		);
 		assert_eq!(layers_at(by_branch.tile(&TileCoord::new(1, 1, 1)?).await?)?, ["roads"]);
+
+		// Inside the mask nothing changes, and outside only `poi` goes: `roads` is the same
+		// wherever the mask is.
+		for coord in [
+			TileCoord::new(1, 0, 0)?,
+			TileCoord::new(1, 1, 1)?,
+			TileCoord::new(3, 5, 2)?,
+		] {
+			let through = by_branch.tile(&coord).await?.expect("a tile").into_vector()?;
+			let original = source().tile(&coord).await?.expect("a tile").into_vector()?;
+			let roads = |tile: &VectorTile| describe(tile).into_iter().find(|(name, _)| name == "roads");
+			assert_eq!(roads(&through), roads(&original), "at {coord:?}");
+		}
+		let inside = TileCoord::new(1, 0, 0)?;
+		assert_eq!(
+			describe(&by_branch.tile(&inside).await?.expect("a tile").into_vector()?),
+			describe(&source().tile(&inside).await?.expect("a tile").into_vector()?)
+		);
 		Ok(())
 	}
 

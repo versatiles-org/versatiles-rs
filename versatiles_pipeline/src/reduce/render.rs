@@ -197,15 +197,10 @@ mod tests {
 	/// as values, so VPL quoting is the serializer's problem.
 	fn problems(requirement: &Requirement) -> Vec<String> {
 		let mut nodes = vec!["from_debug format=mvt".to_string()];
-		for (layer, expression) in feature_expressions(requirement) {
+		for (_layer, expression) in feature_expressions(requirement) {
 			let node = crate::vpl::VPLNode {
 				name: "vector_filter_features".to_string(),
-				properties: [
-					("layer".to_string(), vec![layer]),
-					("expr".to_string(), vec![expression]),
-				]
-				.into_iter()
-				.collect(),
+				properties: [("expr".to_string(), vec![expression])].into_iter().collect(),
 				sources: Vec::new(),
 			};
 			nodes.push(node.to_string());

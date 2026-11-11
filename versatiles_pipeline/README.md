@@ -775,19 +775,30 @@ The branch for the features `expr` chooses, then optionally the branch for the o
 
 ## vector_filter_features
 
-Drops vector features in selected layers that do not satisfy a boolean expression.
+Drops vector features that do not satisfy a boolean expression.
 
-Features in layers outside `layer` pass through untouched.
+The expression is evaluated for every feature of every layer. Most filters are written for one layer, so they go in a `vector_branch` that hands that layer over and leaves the others as they are:
+
+```vpl
+from_container filename="osm.versatiles"
+  | vector_branch expr="$layer == 'place'" [
+      vector_filter_features expr="name == 'Berlin'"
+    ]
+```
+
+The same in one expression is `$layer != 'place' || name == 'Berlin'`, which keeps every feature of the other layers. The branch costs less, because it hands over whole layers without evaluating the expression for each of their features.
 
 ### Examples
 
+The examples below show the operation on its own, as it would stand inside such a branch:
+
 ```vpl
-vector_filter_features layer=["place"] expr="name == 'Berlin'"
-vector_filter_features layer=["poi"]   expr="population >= 1000"
-vector_filter_features layer=["road"]  expr="highway in ['primary','secondary']"
-vector_filter_features layer=["place"] expr="name.matches('^St\\.')"
-vector_filter_features layer=["poi"]   expr="name != null && name != ''"
-vector_filter_features layer=["addr"]  expr="$props['addr:street'] == 'Hauptstr.'"
+vector_filter_features expr="name == 'Berlin'"
+vector_filter_features expr="population >= 1000"
+vector_filter_features expr="highway in ['primary','secondary']"
+vector_filter_features expr="name.matches('^St\\.')"
+vector_filter_features expr="name != null && name != ''"
+vector_filter_features expr="$props['addr:street'] == 'Hauptstr.'"
 ```
 
 ### Expression language
@@ -803,13 +814,13 @@ vector_filter_features layer=["addr"]  expr="$props['addr:street'] == 'Hauptstr.
 Properties whose names are valid CEL identifiers — letters, digits and underscore — are exposed as top-level variables:
 
 ```vpl
-vector_filter_features layer=["place"] expr="name == 'Berlin'"
+vector_filter_features expr="name == 'Berlin'"
 ```
 
 For keys containing `:`, `-`, `.`, or anything else that is not an identifier, use the `$props` map:
 
 ```vpl
-vector_filter_features layer=["addr"] expr="$props['addr:street'] == 'Hauptstr.'"
+vector_filter_features expr="$props['addr:street'] == 'Hauptstr.'"
 ```
 
 ### Names starting with `$`
@@ -823,13 +834,13 @@ Three names describe where a feature is rather than what it carries. They start 
 `$zoom` lets one expression keep different features at different zooms — which is how cartography actually reads a layer:
 
 ```vpl
-vector_filter_features layer=["streets"] expr="kind in ['motorway','trunk'] || $zoom >= 12"
+vector_filter_features expr="kind in ['motorway','trunk'] || $zoom >= 12"
 ```
 
 That keeps motorways everywhere and every other street only from z12. An expression reading no property is answered once per tile, or once per layer if it reads `$layer`, rather than once per feature, so a plain zoom range is cheap:
 
 ```vpl
-vector_filter_features layer=["buildings"] expr="$zoom >= 14"
+vector_filter_features expr="$zoom >= 14"
 ```
 
 The bare words `zoom` and `props` are refused, because they meant `$zoom` and `$props` before the `$` was required. A feature property of either name is `$props.zoom` or `$props.props`. So are `_zoom`, `_layer` and `_props`, which are reserved for the same reason. Any other property, including one named `layer`, is a bare identifier as usual.
@@ -839,14 +850,14 @@ The bare words `zoom` and `props` are refused, because they meant `$zoom` and `$
 A property a feature does not carry resolves to `null` for identifier-safe access, so compare against `null` to say explicitly whether such features are kept or dropped:
 
 ```vpl
-vector_filter_features layer=["place"] expr="name != null && name != ''"
+vector_filter_features expr="name != null && name != ''"
 ```
 
 The `has()` macro asks the same question of an identifier-safe key, and `in` of any key:
 
 ```vpl
-vector_filter_features layer=["place"] expr="has($props.name)"
-vector_filter_features layer=["addr"]  expr="'addr:street' in $props"
+vector_filter_features expr="has($props.name)"
+vector_filter_features expr="'addr:street' in $props"
 ```
 
 ### Evaluation failures
@@ -856,13 +867,13 @@ A feature is kept only when the expression evaluates to `true`. An expression th
 The common way to reach that is an ordering comparison against a property that is absent or is not a number:
 
 ```vpl
-vector_filter_features layer=["poi"] expr="population >= 1000"
+vector_filter_features expr="population >= 1000"
 ```
 
 A feature with no `population` compares `null` against a number and is dropped. Guard the comparison to say so deliberately:
 
 ```vpl
-vector_filter_features layer=["poi"] expr="has($props.population) && $props.population >= 1000"
+vector_filter_features expr="has($props.population) && $props.population >= 1000"
 ```
 
 Equality and membership are safe without a guard: `==`, `!=` and `in` compare across types and return `false` rather than failing. Ordering comparisons — `<` `<=` `>` `>=` — are the ones that fail, and a `has()` guard does not rescue a property that is _present_ but holds a string, because `&&` short-circuits only on `false`.
@@ -870,7 +881,7 @@ Equality and membership are safe without a guard: `==`, `!=` and `in` compare ac
 `is_num(x)` closes that gap. It asks whether a value is a number and answers rather than failing, so an ordering comparison can be made total:
 
 ```vpl
-vector_filter_features layer=["poi"] expr="is_num($props.population) && $props.population >= 1000"
+vector_filter_features expr="is_num($props.population) && $props.population >= 1000"
 ```
 
 This is an extension rather than standard CEL, added because there is no other way to write the guard — `type()` does not exist here, and `int()` and `double()` answer by failing, which costs exactly what the guard was meant to avoid.
@@ -879,7 +890,6 @@ The [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langd
 
 ### Parameters
 
-- **`layer`: [String,...] (required)** - Layers the expression applies to, for example `layer=["poi","place"]`.
 - **`expr`: CEL expression (required)** - Boolean CEL expression over the feature's properties.
 
 ---
@@ -918,14 +928,16 @@ Points outside the polygon are dropped, and lines and polygons are cut at its ed
 from_container filename="osm.versatiles" | vector_mask geojson="berlin.geojson"
 ```
 
-Without `layer`, every layer is cut and tiles outside the polygon are not produced at all. With `layer`, only the named layers are cut and the others pass through everywhere, so this keeps place names inside the region while country and state names stay on the whole map:
+Every layer is cut, and tiles outside the polygon are not produced at all. To cut only some layers, put the mask in a `vector_branch`. This keeps place names inside the region while country and state names stay on the whole map:
 
 ```vpl
 from_container filename="osm.versatiles"
-  | vector_mask geojson="berlin-brandenburg.geojson" layer=["place_labels"]
+  | vector_branch expr="$layer == 'place_labels'" [
+      vector_mask geojson="berlin-brandenburg.geojson"
+    ]
 ```
 
-Tiles entirely inside the polygon pass through without being decoded. Without `layer`, tiles entirely outside are dropped without being decoded too, so only tiles on the edge are. Geometry in a tile's buffer is cut where it really lies, up to one tile beyond the tile's edge.
+Tiles entirely inside the polygon pass through without being decoded, and tiles entirely outside are dropped without being decoded, so only tiles on the edge are. Geometry in a tile's buffer is cut where it really lies, up to one tile beyond the tile's edge.
 
 Cut geometry is rounded back to the tile grid, and a sliver that rounding collapses is dropped.
 
@@ -934,7 +946,6 @@ The mask is not reprojected: coordinates outside the WGS84 range are refused, as
 ### Parameters
 
 - **`geojson`: path or URL (required)** - Path or URL of a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326 lon/lat degrees.
-- _`layer`: [String,...] (optional)_ - Layers to cut, for example `layer=["place_labels"]`. Defaults to every layer.
 
 ---
 

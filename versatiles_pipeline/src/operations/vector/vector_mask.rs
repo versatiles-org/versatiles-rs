@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use geo::{BooleanOps, BoundingRect, MapCoords};
@@ -16,6 +16,7 @@ use crate::{
 			blur_function::BlurFunction,
 			mask_geometry::{MaskGeometry, TileClassification, read_mask_polygons},
 		},
+		removed::refuse_removed_parameters,
 		transform::TileTransform,
 	},
 	vpl::VPLNode,
@@ -32,19 +33,20 @@ use crate::{
 /// from_container filename="osm.versatiles" | vector_mask geojson="berlin.geojson"
 /// ```
 ///
-/// Without `layer`, every layer is cut and tiles outside the polygon are not
-/// produced at all. With `layer`, only the named layers are cut and the others
-/// pass through everywhere, so this keeps place names inside the region while
-/// country and state names stay on the whole map:
+/// Every layer is cut, and tiles outside the polygon are not produced at all.
+/// To cut only some layers, put the mask in a `vector_branch`. This keeps place
+/// names inside the region while country and state names stay on the whole map:
 ///
 /// ```vpl
 /// from_container filename="osm.versatiles"
-///   | vector_mask geojson="berlin-brandenburg.geojson" layer=["place_labels"]
+///   | vector_branch expr="$layer == 'place_labels'" [
+///       vector_mask geojson="berlin-brandenburg.geojson"
+///     ]
 /// ```
 ///
-/// Tiles entirely inside the polygon pass through without being decoded.
-/// Without `layer`, tiles entirely outside are dropped without being decoded
-/// too, so only tiles on the edge are. Geometry in a tile's buffer is cut where
+/// Tiles entirely inside the polygon pass through without being decoded, and
+/// tiles entirely outside are dropped without being decoded, so only tiles on
+/// the edge are. Geometry in a tile's buffer is cut where
 /// it really lies, up to one tile beyond the tile's edge.
 ///
 /// Cut geometry is rounded back to the tile grid, and a sliver that rounding
@@ -58,9 +60,6 @@ struct Args {
 	/// EPSG:4326 lon/lat degrees.
 	#[vpl(accepts = "geojson, json")]
 	geojson: FileLocation,
-	/// Layers to cut, for example `layer=["place_labels"]`. Defaults to every layer.
-	#[vpl(layer_of_source)]
-	layer: Option<Vec<String>>,
 }
 
 /// How far beyond its own edge a tile's geometry is cut where it really lies.
@@ -79,9 +78,7 @@ struct Operation {
 	/// The mask's polygons in Web Mercator metres, as merged by
 	/// [`read_mask_polygons`].
 	polygons: MultiPolygon<f64>,
-	/// Layers to cut, or `None` for every layer.
-	layer_set: Option<HashSet<String>>,
-	/// The source pyramid, clipped to the mask when every layer is cut.
+	/// The source pyramid, clipped to the mask.
 	tile_pyramid: TilePyramid,
 }
 
@@ -149,58 +146,42 @@ impl Operation {
 		source: &dyn TileSource,
 		factory: &PipelineFactory,
 	) -> Result<Operation> {
+		refuse_removed_parameters(&vpl_node)?;
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let geojson = args.geojson.read_all(factory).await?;
 		let polygons =
 			read_mask_polygons(geojson.as_slice()).with_context(|| format!("reading the mask {}", args.geojson))?;
 
 		let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();
-		let operation = Self::new(polygons, args.layer, &mut tile_pyramid)?;
+		let operation = Self::new(polygons, &mut tile_pyramid)?;
 		Ok(operation)
 	}
 
 	/// Builds the operation from mask polygons in Web Mercator metres, clipping
-	/// `tile_pyramid` to the mask when every layer is cut.
+	/// `tile_pyramid` to the mask.
 	///
 	/// The polygons must not overlap, since the clipping counts crossings:
 	/// [`read_mask_polygons`] merges them.
-	fn new(polygons: MultiPolygon<f64>, layer: Option<Vec<String>>, tile_pyramid: &mut TilePyramid) -> Result<Self> {
+	fn new(polygons: MultiPolygon<f64>, tile_pyramid: &mut TilePyramid) -> Result<Self> {
 		let mask = MaskGeometry::from_mercator(polygons.clone(), 0.0, 0.0, BlurFunction::default())?;
-
-		let layer_set = layer.map(|l| l.into_iter().collect::<HashSet<_>>());
-		if layer_set.is_none() {
-			// Only when everything is cut: with `layer`, the other layers are
-			// still wanted outside the polygon.
-			tile_pyramid.intersect_geo_bbox(&mask.geo_bbox())?;
-		}
+		tile_pyramid.intersect_geo_bbox(&mask.geo_bbox())?;
 
 		Ok(Self {
 			mask: Arc::new(mask),
 			polygons,
-			layer_set,
 			tile_pyramid: tile_pyramid.clone(),
 		})
-	}
-
-	fn applies_to(&self, layer_name: &str) -> bool {
-		self.layer_set.as_ref().is_none_or(|set| set.contains(layer_name))
 	}
 
 	/// Cuts a decoded tile, or returns `Ok(None)` when nothing is left of it.
 	fn cut_tile(&self, coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		let tile_bbox = coord.to_mercator_bbox();
-		let outside =
-			self.mask.classify_tile(grow_bbox(tile_bbox, CLASSIFY_MARGIN_TILES)) == TileClassification::FullyOutside;
+		if self.mask.classify_tile(grow_bbox(tile_bbox, CLASSIFY_MARGIN_TILES)) == TileClassification::FullyOutside {
+			return Ok(None);
+		}
 
 		let mut kept = Vec::with_capacity(tile.layers.len());
 		for mut layer in tile.layers.drain(..) {
-			if !self.applies_to(&layer.name) {
-				kept.push(layer);
-				continue;
-			}
-			if outside {
-				continue;
-			}
 			self.cut_layer(&mut layer, tile_bbox)?;
 			if !layer.features.is_empty() {
 				kept.push(layer);
@@ -339,8 +320,7 @@ impl TileTransform for Operation {
 			.classify_tile(grow_bbox(coord.to_mercator_bbox(), CLASSIFY_MARGIN_TILES))
 		{
 			TileClassification::FullyInside => return Ok(Some(tile)),
-			// Dropping only some layers needs to know which layers the tile has.
-			TileClassification::FullyOutside if self.layer_set.is_none() => return Ok(None),
+			TileClassification::FullyOutside => return Ok(None),
 			_ => {}
 		}
 
@@ -380,14 +360,9 @@ mod tests {
 		.unwrap()
 	}
 
-	fn operation(layer: Option<&[&str]>) -> Operation {
+	fn operation() -> Operation {
 		let mut pyramid = TilePyramid::new_full_up_to(8);
-		Operation::new(
-			mask_polygons(),
-			layer.map(|l| l.iter().map(|s| (*s).to_string()).collect()),
-			&mut pyramid,
-		)
-		.unwrap()
+		Operation::new(mask_polygons(), &mut pyramid).unwrap()
 	}
 
 	/// A z2 tile covering 0°–90° E and 0°–66.5° N, so the mask sits in its
@@ -450,7 +425,7 @@ mod tests {
 				point(&c, 9.0, 8.0, "inside too"),
 			],
 		)]);
-		let out = operation(None).cut_tile(&c, input).unwrap().unwrap();
+		let out = operation().cut_tile(&c, input).unwrap().unwrap();
 		assert_eq!(
 			names(&out),
 			[(
@@ -470,7 +445,7 @@ mod tests {
 			Point(to_tile(&c, 8.0, 3.0)),
 		]);
 		let input = tile(vec![("places", vec![feature(Geometry::MultiPoint(points), "group")])]);
-		let out = operation(None).cut_tile(&c, input).unwrap().unwrap();
+		let out = operation().cut_tile(&c, input).unwrap().unwrap();
 		assert_eq!(out.layers[0].features.len(), 1);
 		let Geometry::MultiPoint(kept) = out.layers[0].features[0].to_geometry().unwrap() else {
 			panic!("expected a MultiPoint");
@@ -493,24 +468,10 @@ mod tests {
 	}
 
 	#[test]
-	fn layers_outside_the_selection_pass_through() {
-		let c = edge_coord();
-		let input = tile(vec![
-			("places", vec![point(&c, 20.0, 20.0, "outside")]),
-			("boundary_labels", vec![point(&c, 20.0, 20.0, "country")]),
-		]);
-		let out = operation(Some(&["places"])).cut_tile(&c, input).unwrap().unwrap();
-		assert_eq!(
-			names(&out),
-			[("boundary_labels".to_string(), vec!["country".to_string()])]
-		);
-	}
-
-	#[test]
 	fn a_tile_with_nothing_left_is_dropped() {
 		let c = edge_coord();
 		let input = tile(vec![("places", vec![point(&c, 20.0, 20.0, "outside")])]);
-		assert!(operation(None).cut_tile(&c, input).unwrap().is_none());
+		assert!(operation().cut_tile(&c, input).unwrap().is_none());
 	}
 
 	/// A cut feature is a new one, built from its cut geometry, so it is where
@@ -535,7 +496,7 @@ mod tests {
 			feature.position = Some(position);
 		}
 
-		let out = operation(None).cut_tile(&c, input).unwrap().unwrap();
+		let out = operation().cut_tile(&c, input).unwrap().unwrap();
 		let positions: Vec<_> = out.layers[0].features.iter().map(|f| f.position).collect();
 		assert_eq!(positions, [Some(10), Some(12), Some(13), Some(14)]);
 	}
@@ -545,7 +506,7 @@ mod tests {
 		let c = edge_coord();
 		let line = LineString(vec![to_tile(&c, 2.0, 2.0), to_tile(&c, 20.0, 2.0)]);
 		let input = tile(vec![("streets", vec![feature(Geometry::LineString(line), "street")])]);
-		let out = operation(None).cut_tile(&c, input).unwrap().unwrap();
+		let out = operation().cut_tile(&c, input).unwrap().unwrap();
 
 		let geometry = out.layers[0].features[0].to_geometry().unwrap();
 		let rect = geometry.bounding_rect().unwrap();
@@ -567,7 +528,7 @@ mod tests {
 		.map_coords(|g| Point::from(g).to_mercator().0)
 		.map_coords(|m| TileSpace::new(c.to_mercator_bbox(), 4096).to_tile(m));
 		let input = tile(vec![("land", vec![feature(Geometry::Polygon(square), "land")])]);
-		let out = operation(None).cut_tile(&c, input).unwrap().unwrap();
+		let out = operation().cut_tile(&c, input).unwrap().unwrap();
 
 		let Geometry::MultiPolygon(mp) = out.layers[0].features[0].to_geometry().unwrap() else {
 			panic!("expected a polygon");
@@ -589,7 +550,7 @@ mod tests {
 	fn cut_one(geometry: Geometry<f64>) -> Option<Geometry<f64>> {
 		let c = edge_coord();
 		let input = tile(vec![("l", vec![feature(geometry, "f")])]);
-		let out = operation(None).cut_tile(&c, input).unwrap()?;
+		let out = operation().cut_tile(&c, input).unwrap()?;
 		Some(out.layers[0].features[0].to_geometry().unwrap())
 	}
 
@@ -667,17 +628,13 @@ mod tests {
 	}
 
 	#[test]
-	fn the_pyramid_is_clipped_only_when_every_layer_is_cut() {
-		assert!(operation(None).tile_pyramid.count_tiles() < TilePyramid::new_full_up_to(8).count_tiles());
-		assert_eq!(
-			operation(Some(&["places"])).tile_pyramid.count_tiles(),
-			TilePyramid::new_full_up_to(8).count_tiles()
-		);
+	fn the_pyramid_is_clipped_to_the_mask() {
+		assert!(operation().tile_pyramid.count_tiles() < TilePyramid::new_full_up_to(8).count_tiles());
 	}
 
 	#[test]
 	fn tiles_inside_and_outside_are_classified_without_decoding() {
-		let op = operation(None);
+		let op = operation();
 		// z9 tile around 2° E, 8° N: inside the mask and away from the hole, with
 		// room for the one-tile margin the classification adds.
 		let inside = TileCoord::from_geo(2.0, 8.0, 9).unwrap();

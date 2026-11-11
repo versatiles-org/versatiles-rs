@@ -810,7 +810,7 @@ mod tests {
 	/// A per-tile operation built on its own applies the same transform a pipeline would.
 	#[tokio::test]
 	async fn a_tile_transform_built_alone_matches_the_pipeline() -> Result<()> {
-		const OPERATION: &str = r#"vector_filter_features layer=["debug_x"] expr="$zoom >= 2""#;
+		const OPERATION: &str = r#"vector_filter_features expr="$layer != 'debug_x' || $zoom >= 2""#;
 		let factory = PipelineFactory::new_dummy();
 		let source = factory.operation_from_vpl("from_debug format=mvt").await?;
 		let piped = factory

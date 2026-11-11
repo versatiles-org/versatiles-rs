@@ -614,7 +614,9 @@ fn every_argument_that_names_data_says_what_it_names() {
 	assert!(counts["field-of:filename"] >= 7, "{counts:?}");
 	assert!(counts["field-of:data_source_path"] >= 1, "{counts:?}");
 	assert!(counts["field-of-source"] >= 1, "{counts:?}");
-	assert!(counts["layer-of-source"] >= 3, "{counts:?}");
+	// Two fewer since `vector_branch` replaced the `layer` of `vector_mask` and
+	// `vector_filter_features`.
+	assert!(counts["layer-of-source"] >= 2, "{counts:?}");
 	assert!(counts["new-layer"] >= 4, "{counts:?}");
 	assert!(counts["new-field"] >= 4, "{counts:?}");
 

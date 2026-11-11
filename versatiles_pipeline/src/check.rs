@@ -407,6 +407,14 @@ mod tests {
 				"from_debug format=pbf | vector_overzoom enable_climbing=true",
 				"remove the parameter",
 			),
+			(
+				r#"from_debug format=mvt | vector_filter_features layer=["a"] expr="true""#,
+				"vector_branch",
+			),
+			(
+				r#"from_debug format=mvt | vector_mask geojson="a.geojson" layer=["a"]"#,
+				"vector_branch",
+			),
 		] {
 			let found = problems(vpl);
 			assert_eq!(found.len(), 1, "{found:?}");
@@ -685,18 +693,18 @@ mod tests {
 			"{found:?}"
 		);
 
-		let found = problems(r#"from_debug format=mvt | vector_filter_features layer=["a"] expr="foo @@""#);
+		let found = problems(r#"from_debug format=mvt | vector_filter_features expr="foo @@""#);
 		assert_eq!(found.len(), 1, "{found:?}");
 		assert!(found[0].contains("Failed to compile CEL expression"), "{found:?}");
 
 		// The input that panics the parser rather than erroring.
-		let found = problems(r#"from_debug format=mvt | vector_filter_features layer=["a"] expr="population >=""#);
+		let found = problems(r#"from_debug format=mvt | vector_filter_features expr="population >=""#);
 		assert_eq!(found.len(), 1, "{found:?}");
 		assert!(found[0].contains("Parser crashed"), "{found:?}");
 
 		for vpl in [
 			r#"from_debug format=mvt | vector_filter_properties regex="^name:""#,
-			r#"from_debug format=mvt | vector_filter_features layer=["a"] expr="$props.population > 1000""#,
+			r#"from_debug format=mvt | vector_filter_features expr="$props.population > 1000""#,
 		] {
 			assert!(problems(vpl).is_empty(), "check rejected {vpl:?}: {:?}", problems(vpl));
 		}
@@ -798,7 +806,7 @@ mod tests {
 	#[test]
 	fn a_string_list_takes_any_number_of_values() {
 		assert_eq!(
-			problems("from_debug format=png | vector_filter_features layer=[a,b,c] expr=true"),
+			problems("from_debug format=mvt | vector_filter_layers filter=[a,b,c]"),
 			Vec::<String>::new()
 		);
 	}

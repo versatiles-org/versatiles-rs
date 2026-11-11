@@ -9,24 +9,41 @@ use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 use crate::{
 	PipelineFactory,
 	helpers::feature_expr::{CelExpression, ExprScope, FeatureExpr},
-	operations::transform::TileTransform,
+	operations::{removed::refuse_removed_parameters, transform::TileTransform},
 	vpl::VPLNode,
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Drops vector features in selected layers that do not satisfy a boolean expression.
+/// Drops vector features that do not satisfy a boolean expression.
 ///
-/// Features in layers outside `layer` pass through untouched.
+/// The expression is evaluated for every feature of every layer. Most filters
+/// are written for one layer, so they go in a `vector_branch` that hands that
+/// layer over and leaves the others as they are:
+///
+/// ```vpl
+/// from_container filename="osm.versatiles"
+///   | vector_branch expr="$layer == 'place'" [
+///       vector_filter_features expr="name == 'Berlin'"
+///     ]
+/// ```
+///
+/// The same in one expression is `$layer != 'place' || name == 'Berlin'`, which
+/// keeps every feature of the other layers. The branch costs less, because it
+/// hands over whole layers without evaluating the expression for each of their
+/// features.
 ///
 /// ### Examples
 ///
+/// The examples below show the operation on its own, as it would stand inside
+/// such a branch:
+///
 /// ```vpl
-/// vector_filter_features layer=["place"] expr="name == 'Berlin'"
-/// vector_filter_features layer=["poi"]   expr="population >= 1000"
-/// vector_filter_features layer=["road"]  expr="highway in ['primary','secondary']"
-/// vector_filter_features layer=["place"] expr="name.matches('^St\\.')"
-/// vector_filter_features layer=["poi"]   expr="name != null && name != ''"
-/// vector_filter_features layer=["addr"]  expr="$props['addr:street'] == 'Hauptstr.'"
+/// vector_filter_features expr="name == 'Berlin'"
+/// vector_filter_features expr="population >= 1000"
+/// vector_filter_features expr="highway in ['primary','secondary']"
+/// vector_filter_features expr="name.matches('^St\\.')"
+/// vector_filter_features expr="name != null && name != ''"
+/// vector_filter_features expr="$props['addr:street'] == 'Hauptstr.'"
 /// ```
 ///
 /// ### Expression language
@@ -49,14 +66,14 @@ use crate::{
 /// underscore — are exposed as top-level variables:
 ///
 /// ```vpl
-/// vector_filter_features layer=["place"] expr="name == 'Berlin'"
+/// vector_filter_features expr="name == 'Berlin'"
 /// ```
 ///
 /// For keys containing `:`, `-`, `.`, or anything else that is not an
 /// identifier, use the `$props` map:
 ///
 /// ```vpl
-/// vector_filter_features layer=["addr"] expr="$props['addr:street'] == 'Hauptstr.'"
+/// vector_filter_features expr="$props['addr:street'] == 'Hauptstr.'"
 /// ```
 ///
 /// ### Names starting with `$`
@@ -72,7 +89,7 @@ use crate::{
 /// which is how cartography actually reads a layer:
 ///
 /// ```vpl
-/// vector_filter_features layer=["streets"] expr="kind in ['motorway','trunk'] || $zoom >= 12"
+/// vector_filter_features expr="kind in ['motorway','trunk'] || $zoom >= 12"
 /// ```
 ///
 /// That keeps motorways everywhere and every other street only from z12. An
@@ -81,7 +98,7 @@ use crate::{
 /// cheap:
 ///
 /// ```vpl
-/// vector_filter_features layer=["buildings"] expr="$zoom >= 14"
+/// vector_filter_features expr="$zoom >= 14"
 /// ```
 ///
 /// The bare words `zoom` and `props` are refused, because they meant `$zoom` and
@@ -97,15 +114,15 @@ use crate::{
 /// kept or dropped:
 ///
 /// ```vpl
-/// vector_filter_features layer=["place"] expr="name != null && name != ''"
+/// vector_filter_features expr="name != null && name != ''"
 /// ```
 ///
 /// The `has()` macro asks the same question of an identifier-safe key, and `in`
 /// of any key:
 ///
 /// ```vpl
-/// vector_filter_features layer=["place"] expr="has($props.name)"
-/// vector_filter_features layer=["addr"]  expr="'addr:street' in $props"
+/// vector_filter_features expr="has($props.name)"
+/// vector_filter_features expr="'addr:street' in $props"
 /// ```
 ///
 /// ### Evaluation failures
@@ -119,14 +136,14 @@ use crate::{
 /// that is absent or is not a number:
 ///
 /// ```vpl
-/// vector_filter_features layer=["poi"] expr="population >= 1000"
+/// vector_filter_features expr="population >= 1000"
 /// ```
 ///
 /// A feature with no `population` compares `null` against a number and is
 /// dropped. Guard the comparison to say so deliberately:
 ///
 /// ```vpl
-/// vector_filter_features layer=["poi"] expr="has($props.population) && $props.population >= 1000"
+/// vector_filter_features expr="has($props.population) && $props.population >= 1000"
 /// ```
 ///
 /// Equality and membership are safe without a guard: `==`, `!=` and `in`
@@ -139,7 +156,7 @@ use crate::{
 /// answers rather than failing, so an ordering comparison can be made total:
 ///
 /// ```vpl
-/// vector_filter_features layer=["poi"] expr="is_num($props.population) && $props.population >= 1000"
+/// vector_filter_features expr="is_num($props.population) && $props.population >= 1000"
 /// ```
 ///
 /// This is an extension rather than standard CEL, added because there is no
@@ -151,23 +168,24 @@ use crate::{
 /// spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md) has the
 /// full grammar, built-in functions and string methods.
 struct Args {
-	/// Layers the expression applies to, for example `layer=["poi","place"]`.
-	#[vpl(layer_of_source)]
-	layer: Vec<String>,
-
 	/// Boolean CEL expression over the feature's properties.
 	expr: CelExpression,
 }
 
 #[derive(Debug)]
 pub(crate) struct Runner {
-	layer_set: HashSet<String>,
+	/// The layers the expression applies to, or `None` for every layer. Only
+	/// `vector_reduce_to_style` sets one; the operation applies to every layer.
+	layer_set: Option<HashSet<String>>,
 	expr: FeatureExpr,
 }
 
 impl Runner {
 	fn from_args(args: &Args) -> Result<Self> {
-		Self::new(args.layer.iter().cloned(), args.expr.as_str())
+		Ok(Self {
+			layer_set: None,
+			expr: FeatureExpr::new(args.expr.as_str())?,
+		})
 	}
 
 	/// Builds a runner from a layer set and an expression, without going through VPL.
@@ -178,9 +196,13 @@ impl Runner {
 	/// for a real style, to touch one layer each time.
 	pub(crate) fn new(layers: impl IntoIterator<Item = String>, expr: &str) -> Result<Self> {
 		Ok(Self {
-			layer_set: layers.into_iter().collect(),
+			layer_set: Some(layers.into_iter().collect()),
 			expr: FeatureExpr::new(expr)?,
 		})
+	}
+
+	fn applies_to(&self, layer_name: &str) -> bool {
+		self.layer_set.as_ref().is_none_or(|set| set.contains(layer_name))
 	}
 }
 
@@ -233,7 +255,7 @@ impl Runner {
 		// by `TransformOp`, rather than quietly losing the features that failed to decode.
 		let mut kept = Vec::with_capacity(tile.layers.len());
 		for mut layer in tile.layers.drain(..) {
-			if !self.layer_set.contains(&layer.name) {
+			if !self.applies_to(&layer.name) {
 				kept.push(layer);
 				continue;
 			}
@@ -272,6 +294,7 @@ impl Runner {
 impl Runner {
 	#[context("Building vector_filter_features operation in VPL node {:?}", vpl_node.name)]
 	async fn build_transform(vpl_node: VPLNode, _source: &dyn TileSource, _factory: &PipelineFactory) -> Result<Runner> {
+		refuse_removed_parameters(&vpl_node)?;
 		let args = Args::from_vpl_node(&vpl_node)?;
 		Runner::from_args(&args)
 	}
@@ -307,10 +330,7 @@ mod tests {
 
 	/// `run_expr` with the tile placed at a chosen zoom level.
 	fn run_expr_at(layers: &[&str], expr: &str, tile: VectorTile, level: u8) -> Result<Option<VectorTile>> {
-		let runner = Runner::from_args(&Args {
-			layer: layers.iter().map(|s| (*s).to_string()).collect(),
-			expr: CelExpression::try_from(expr)?,
-		})?;
+		let runner = Runner::new(layers.iter().map(|s| (*s).to_string()), expr)?;
 		runner.filter(&TileCoord::new(level, 0, 0)?, tile)
 	}
 
@@ -322,20 +342,46 @@ mod tests {
 	}
 
 	#[test]
-	fn test_args_requires_layer_and_expr() {
-		let n = VPLNode::try_from_str(r#"vector_filter_features expr="true""#).unwrap();
+	fn test_args_requires_expr() {
+		let n = VPLNode::try_from_str("vector_filter_features").unwrap();
 		assert!(Args::from_vpl_node(&n).is_err());
 
-		let n = VPLNode::try_from_str(r#"vector_filter_features layer=["poi"]"#).unwrap();
-		assert!(Args::from_vpl_node(&n).is_err());
+		let n = VPLNode::try_from_str(r#"vector_filter_features expr="true""#).unwrap();
+		assert_eq!(Args::from_vpl_node(&n).unwrap().expr.as_str(), "true");
 	}
 
-	#[test]
-	fn test_args_parses_layer_array() {
-		let n = VPLNode::try_from_str(r#"vector_filter_features layer=["poi","place"] expr="true""#).unwrap();
-		let a = Args::from_vpl_node(&n).unwrap();
-		assert_eq!(a.layer, vec!["poi".to_string(), "place".to_string()]);
-		assert_eq!(a.expr.as_str(), "true");
+	/// `layer` was replaced by `vector_branch` and `$layer`, and the build says so.
+	#[tokio::test]
+	async fn test_the_removed_layer_parameter_names_its_replacement() {
+		let factory = PipelineFactory::new_dummy();
+		let error = factory
+			.operation_from_vpl(r#"from_debug format=mvt | vector_filter_features layer=["debug_x"] expr="true""#)
+			.await
+			.expect_err("layer= is gone");
+		let message = format!("{error:#}");
+		assert!(message.contains("no longer has the parameter 'layer'"), "{message}");
+		assert!(message.contains("vector_branch"), "{message}");
+	}
+
+	/// Without a layer set the expression applies to every layer, which is what
+	/// the operation does now.
+	#[tokio::test]
+	async fn test_the_expression_applies_to_every_layer() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(r#"from_debug format=mvt | vector_filter_features expr="$layer == 'debug_x'""#)
+			.await?;
+		let tile = op
+			.tile_stream(TileBBox::new_full(0)?)
+			.await?
+			.next()
+			.await
+			.unwrap()
+			.1
+			.into_vector()?;
+		let names: Vec<&str> = tile.layers.iter().map(|l| l.name.as_str()).collect();
+		assert_eq!(names, ["debug_x"]);
+		Ok(())
 	}
 
 	#[test]
@@ -504,11 +550,7 @@ mod tests {
 			TileFormat::MVT,
 		);
 
-		let runner = Runner::from_args(&Args {
-			layer: vec!["streets".to_string()],
-			expr: CelExpression::try_from("$zoom >= 5").unwrap(),
-		})
-		.unwrap();
+		let runner = Runner::new(["streets".to_string()], "$zoom >= 5").unwrap();
 
 		assert!(
 			runner.run(&TileCoord::new(9, 0, 0).unwrap(), tile).unwrap().is_some(),
@@ -526,11 +568,7 @@ mod tests {
 			TileFormat::MVT,
 		);
 
-		let runner = Runner::from_args(&Args {
-			layer: vec!["streets".to_string()],
-			expr: CelExpression::try_from("$props.kind == 'motorway'").unwrap(),
-		})
-		.unwrap();
+		let runner = Runner::new(["streets".to_string()], "$props.kind == 'motorway'").unwrap();
 
 		assert!(runner.run(&TileCoord::new(9, 0, 0).unwrap(), tile).is_err());
 	}
@@ -548,11 +586,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let runner = Runner::from_args(&Args {
-			layer: vec!["streets".to_string()],
-			expr: CelExpression::try_from("$zoom >= 5").unwrap(),
-		})
-		.unwrap();
+		let runner = Runner::new(["streets".to_string()], "$zoom >= 5").unwrap();
 
 		assert!(
 			runner.run(&TileCoord::new(1, 0, 0).unwrap(), tile).unwrap().is_none(),
@@ -680,7 +714,7 @@ mod tests {
 		// End-to-end, so the coordinate arrives from the stream rather than from a test literal:
 		// the same pipeline keeps the layer at z2 and drops it at z1.
 		let factory = PipelineFactory::new_dummy();
-		let vpl = r#"from_debug format=mvt | vector_filter_features layer=["debug_x"] expr="$zoom >= 2""#;
+		let vpl = r#"from_debug format=mvt | vector_filter_features expr="$layer != 'debug_x' || $zoom >= 2""#;
 		let op = factory.operation_from_vpl(vpl).await?;
 
 		let has_debug_x = async |level: u8| -> Result<bool> {
@@ -930,7 +964,7 @@ mod tests {
 		// `from_debug format=mvt` produces layers: background, debug_x, debug_y, debug_z.
 		// Apply the filter only to debug_x; other layers should pass through.
 		let op = factory
-			.operation_from_vpl(r#"from_debug format=mvt | vector_filter_features layer=["debug_x"] expr="false""#)
+			.operation_from_vpl(r#"from_debug format=mvt | vector_filter_features expr="$layer != 'debug_x'""#)
 			.await?;
 
 		let mut stream = op.tile_stream(TileBBox::new_full(0)?).await?;
@@ -948,7 +982,7 @@ mod tests {
 	async fn test_integration_compile_error_surfaces() {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
-			.operation_from_vpl(r#"from_debug format=mvt | vector_filter_features layer=["debug_x"] expr="population >=""#)
+			.operation_from_vpl(r#"from_debug format=mvt | vector_filter_features expr="population >=""#)
 			.await;
 		assert!(result.is_err(), "invalid CEL should fail at pipeline build time");
 	}
@@ -958,7 +992,7 @@ mod tests {
 		use crate::helpers::assert_tiles_valid;
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
-			.operation_from_vpl(r#"from_debug format=mvt | vector_filter_features layer=["debug_x"] expr="true""#)
+			.operation_from_vpl(r#"from_debug format=mvt | vector_filter_features expr="true""#)
 			.await?;
 		let tiles = op.tile_stream(TileBBox::new_full(1)?).await?.to_vec().await;
 		assert_tiles_valid(tiles);

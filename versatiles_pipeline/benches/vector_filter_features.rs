@@ -6,8 +6,9 @@
 //! ## Reading the numbers
 //!
 //! Every case runs the same pipeline over the same tiles and differs only in `expr`, so the
-//! absolute figures include reading and decoding tiles and are not interesting on their own. The
-//! **differences between cases** are the measurement:
+//! absolute figures include reading and decoding tiles and are not interesting on their own. Nor
+//! is the `vector_branch` that hands the filter its one layer, since every case pays the same for
+//! it. The **differences between cases** are the measurement:
 //!
 //! - `zoom_only` minus `constant_true` is the cost of the per-feature path itself. Both expressions
 //!   keep every feature and read nothing about it, but `$zoom >= 0` takes the whole-tile shortcut
@@ -86,7 +87,9 @@ async fn drain(reader: &PipelineReader) -> usize {
 fn pipeline(expr: Option<&str>) -> String {
 	match expr {
 		None => SOURCE.to_string(),
-		Some(expr) => format!(r#"{SOURCE} | vector_filter_features layer=["{LAYER}"] expr="{expr}""#),
+		Some(expr) => {
+			format!(r#"{SOURCE} | vector_branch expr="$layer == '{LAYER}'" [ vector_filter_features expr="{expr}" ]"#)
+		}
 	}
 }
 

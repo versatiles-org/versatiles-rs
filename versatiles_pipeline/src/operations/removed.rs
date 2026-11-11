@@ -11,7 +11,18 @@ use anyhow::{Result, bail};
 use crate::vpl::VPLNode;
 
 /// Operation, parameter, advice.
-const REMOVED_PARAMETERS: [(&str, &str, &str); 4] = [
+const REMOVED_PARAMETERS: [(&str, &str, &str); 6] = [
+	// Replaced by `vector_branch`, which scopes any operation to some layers.
+	(
+		"vector_filter_features",
+		"layer",
+		"the expression now applies to every layer. To filter only some, put the operation in a branch, as in `vector_branch expr=\"$layer == 'poi'\" [ vector_filter_features expr=\"…\" ]`, or test `$layer` in the expression, as in `expr=\"$layer != 'poi' || (…)\"`",
+	),
+	(
+		"vector_mask",
+		"layer",
+		"it now cuts every layer. To cut only some, put it in a branch, as in `vector_branch expr=\"$layer == 'place_labels'\" [ vector_mask geojson=\"…\" ]`",
+	),
 	// Before it filled gaps (#284).
 	(
 		"raster_overscale",
