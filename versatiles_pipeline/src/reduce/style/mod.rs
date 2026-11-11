@@ -397,7 +397,7 @@ fn keep_entries(ranges: BTreeMap<ZoomRange, Vec<Option<&JsonValue>>>, maxzoom: u
 
 			KeepEntry {
 				// A bound that covers the whole pyramid is not worth emitting: it would render as
-				// `zoom >= 0`, which every tile satisfies, and cost a CEL evaluation to say so.
+				// `$zoom >= 0`, which every tile satisfies, and cost a CEL evaluation to say so.
 				minzoom: (min > 0).then_some(min),
 				maxzoom: (max < maxzoom).then_some(max),
 				predicate,
@@ -490,7 +490,7 @@ pub fn from_style(
 		let mut usage = usage.get(&source_layer).cloned().unwrap_or_default();
 
 		// Every property a predicate reads must survive the reduction, or the filter that needs it
-		// evaluates `has(props.k)` against a feature that no longer carries it and drops the whole
+		// evaluates `has($props.k)` against a feature that no longer carries it and drops the whole
 		// layer. `fields::usage` already walks filters, so this should be a no-op — but "should be"
 		// is what the `{ref}` token also was, and the cost of being wrong here is silent data loss
 		// while the cost of the union is nothing. The feature filter runs before properties are
@@ -539,7 +539,7 @@ mod tests {
 	/// Every property a requirement's predicates read.
 	///
 	/// A predicate that reads a property the reduction strips would be evaluated against a feature
-	/// that no longer carries it, and `has(props.k)` would answer `false` for every one of them.
+	/// that no longer carries it, and `has($props.k)` would answer `false` for every one of them.
 	fn predicate_fields(requirement: &Requirement, layer: &str) -> BTreeSet<String> {
 		let mut out = BTreeSet::new();
 		if let Some(requirements) = requirement.layers.get(layer) {
@@ -623,7 +623,7 @@ mod tests {
 
 	#[test]
 	fn every_predicate_field_survives_the_reduction() {
-		// A `where` that reads a stripped property would evaluate `has(props.k)` against a feature
+		// A `where` that reads a stripped property would evaluate `has($props.k)` against a feature
 		// that no longer carries it, and drop every feature of the layer.
 		let requirement = from(&style("colorful.json"), 14);
 		for (name, layer) in &requirement.layers {
@@ -641,7 +641,7 @@ mod tests {
 
 	#[test]
 	fn a_full_range_emits_no_zoom_bound() {
-		// `zoom >= 0` is satisfied by every tile and costs an evaluation to say so.
+		// `$zoom >= 0` is satisfied by every tile and costs an evaluation to say so.
 		let requirement = from(
 			r#"{"layers":[{"id":"a","source-layer":"water","minzoom":0,"maxzoom":14}]}"#,
 			14,

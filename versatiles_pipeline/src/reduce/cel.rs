@@ -8,8 +8,8 @@
 //! (see the tests in `operations/vector/vector_filter_features.rs`):
 //!
 //! - `==`, `!=` and `in` compare across types and return `false`; ordering comparisons error.
-//! - `has(props.x)` works for an identifier-safe key; `has(props['a:b'])` does not compile, so a
-//!   key that is not an identifier tests presence with `'a:b' in props`.
+//! - `has($props.x)` works for an identifier-safe key; `has($props['a:b'])` does not compile, so a
+//!   key that is not an identifier tests presence with `'a:b' in $props`.
 //! - There is no `type()`, so `is_num` — an extension this crate registers — is the only way to
 //!   keep an ordering comparison from erroring on a mistyped value.
 
@@ -20,7 +20,7 @@ use super::ir::Literal;
 /// CEL's keywords, which cannot follow a `.` even though they look like identifiers.
 ///
 /// A property named `in` or `function` is unlikely but not impossible in OSM-derived data, and
-/// `props.in` is a parse error rather than a wrong answer — the kind of failure that appears as a
+/// `$props.in` is a parse error rather than a wrong answer — the kind of failure that appears as a
 /// whole pipeline refusing to build, far from the tag that caused it.
 const CEL_KEYWORDS: &[&str] = &[
 	"as",
@@ -88,24 +88,24 @@ pub fn literal(value: &Literal) -> String {
 	}
 }
 
-/// Reading a property: `props.kind`, or `props['addr:street']` when the name is not an identifier.
+/// Reading a property: `$props.kind`, or `$props['addr:street']` when the name is not an identifier.
 pub fn property(name: &str) -> String {
 	if is_identifier(name) {
-		format!("props.{name}")
+		format!("$props.{name}")
 	} else {
-		format!("props[{}]", string_literal(name))
+		format!("$props[{}]", string_literal(name))
 	}
 }
 
 /// Testing that a property is present.
 ///
-/// Two spellings because `has()` takes a field selection and nothing else: `has(props['a:b'])` is
+/// Two spellings because `has()` takes a field selection and nothing else: `has($props['a:b'])` is
 /// a compile error, not a `false`.
 pub fn has_property(name: &str) -> String {
 	if is_identifier(name) {
-		format!("has(props.{name})")
+		format!("has($props.{name})")
 	} else {
-		format!("{} in props", string_literal(name))
+		format!("{} in $props", string_literal(name))
 	}
 }
 
@@ -118,35 +118,35 @@ mod tests {
 
 	#[test]
 	fn identifier_safe_names_use_the_dot_form() {
-		assert_eq!(property("kind"), "props.kind");
-		assert_eq!(property("name_de"), "props.name_de");
-		assert_eq!(property("a1"), "props.a1");
-		assert_eq!(has_property("kind"), "has(props.kind)");
+		assert_eq!(property("kind"), "$props.kind");
+		assert_eq!(property("name_de"), "$props.name_de");
+		assert_eq!(property("a1"), "$props.a1");
+		assert_eq!(has_property("kind"), "has($props.kind)");
 	}
 
 	#[test]
 	fn other_names_use_the_index_form() {
-		// OSM keys carry colons constantly, and `props.addr:street` does not parse.
-		assert_eq!(property("addr:street"), "props['addr:street']");
-		assert_eq!(property("name:de"), "props['name:de']");
-		assert_eq!(property("has-dash"), "props['has-dash']");
-		assert_eq!(property(""), "props['']");
-		assert_eq!(property("1st"), "props['1st']", "cannot start with a digit");
+		// OSM keys carry colons constantly, and `$props.addr:street` does not parse.
+		assert_eq!(property("addr:street"), "$props['addr:street']");
+		assert_eq!(property("name:de"), "$props['name:de']");
+		assert_eq!(property("has-dash"), "$props['has-dash']");
+		assert_eq!(property(""), "$props['']");
+		assert_eq!(property("1st"), "$props['1st']", "cannot start with a digit");
 	}
 
 	#[test]
 	fn a_keyword_is_not_an_identifier() {
-		// `props.in` is a parse error, which surfaces as the whole pipeline refusing to build.
-		assert_eq!(property("in"), "props['in']");
-		assert_eq!(property("true"), "props['true']");
-		assert_eq!(has_property("function"), "'function' in props");
+		// `$props.in` is a parse error, which surfaces as the whole pipeline refusing to build.
+		assert_eq!(property("in"), "$props['in']");
+		assert_eq!(property("true"), "$props['true']");
+		assert_eq!(has_property("function"), "'function' in $props");
 	}
 
 	#[test]
 	fn presence_of_a_non_identifier_uses_in_rather_than_has() {
-		// `has(props['a:b'])` is "invalid argument to has() macro" — a compile error, so this is
+		// `has($props['a:b'])` is "invalid argument to has() macro" — a compile error, so this is
 		// not a stylistic choice.
-		assert_eq!(has_property("addr:street"), "'addr:street' in props");
+		assert_eq!(has_property("addr:street"), "'addr:street' in $props");
 	}
 
 	#[test]

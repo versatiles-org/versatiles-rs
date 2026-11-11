@@ -121,10 +121,10 @@ mod tests {
 
 	#[test]
 	fn has_needs_no_guard() {
-		assert_eq!(render_positive(&Predicate::Has("name".to_string())), "has(props.name)");
+		assert_eq!(render_positive(&Predicate::Has("name".to_string())), "has($props.name)");
 		assert_eq!(
 			render_positive(&Predicate::Has("addr:street".to_string())),
-			"'addr:street' in props"
+			"'addr:street' in $props"
 		);
 	}
 
@@ -132,7 +132,7 @@ mod tests {
 	fn equality_is_guarded_for_presence_only() {
 		assert_eq!(
 			render_positive(&Predicate::Eq("kind".to_string(), s("motorway"))),
-			"(has(props.kind) && props.kind == 'motorway')"
+			"(has($props.kind) && $props.kind == 'motorway')"
 		);
 	}
 
@@ -142,7 +142,7 @@ mod tests {
 		// over-approximates, so the first is the correct rendering.
 		assert_eq!(
 			render_positive(&Predicate::Ne("bridge".to_string(), Literal::Bool(true))),
-			"!((has(props.bridge) && props.bridge == true))"
+			"!((has($props.bridge) && $props.bridge == true))"
 		);
 	}
 
@@ -150,7 +150,7 @@ mod tests {
 	fn membership_renders_a_list() {
 		assert_eq!(
 			render_positive(&Predicate::In("kind".to_string(), vec![s("motorway"), s("trunk")])),
-			"(has(props.kind) && props.kind in ['motorway', 'trunk'])"
+			"(has($props.kind) && $props.kind in ['motorway', 'trunk'])"
 		);
 	}
 
@@ -158,7 +158,7 @@ mod tests {
 	fn ordering_carries_the_numeric_guard() {
 		assert_eq!(
 			render_positive(&Predicate::Ge("population".to_string(), Literal::Number(1000.0))),
-			"(has(props.population) && is_num(props.population) && props.population >= 1000)"
+			"(has($props.population) && is_num($props.population) && $props.population >= 1000)"
 		);
 	}
 
@@ -188,14 +188,14 @@ mod tests {
 		]);
 		assert_eq!(
 			render_positive(&p),
-			"(has(props.name) && ((has(props.kind) && props.kind == 'city') || (has(props.kind) && props.kind == 'town')))"
+			"(has($props.name) && ((has($props.kind) && $props.kind == 'city') || (has($props.kind) && $props.kind == 'town')))"
 		);
 	}
 
 	#[test]
 	fn a_single_argument_needs_no_extra_parentheses() {
 		let p = Predicate::And(vec![Predicate::Has("name".to_string())]);
-		assert_eq!(render_positive(&p), "has(props.name)");
+		assert_eq!(render_positive(&p), "has($props.name)");
 	}
 
 	/// An ordering against a non-numeric literal — the one predicate this module cannot express.
@@ -235,7 +235,7 @@ mod tests {
 			Predicate::Has("k".to_string()),
 			inexpressible(),
 		])]);
-		assert_eq!(render_positive(&p), "!((has(props.k) && false))");
+		assert_eq!(render_positive(&p), "!((has($props.k) && false))");
 	}
 
 	#[test]

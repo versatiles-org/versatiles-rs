@@ -8,7 +8,7 @@ use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 
 use crate::{
 	PipelineFactory,
-	helpers::feature_expr::{CelExpression, FeatureExpr},
+	helpers::feature_expr::{CelExpression, ExprScope, FeatureExpr},
 	operations::transform::{TileTransform, TransformOp},
 	vpl::VPLNode,
 };
@@ -26,7 +26,7 @@ use crate::{
 /// vector_filter_features layer=["road"]  expr="highway in ['primary','secondary']"
 /// vector_filter_features layer=["place"] expr="name.matches('^St\\.')"
 /// vector_filter_features layer=["poi"]   expr="name != null && name != ''"
-/// vector_filter_features layer=["addr"]  expr="props['addr:street'] == 'Hauptstr.'"
+/// vector_filter_features layer=["addr"]  expr="$props['addr:street'] == 'Hauptstr.'"
 /// ```
 ///
 /// ### Expression language
@@ -46,40 +46,49 @@ use crate::{
 /// ### Accessing feature properties
 ///
 /// Properties whose names are valid CEL identifiers — letters, digits and
-/// underscore — are exposed as top-level variables, except for the two reserved
-/// names below:
+/// underscore — are exposed as top-level variables:
 ///
 /// ```vpl
 /// vector_filter_features layer=["place"] expr="name == 'Berlin'"
 /// ```
 ///
 /// For keys containing `:`, `-`, `.`, or anything else that is not an
-/// identifier, use the `props` map:
+/// identifier, use the `$props` map:
 ///
 /// ```vpl
-/// vector_filter_features layer=["addr"] expr="props['addr:street'] == 'Hauptstr.'"
+/// vector_filter_features layer=["addr"] expr="$props['addr:street'] == 'Hauptstr.'"
 /// ```
 ///
-/// ### Filtering by zoom level
+/// ### Names starting with `$`
 ///
-/// `zoom` is the zoom level of the tile being filtered, so one expression can
-/// keep different features at different zooms — which is how cartography
-/// actually reads a layer:
+/// Three names describe where a feature is rather than what it carries. They
+/// start with `$`, which no property name can, so they never collide with one:
+///
+/// - `$zoom` — the zoom level of the tile being filtered, as an integer.
+/// - `$layer` — the name of the feature's layer, as a string.
+/// - `$props` — all of the feature's properties, as a map.
+///
+/// `$zoom` lets one expression keep different features at different zooms —
+/// which is how cartography actually reads a layer:
 ///
 /// ```vpl
-/// vector_filter_features layer=["streets"] expr="kind in ['motorway','trunk'] || zoom >= 12"
+/// vector_filter_features layer=["streets"] expr="kind in ['motorway','trunk'] || $zoom >= 12"
 /// ```
 ///
 /// That keeps motorways everywhere and every other street only from z12. An
-/// expression mentioning only `zoom` is answered once per tile rather than once
-/// per feature, so a plain zoom range is cheap:
+/// expression reading no property is answered once per tile, or once per layer
+/// if it reads `$layer`, rather than once per feature, so a plain zoom range is
+/// cheap:
 ///
 /// ```vpl
-/// vector_filter_features layer=["buildings"] expr="zoom >= 14"
+/// vector_filter_features layer=["buildings"] expr="$zoom >= 14"
 /// ```
 ///
-/// `zoom` and `props` are reserved: a feature carrying a property of either name
-/// is shadowed, and `props['zoom']` reads it.
+/// The bare words `zoom` and `props` are refused, because they meant `$zoom` and
+/// `$props` before the `$` was required. A feature property of either name is
+/// `$props.zoom` or `$props.props`. So are `_zoom`, `_layer` and `_props`, which
+/// are reserved for the same reason. Any other property, including one named
+/// `layer`, is a bare identifier as usual.
 ///
 /// ### Missing keys
 ///
@@ -95,8 +104,8 @@ use crate::{
 /// of any key:
 ///
 /// ```vpl
-/// vector_filter_features layer=["place"] expr="has(props.name)"
-/// vector_filter_features layer=["addr"]  expr="'addr:street' in props"
+/// vector_filter_features layer=["place"] expr="has($props.name)"
+/// vector_filter_features layer=["addr"]  expr="'addr:street' in $props"
 /// ```
 ///
 /// ### Evaluation failures
@@ -117,7 +126,7 @@ use crate::{
 /// dropped. Guard the comparison to say so deliberately:
 ///
 /// ```vpl
-/// vector_filter_features layer=["poi"] expr="has(props.population) && props.population >= 1000"
+/// vector_filter_features layer=["poi"] expr="has($props.population) && $props.population >= 1000"
 /// ```
 ///
 /// Equality and membership are safe without a guard: `==`, `!=` and `in`
@@ -130,7 +139,7 @@ use crate::{
 /// answers rather than failing, so an ordering comparison can be made total:
 ///
 /// ```vpl
-/// vector_filter_features layer=["poi"] expr="is_num(props.population) && props.population >= 1000"
+/// vector_filter_features layer=["poi"] expr="is_num($props.population) && $props.population >= 1000"
 /// ```
 ///
 /// This is an extension rather than standard CEL, added because there is no
@@ -178,7 +187,7 @@ impl Runner {
 /// Implemented directly rather than through `AsTileTransform`, because the adapter decodes the
 /// tile before the operation is asked anything.
 ///
-/// For an expression that reads only `zoom` and keeps everything, decoding is the entire cost:
+/// For an expression that reads only `$zoom` and keeps everything, decoding is the entire cost:
 /// measured on a Berlin z13 tile, decode and re-encode is 940 µs of the operation's 988 µs, and
 /// the remaining 48 µs is reading the tile. The hoist added in #274 skips the per-feature work but
 /// could not skip that, because by then the tile was already decoded. Answering before
@@ -191,9 +200,9 @@ impl TileTransform for Runner {
 
 	#[context("Failed to run vector_filter_features")]
 	fn run(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
-		// An expression reading only `zoom` has one answer for the whole tile, and it can be had
-		// without looking inside.
-		if self.expr.depends_only_on_zoom() && self.expr.evaluate(coord, &GeoProperties::new()) {
+		// An expression reading at most `$zoom` has one answer for the whole tile, and it can be
+		// had without looking inside.
+		if self.expr.scope() == ExprScope::Tile && self.expr.evaluate(coord, "", &GeoProperties::new()) {
 			// Every feature is kept, so there is nothing to rewrite. Hand back the original bytes.
 			//
 			// The `false` case is not symmetrical: dropping the in-scope layers means knowing
@@ -216,10 +225,8 @@ impl Runner {
 	pub(crate) fn filter(&self, coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		// Still worth asking: a zoom-only expression that answered `false` reaches here, and then
 		// every in-scope layer goes rather than being walked feature by feature.
-		let same_for_every_feature = self
-			.expr
-			.depends_only_on_zoom()
-			.then(|| self.expr.evaluate(coord, &GeoProperties::new()));
+		let scope = self.expr.scope();
+		let same_for_the_tile = (scope == ExprScope::Tile).then(|| self.expr.evaluate(coord, "", &GeoProperties::new()));
 
 		// Not `retain_mut`: filtering can fail, and a closure returning `bool` has nowhere to put
 		// the error but the floor. A tile whose properties do not decode is reported and dropped
@@ -230,12 +237,17 @@ impl Runner {
 				kept.push(layer);
 				continue;
 			}
-			match same_for_every_feature {
+			// An expression reading `$layer` but no property has one answer per layer.
+			let same_for_the_layer = same_for_the_tile.or_else(|| {
+				(scope == ExprScope::Layer).then(|| self.expr.evaluate(coord, &layer.name, &GeoProperties::new()))
+			});
+			match same_for_the_layer {
 				Some(true) => kept.push(layer),
 				Some(false) => (),
 				None => {
+					let name = layer.name.clone();
 					layer.filter_map_properties(|props| {
-						if self.expr.evaluate(coord, &props) {
+						if self.expr.evaluate(coord, &name, &props) {
 							Some(props)
 						} else {
 							None
@@ -466,16 +478,16 @@ mod tests {
 
 	#[test]
 	fn test_zoom_compares_against_an_integer_literal() {
-		// `zoom` is a number the expression can order against, not a string or an opaque value.
+		// `$zoom` is a number the expression can order against, not a string or an opaque value.
 		let tile = || VectorTile::new(vec![layer("poi", vec![feature(vec![("a", GeoValue::Int(1))])])]);
 
 		assert_eq!(
-			summarise(&run_expr_at(&["poi"], "zoom >= 12", tile(), 12).unwrap().unwrap()),
+			summarise(&run_expr_at(&["poi"], "$zoom >= 12", tile(), 12).unwrap().unwrap()),
 			vec![("poi".to_string(), 1)],
-			"z12 satisfies zoom >= 12"
+			"z12 satisfies $zoom >= 12"
 		);
 		assert!(
-			run_expr_at(&["poi"], "zoom >= 12", tile(), 5).unwrap().is_none(),
+			run_expr_at(&["poi"], "$zoom >= 12", tile(), 5).unwrap().is_none(),
 			"z5 does not, and the layer empties"
 		);
 	}
@@ -498,7 +510,7 @@ mod tests {
 
 		let runner = Runner::from_args(&Args {
 			layer: vec!["streets".to_string()],
-			expr: CelExpression::try_from("zoom >= 5").unwrap(),
+			expr: CelExpression::try_from("$zoom >= 5").unwrap(),
 		})
 		.unwrap();
 
@@ -520,7 +532,7 @@ mod tests {
 
 		let runner = Runner::from_args(&Args {
 			layer: vec!["streets".to_string()],
-			expr: CelExpression::try_from("props.kind == 'motorway'").unwrap(),
+			expr: CelExpression::try_from("$props.kind == 'motorway'").unwrap(),
 		})
 		.unwrap();
 
@@ -542,7 +554,7 @@ mod tests {
 
 		let runner = Runner::from_args(&Args {
 			layer: vec!["streets".to_string()],
-			expr: CelExpression::try_from("zoom >= 5").unwrap(),
+			expr: CelExpression::try_from("$zoom >= 5").unwrap(),
 		})
 		.unwrap();
 
@@ -566,13 +578,13 @@ mod tests {
 			)])
 		};
 
-		let kept = run_expr_at(&["streets"], "zoom >= 5 && zoom <= 14", tile(), 9)
+		let kept = run_expr_at(&["streets"], "$zoom >= 5 && $zoom <= 14", tile(), 9)
 			.unwrap()
 			.unwrap();
 		assert_eq!(summarise(&kept), vec![("streets".to_string(), 2)]);
 
 		assert!(
-			run_expr_at(&["streets"], "zoom >= 5 && zoom <= 14", tile(), 15)
+			run_expr_at(&["streets"], "$zoom >= 5 && $zoom <= 14", tile(), 15)
 				.unwrap()
 				.is_none()
 		);
@@ -591,7 +603,7 @@ mod tests {
 				],
 			)])
 		};
-		let expr = "kind in ['motorway','trunk'] || zoom >= 12";
+		let expr = "kind in ['motorway','trunk'] || $zoom >= 12";
 
 		assert_eq!(
 			summarise(&run_expr_at(&["streets"], expr, tile(), 5).unwrap().unwrap()),
@@ -606,19 +618,64 @@ mod tests {
 	}
 
 	#[test]
-	fn test_zoom_shadows_a_property_of_the_same_name() {
-		// `zoom` is reserved, like `props`. A feature carrying a property called `zoom` cannot be
-		// read through the bare identifier any more — `props['zoom']` is the way to it.
+	fn test_zoom_and_a_property_named_zoom_do_not_collide() {
+		// `$zoom` is the tile's zoom level. A feature property called `zoom` is a different thing,
+		// reached through `$props`, and the bare word is refused rather than guessed at.
 		let tile = || VectorTile::new(vec![layer("poi", vec![feature(vec![("zoom", GeoValue::Int(3))])])]);
 
 		assert!(
-			run_expr_at(&["poi"], "zoom == 3", tile(), 7).unwrap().is_none(),
-			"the bare identifier is the tile's zoom (7), not the property (3)"
+			run_expr_at(&["poi"], "$zoom == 3", tile(), 7).unwrap().is_none(),
+			"`$zoom` is the tile's zoom (7), not the property (3)"
 		);
 		assert_eq!(
-			summarise(&run_expr_at(&["poi"], "props['zoom'] == 3", tile(), 7).unwrap().unwrap()),
+			summarise(&run_expr_at(&["poi"], "$props.zoom == 3", tile(), 7).unwrap().unwrap()),
 			vec![("poi".to_string(), 1)],
-			"the property is still reachable through the props map"
+			"the property is reachable through `$props`"
+		);
+		let error = run_expr_at(&["poi"], "zoom == 3", tile(), 7).unwrap_err();
+		assert!(
+			format!("{error:#}").contains("`zoom` is written `$zoom` now"),
+			"unhelpful message: {error:#}"
+		);
+	}
+
+	#[test]
+	fn test_layer_names_the_layer_being_filtered() {
+		let tile = || {
+			VectorTile::new(vec![
+				layer("poi", vec![feature(vec![("kind", GeoValue::from("shop"))])]),
+				layer("place", vec![feature(vec![("kind", GeoValue::from("city"))])]),
+			])
+		};
+
+		// Answered once per layer: the expression reads no property.
+		assert_eq!(
+			summarise(
+				&run_expr(&["poi", "place"], "$layer == 'place'", tile())
+					.unwrap()
+					.unwrap()
+			),
+			vec![("place".to_string(), 1)]
+		);
+		// Answered per feature, with the layer bound beside the properties.
+		assert_eq!(
+			summarise(
+				&run_expr(&["poi", "place"], "$layer == 'poi' || kind == 'city'", tile())
+					.unwrap()
+					.unwrap()
+			),
+			vec![("place".to_string(), 1), ("poi".to_string(), 1)]
+		);
+	}
+
+	#[test]
+	fn test_a_property_named_layer_is_an_ordinary_property() {
+		// `layer` was never reserved, so a property of that name, common in OpenMapTiles data,
+		// keeps working as a bare identifier.
+		let tile = VectorTile::new(vec![layer("roads", vec![feature(vec![("layer", GeoValue::Int(1))])])]);
+		assert_eq!(
+			summarise(&run_expr(&["roads"], "layer == 1", tile).unwrap().unwrap()),
+			vec![("roads".to_string(), 1)]
 		);
 	}
 
@@ -627,7 +684,7 @@ mod tests {
 		// End-to-end, so the coordinate arrives from the stream rather than from a test literal:
 		// the same pipeline keeps the layer at z2 and drops it at z1.
 		let factory = PipelineFactory::new_dummy();
-		let vpl = r#"from_debug format=mvt | vector_filter_features layer=["debug_x"] expr="zoom >= 2""#;
+		let vpl = r#"from_debug format=mvt | vector_filter_features layer=["debug_x"] expr="$zoom >= 2""#;
 		let op = factory.operation_from_vpl(vpl).await?;
 
 		let has_debug_x = async |level: u8| -> Result<bool> {
@@ -642,7 +699,7 @@ mod tests {
 			Ok(tile.layers.iter().any(|l| l.name == "debug_x"))
 		};
 
-		assert!(!has_debug_x(1).await?, "z1 fails zoom >= 2");
+		assert!(!has_debug_x(1).await?, "z1 fails $zoom >= 2");
 		assert!(has_debug_x(2).await?, "z2 satisfies it");
 		Ok(())
 	}
@@ -692,7 +749,7 @@ mod tests {
 				feature(vec![("population", GeoValue::Int(2000))]),
 			],
 		)]);
-		let out = run_expr(&["poi"], "has(props.population) && props.population >= 1000", tile)
+		let out = run_expr(&["poi"], "has($props.population) && $props.population >= 1000", tile)
 			.unwrap()
 			.unwrap();
 		assert_eq!(summarise(&out), vec![("poi".to_string(), 1)]);
@@ -709,7 +766,7 @@ mod tests {
 				feature(vec![("population", GeoValue::Int(2000))]),
 			],
 		)]);
-		let out = run_expr(&["poi"], "props.population != 1000", tile).unwrap().unwrap();
+		let out = run_expr(&["poi"], "$props.population != 1000", tile).unwrap().unwrap();
 		assert_eq!(
 			summarise(&out),
 			vec![("poi".to_string(), 2)],
@@ -733,7 +790,7 @@ mod tests {
 			)])
 		};
 
-		let expr = "is_num(props.population) && props.population >= 1000";
+		let expr = "is_num($props.population) && $props.population >= 1000";
 		let out = run_expr(&["poi"], expr, tile()).unwrap().unwrap();
 		assert_eq!(
 			summarise(&out),
@@ -758,7 +815,7 @@ mod tests {
 
 		for (value, expected) in cases {
 			let tile = VectorTile::new(vec![layer("poi", vec![feature(vec![("v", value.clone())])])]);
-			let kept = run_expr(&["poi"], "is_num(props.v)", tile).unwrap().is_some();
+			let kept = run_expr(&["poi"], "is_num($props.v)", tile).unwrap().is_some();
 			assert_eq!(kept, expected, "is_num({value:?}) should be {expected}");
 		}
 	}
@@ -776,7 +833,7 @@ mod tests {
 			"poi",
 			vec![feature(vec![("population", GeoValue::from("many"))])],
 		)]);
-		let out = run_expr(&["poi"], "has(props.population) && props.population >= 1000", tile).unwrap();
+		let out = run_expr(&["poi"], "has($props.population) && $props.population >= 1000", tile).unwrap();
 		assert!(out.is_none(), "the guard does not prevent the comparison from erroring");
 	}
 
@@ -798,7 +855,7 @@ mod tests {
 
 	#[test]
 	fn test_key_in_props_map() {
-		// For non-identifier keys (like OSM `addr:street`), `'key' in props` checks presence.
+		// For non-identifier keys (like OSM `addr:street`), `'key' in $props` checks presence.
 		let tile = VectorTile::new(vec![layer(
 			"addr",
 			vec![
@@ -806,7 +863,7 @@ mod tests {
 				feature(vec![("other", GeoValue::from("x"))]),
 			],
 		)]);
-		let out = run_expr(&["addr"], "'addr:street' in props", tile).unwrap().unwrap();
+		let out = run_expr(&["addr"], "'addr:street' in $props", tile).unwrap().unwrap();
 		assert_eq!(summarise(&out), vec![("addr".to_string(), 1)]);
 	}
 
@@ -819,7 +876,7 @@ mod tests {
 				feature(vec![("other", GeoValue::from("x"))]), // name missing
 			],
 		)]);
-		let out = run_expr(&["poi"], "has(props.name)", tile).unwrap().unwrap();
+		let out = run_expr(&["poi"], "has($props.name)", tile).unwrap().unwrap();
 		assert_eq!(summarise(&out), vec![("poi".to_string(), 1)]);
 	}
 
@@ -832,7 +889,7 @@ mod tests {
 				feature(vec![("addr:street", GeoValue::from("Nebenstr."))]),
 			],
 		)]);
-		let out = run_expr(&["addr"], "props['addr:street'] == 'Hauptstr.'", tile)
+		let out = run_expr(&["addr"], "$props['addr:street'] == 'Hauptstr.'", tile)
 			.unwrap()
 			.unwrap();
 		assert_eq!(summarise(&out), vec![("addr".to_string(), 1)]);

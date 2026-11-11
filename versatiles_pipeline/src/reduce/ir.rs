@@ -145,7 +145,7 @@ mod tests {
 
 	#[test]
 	fn whole_numbers_render_without_a_decimal_point() {
-		// `props.population >= 1000.0` is legal CEL but reads as a mistake, and the style wrote an
+		// `$props.population >= 1000.0` is legal CEL but reads as a mistake, and the style wrote an
 		// integer.
 		assert_eq!(Literal::render_number(1000.0), "1000");
 		assert_eq!(Literal::render_number(-3.0), "-3");

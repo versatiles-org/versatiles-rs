@@ -137,7 +137,7 @@ impl VectorTransform for Runner {
 		tile.layers.retain(|layer| self.layers.contains(&layer.name));
 
 		// Features before properties, and that ordering is a correctness requirement rather than a
-		// preference: the predicates read properties through `has(props.k)`, so stripping
+		// preference: the predicates read properties through `has($props.k)`, so stripping
 		// properties first would make every guard false and delete the features they keep.
 		for filter in &self.filters {
 			match filter.filter(coord, tile)? {

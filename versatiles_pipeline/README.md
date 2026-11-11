@@ -746,7 +746,7 @@ vector_filter_features layer=["poi"]   expr="population >= 1000"
 vector_filter_features layer=["road"]  expr="highway in ['primary','secondary']"
 vector_filter_features layer=["place"] expr="name.matches('^St\\.')"
 vector_filter_features layer=["poi"]   expr="name != null && name != ''"
-vector_filter_features layer=["addr"]  expr="props['addr:street'] == 'Hauptstr.'"
+vector_filter_features layer=["addr"]  expr="$props['addr:street'] == 'Hauptstr.'"
 ```
 
 ### Expression language
@@ -759,33 +759,39 @@ vector_filter_features layer=["addr"]  expr="props['addr:street'] == 'Hauptstr.'
 
 ### Accessing feature properties
 
-Properties whose names are valid CEL identifiers — letters, digits and underscore — are exposed as top-level variables, except for the two reserved names below:
+Properties whose names are valid CEL identifiers — letters, digits and underscore — are exposed as top-level variables:
 
 ```vpl
 vector_filter_features layer=["place"] expr="name == 'Berlin'"
 ```
 
-For keys containing `:`, `-`, `.`, or anything else that is not an identifier, use the `props` map:
+For keys containing `:`, `-`, `.`, or anything else that is not an identifier, use the `$props` map:
 
 ```vpl
-vector_filter_features layer=["addr"] expr="props['addr:street'] == 'Hauptstr.'"
+vector_filter_features layer=["addr"] expr="$props['addr:street'] == 'Hauptstr.'"
 ```
 
-### Filtering by zoom level
+### Names starting with `$`
 
-`zoom` is the zoom level of the tile being filtered, so one expression can keep different features at different zooms — which is how cartography actually reads a layer:
+Three names describe where a feature is rather than what it carries. They start with `$`, which no property name can, so they never collide with one:
+
+- `$zoom` — the zoom level of the tile being filtered, as an integer.
+- `$layer` — the name of the feature's layer, as a string.
+- `$props` — all of the feature's properties, as a map.
+
+`$zoom` lets one expression keep different features at different zooms — which is how cartography actually reads a layer:
 
 ```vpl
-vector_filter_features layer=["streets"] expr="kind in ['motorway','trunk'] || zoom >= 12"
+vector_filter_features layer=["streets"] expr="kind in ['motorway','trunk'] || $zoom >= 12"
 ```
 
-That keeps motorways everywhere and every other street only from z12. An expression mentioning only `zoom` is answered once per tile rather than once per feature, so a plain zoom range is cheap:
+That keeps motorways everywhere and every other street only from z12. An expression reading no property is answered once per tile, or once per layer if it reads `$layer`, rather than once per feature, so a plain zoom range is cheap:
 
 ```vpl
-vector_filter_features layer=["buildings"] expr="zoom >= 14"
+vector_filter_features layer=["buildings"] expr="$zoom >= 14"
 ```
 
-`zoom` and `props` are reserved: a feature carrying a property of either name is shadowed, and `props['zoom']` reads it.
+The bare words `zoom` and `props` are refused, because they meant `$zoom` and `$props` before the `$` was required. A feature property of either name is `$props.zoom` or `$props.props`. So are `_zoom`, `_layer` and `_props`, which are reserved for the same reason. Any other property, including one named `layer`, is a bare identifier as usual.
 
 ### Missing keys
 
@@ -798,8 +804,8 @@ vector_filter_features layer=["place"] expr="name != null && name != ''"
 The `has()` macro asks the same question of an identifier-safe key, and `in` of any key:
 
 ```vpl
-vector_filter_features layer=["place"] expr="has(props.name)"
-vector_filter_features layer=["addr"]  expr="'addr:street' in props"
+vector_filter_features layer=["place"] expr="has($props.name)"
+vector_filter_features layer=["addr"]  expr="'addr:street' in $props"
 ```
 
 ### Evaluation failures
@@ -815,7 +821,7 @@ vector_filter_features layer=["poi"] expr="population >= 1000"
 A feature with no `population` compares `null` against a number and is dropped. Guard the comparison to say so deliberately:
 
 ```vpl
-vector_filter_features layer=["poi"] expr="has(props.population) && props.population >= 1000"
+vector_filter_features layer=["poi"] expr="has($props.population) && $props.population >= 1000"
 ```
 
 Equality and membership are safe without a guard: `==`, `!=` and `in` compare across types and return `false` rather than failing. Ordering comparisons — `<` `<=` `>` `>=` — are the ones that fail, and a `has()` guard does not rescue a property that is _present_ but holds a string, because `&&` short-circuits only on `false`.
@@ -823,7 +829,7 @@ Equality and membership are safe without a guard: `==`, `!=` and `in` compare ac
 `is_num(x)` closes that gap. It asks whether a value is a number and answers rather than failing, so an ordering comparison can be made total:
 
 ```vpl
-vector_filter_features layer=["poi"] expr="is_num(props.population) && props.population >= 1000"
+vector_filter_features layer=["poi"] expr="is_num($props.population) && $props.population >= 1000"
 ```
 
 This is an extension rather than standard CEL, added because there is no other way to write the guard — `type()` does not exist here, and `int()` and `double()` answer by failing, which costs exactly what the guard was meant to avoid.

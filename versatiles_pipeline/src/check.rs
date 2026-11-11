@@ -633,7 +633,7 @@ mod tests {
 
 		for vpl in [
 			r#"from_debug format=mvt | vector_filter_properties regex="^name:""#,
-			r#"from_debug format=mvt | vector_filter_features layer=["a"] expr="props.population > 1000""#,
+			r#"from_debug format=mvt | vector_filter_features layer=["a"] expr="$props.population > 1000""#,
 		] {
 			assert!(problems(vpl).is_empty(), "check rejected {vpl:?}: {:?}", problems(vpl));
 		}

@@ -10,7 +10,7 @@
 //! **differences between cases** are the measurement:
 //!
 //! - `zoom_only` minus `constant_true` is the cost of the per-feature path itself. Both expressions
-//!   keep every feature and read nothing about it, but `zoom >= 0` takes the whole-tile shortcut
+//!   keep every feature and read nothing about it, but `$zoom >= 0` takes the whole-tile shortcut
 //!   added in #274 while `true` does not — so the gap is `Context::default()` plus one `execute`,
 //!   multiplied by the feature count. That gap is what P-1 proposes to remove.
 //! - `bare_identifier` minus `constant_true` is the cost of binding one variable.
@@ -140,7 +140,7 @@ fn benchmark_evaluate(c: &mut Criterion) {
 		// No filter at all: the floor every other case sits on.
 		("source_only", None),
 		// Keeps everything via the whole-tile shortcut: one evaluation per tile.
-		("zoom_only", Some("zoom >= 0")),
+		("zoom_only", Some("$zoom >= 0")),
 		// Keeps everything the slow way: one evaluation per feature, empty context.
 		("constant_true", Some("true")),
 		// One bound variable. Phrased so it keeps every feature: an expression that filters some
@@ -148,21 +148,21 @@ fn benchmark_evaluate(c: &mut Criterion) {
 		// binding being cheap.
 		("bare_identifier", Some("kind != 'no-such-kind'")),
 		// The same question asked through the props map, which is rebuilt per feature.
-		("props_map", Some("props.kind != 'no-such-kind'")),
+		("props_map", Some("$props.kind != 'no-such-kind'")),
 		// What a generated reduction pipeline runs.
 		(
 			"reduction_shape",
-			Some("(has(props.kind) && props.kind in ['motorway', 'trunk']) || zoom >= 12"),
+			Some("(has($props.kind) && $props.kind in ['motorway', 'trunk']) || $zoom >= 12"),
 		),
 		// Decodes and drops everything, so the tile never gets re-encoded. Subtracting this from
 		// `constant_true` splits the codec into its halves: what decoding costs, and what writing
 		// the tile back out costs. `zoom_only` cannot do that job any more — it stopped decoding
 		// at all when the pass-through landed.
-		("decode_only", Some("zoom >= 99")),
+		("decode_only", Some("$zoom >= 99")),
 		// Drops most features rather than none. Every other case keeps everything on purpose, so
 		// none of them can say what an operation costs when it actually filters — which is what a
 		// reduction does.
-		("selective", Some("props.kind == 'motorway'")),
+		("selective", Some("$props.kind == 'motorway'")),
 	];
 
 	let mut group = c.benchmark_group("vector_filter_features");

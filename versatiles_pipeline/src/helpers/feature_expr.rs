@@ -88,11 +88,14 @@ fn compile_cel(expr: &str) -> Result<Program> {
 	// pipeline build, which is also when a person is best placed to fix it.
 	ensure_cel_nesting_is_bounded(expr)?;
 
+	let compiled_text =
+		rewrite_special_names(expr).map_err(|e| anyhow!("Failed to compile CEL expression:\n  {expr}\n\n{e}"))?;
+
 	// `ParseErrors` holds an `Rc` and so cannot cross a thread boundary; it is rendered to its
 	// message here, inside the thread, which is all the caller ever did with it.
 	let parse = || {
 		std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-			Program::compile(expr).map_err(|e| e.to_string())
+			Program::compile(&compiled_text).map_err(|e| e.to_string())
 		}))
 	};
 
@@ -109,7 +112,7 @@ fn compile_cel(expr: &str) -> Result<Program> {
 		}
 	});
 
-	compiled
+	let program = compiled
 		.map_err(|panic_payload| {
 			// `catch_unwind` returns `Box<dyn Any + Send>`; extract a message if the panic
 			// carried one (Rust panics with string literals or `format!`-ed Strings).
@@ -129,8 +132,22 @@ fn compile_cel(expr: &str) -> Result<Program> {
 			// `ParseErrors::Display` already renders `ERROR: <input>:L:C: msg` plus a source
 			// snippet with a caret. Put the expression and the report on separate lines so
 			// the caret alignment survives and terminal output stays readable.
+			let e = restore_special_names(&e, expr, &compiled_text);
 			anyhow!("Failed to compile CEL expression:\n  {expr}\n\n{e}")
-		})
+		})?;
+
+	// Checked on the compiled program rather than by the scanner, because only
+	// the parser knows which identifiers are variables: `$props.zoom` is fine.
+	let refs = program.references();
+	for name in FORMER_SPECIAL_NAMES {
+		ensure!(
+			!refs.has_variable(name),
+			"Failed to compile CEL expression:\n  {expr}\n\n\
+			 `{name}` is written `${name}` now. A feature property named {name} is `$props.{name}`."
+		);
+	}
+
+	Ok(program)
 }
 
 /// How deeply brackets may nest inside a CEL expression.
@@ -186,11 +203,177 @@ fn ensure_cel_nesting_is_bounded(expr: &str) -> Result<()> {
 	Ok(())
 }
 
-/// The name bound to the tile's zoom level, reserved like [`PROPS_VAR`].
-const ZOOM_VAR: &str = "zoom";
+/// The names an expression reads besides a feature's own properties, each
+/// written with a leading `$`: `$zoom`, `$layer`, `$props`.
+///
+/// The `$` is what keeps them apart from properties. A property is a top-level
+/// variable only if its name is a CEL identifier, and no identifier starts with
+/// `$`, so no property can ever hide one of these or be hidden by one. They used
+/// to be bare words, and `zoom` and `props` shadowed any property of that name.
+const SPECIAL_NAMES: [&str; 3] = ["zoom", "layer", "props"];
 
-/// The name bound to the feature's full property map.
-const PROPS_VAR: &str = "props";
+/// What `$zoom` becomes before compiling, because CEL has no `$` in identifiers.
+///
+/// Each `$` becomes a `_`, so the compiled text is exactly as long as the one
+/// written and a parser error points at the right column. That needs
+/// [`rewrite_special_names`] to refuse a bare `_zoom`, which would otherwise
+/// read the zoom level without saying so.
+const ZOOM_VAR: &str = "_zoom";
+
+/// What `$layer`, the name of the feature's layer, becomes before compiling.
+const LAYER_VAR: &str = "_layer";
+
+/// What `$props`, the feature's full property map, becomes before compiling.
+const PROPS_VAR: &str = "_props";
+
+/// The bare words that meant `$zoom` and `$props` before the `$` was required.
+///
+/// Refused rather than read as properties, so a pipeline written for the old
+/// meaning fails with a pointer to the new spelling instead of quietly
+/// comparing a property that no feature has.
+const FORMER_SPECIAL_NAMES: [&str; 2] = ["zoom", "props"];
+
+/// Rewrites each `$name` in `expr` into the identifier it is compiled as.
+///
+/// Only code is rewritten. String literals, in every form CEL has, and `//`
+/// comments are copied as they are, so `name == 'costs $zoom'` compares against
+/// that text.
+///
+/// # Errors
+///
+/// For a `$` not followed by one of [`SPECIAL_NAMES`], and for a bare
+/// identifier that is one of the compiled names, such as `_zoom`.
+fn rewrite_special_names(expr: &str) -> Result<String> {
+	let compiled_names = [ZOOM_VAR, LAYER_VAR, PROPS_VAR];
+	let chars: Vec<char> = expr.chars().collect();
+	let mut out = String::with_capacity(expr.len());
+	// The last character of code that is not white space. After a `.`, a name
+	// is a field, as in `$props._zoom`, not a variable.
+	let mut previous: Option<char> = None;
+	let mut i = 0;
+
+	while i < chars.len() {
+		let start = i;
+		let c = chars[i];
+
+		if c == '/' && chars.get(i + 1) == Some(&'/') {
+			// A comment: copied, and not code, so it leaves `previous` alone.
+			while i < chars.len() && chars[i] != '\n' {
+				i += 1;
+			}
+			out.extend(&chars[start..i]);
+			continue;
+		}
+
+		if c == '$' {
+			let name: String = chars[i + 1..].iter().take_while(|c| is_identifier_char(**c)).collect();
+			ensure!(
+				SPECIAL_NAMES.contains(&name.as_str()),
+				"`${name}` is not a name an expression can read. The names starting with `$` are \
+				 `$zoom`, `$layer` and `$props`; a feature property is written without one."
+			);
+			ensure!(
+				previous != Some('.'),
+				"`${name}` cannot follow a `.`: `$zoom`, `$layer` and `$props` stand on their own."
+			);
+			out.push('_');
+			out.push_str(&name);
+			i += 1 + name.len();
+			previous = name.chars().last();
+			continue;
+		}
+
+		if c == '\'' || c == '"' {
+			i = end_of_string(&chars, i, false);
+		} else if c.is_ascii_digit() {
+			// A number with its suffix or exponent, such as `1000u` or `1e5`, so
+			// the letters in it are not taken for a name.
+			while i < chars.len() && is_identifier_char(chars[i]) {
+				i += 1;
+			}
+		} else if is_identifier_start(c) {
+			while i < chars.len() && is_identifier_char(chars[i]) {
+				i += 1;
+			}
+			let word: String = chars[start..i].iter().collect();
+			if matches!(chars.get(i), Some('\'' | '"')) && is_string_prefix(&word) {
+				i = end_of_string(&chars, i, word.contains(['r', 'R']));
+			} else {
+				ensure!(
+					previous == Some('.') || !compiled_names.contains(&word.as_str()),
+					"`{word}` is reserved, because `${}` is compiled to it. \
+					 For a feature property of that name, use `$props.{word}`.",
+					&word[1..]
+				);
+			}
+		} else {
+			i += 1;
+		}
+
+		out.extend(&chars[start..i]);
+		if let Some(last) = chars[start..i].iter().rev().find(|c| !c.is_whitespace()) {
+			previous = Some(*last);
+		}
+	}
+
+	Ok(out)
+}
+
+/// The index just past the string literal whose opening quote is at `start`,
+/// or the end of `chars` if it is not closed, which the parser then reports.
+///
+/// Handles both quotes, the tripled forms that may span lines, and `raw`
+/// strings, whose backslashes escape nothing.
+fn end_of_string(chars: &[char], start: usize, raw: bool) -> usize {
+	let quote = chars[start];
+	let triple = chars.get(start + 1) == Some(&quote) && chars.get(start + 2) == Some(&quote);
+	let closes = |i: usize| {
+		chars[i] == quote && (!triple || (chars.get(i + 1) == Some(&quote) && chars.get(i + 2) == Some(&quote)))
+	};
+
+	let mut i = start + if triple { 3 } else { 1 };
+	while i < chars.len() {
+		if !raw && chars[i] == '\\' {
+			i += 2;
+		} else if closes(i) {
+			return i + if triple { 3 } else { 1 };
+		} else {
+			i += 1;
+		}
+	}
+	chars.len()
+}
+
+/// Whether `word`, directly before a quote, makes it a raw or bytes literal.
+fn is_string_prefix(word: &str) -> bool {
+	matches!(
+		word,
+		"r" | "R" | "b" | "B" | "br" | "bR" | "Br" | "BR" | "rb" | "rB" | "Rb" | "RB"
+	)
+}
+
+fn is_identifier_start(c: char) -> bool {
+	c.is_ascii_alphabetic() || c == '_'
+}
+
+fn is_identifier_char(c: char) -> bool {
+	c.is_ascii_alphanumeric() || c == '_'
+}
+
+/// Puts the `$` names back into a parser error about the rewritten text.
+///
+/// The parser quotes the line it failed on, with a caret under the column.
+/// Each `$` became one `_`, so swapping the written line back in keeps the caret
+/// where it was.
+fn restore_special_names(message: &str, written: &str, compiled: &str) -> String {
+	let mut message = message.to_string();
+	for (written_line, compiled_line) in written.lines().zip(compiled.lines()) {
+		if written_line != compiled_line {
+			message = message.replace(compiled_line, written_line);
+		}
+	}
+	message
+}
 
 /// The name of the numeric type test this operation adds to CEL.
 const IS_NUM_FN: &str = "is_num";
@@ -215,10 +398,25 @@ fn is_num(This(this): This<CelValue>) -> bool {
 	matches!(this, CelValue::Int(_) | CelValue::UInt(_) | CelValue::Float(_))
 }
 
+/// How much of a tile an expression's answer depends on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ExprScope {
+	/// One answer for the whole tile: the expression reads at most `$zoom`.
+	Tile,
+	/// One answer per layer: it reads `$layer`, and perhaps `$zoom`.
+	Layer,
+	/// An answer per feature: it reads a property.
+	Feature,
+}
+
 /// A compiled feature expression, evaluated against one feature at a time.
 ///
 /// Knows which names the expression reads, so each evaluation binds only those:
-/// the reserved `zoom` and `props`, and the feature properties it mentions.
+/// `$zoom`, `$layer` and `$props`, and the feature properties it mentions.
+#[expect(
+	clippy::struct_excessive_bools,
+	reason = "one flag per name the expression may read, each independent of the others; a bit set would only rename them"
+)]
 pub(crate) struct FeatureExpr {
 	program: Program,
 	/// The functions every evaluation needs, registered once.
@@ -233,14 +431,15 @@ pub(crate) struct FeatureExpr {
 	/// would leave the expression calling an undeclared function, which errors, which drops every
 	/// feature. Silently.
 	context: CelContext<'static>,
-	/// Top-level identifiers referenced by the expression, other than the reserved names.
+	/// Top-level identifiers referenced by the expression, other than the special names.
 	/// Bound to the feature's property value (or `Null` if absent) on each evaluation.
 	referenced_vars: Vec<String>,
-	/// Whether the expression references the reserved `props` map. The map is only built
-	/// per-feature when needed.
+	/// Whether the expression reads `$props`. The map is only built per feature when needed.
 	binds_props: bool,
-	/// Whether the expression references the reserved `zoom` variable.
+	/// Whether the expression reads `$zoom`.
 	binds_zoom: bool,
+	/// Whether the expression reads `$layer`.
+	binds_layer: bool,
 	/// Whether the expression calls [`is_num`], which is only registered when it does.
 	binds_is_num: bool,
 }
@@ -253,6 +452,7 @@ impl std::fmt::Debug for FeatureExpr {
 			.field("referenced_vars", &self.referenced_vars)
 			.field("binds_props", &self.binds_props)
 			.field("binds_zoom", &self.binds_zoom)
+			.field("binds_layer", &self.binds_layer)
 			.field("binds_is_num", &self.binds_is_num)
 			.finish_non_exhaustive()
 	}
@@ -263,18 +463,20 @@ impl FeatureExpr {
 	///
 	/// # Errors
 	///
-	/// When the expression does not compile, or nests too deeply to evaluate.
+	/// When the expression does not compile, nests too deeply to evaluate, or
+	/// uses a name it cannot read.
 	pub(crate) fn new(expr: &str) -> Result<Self> {
 		let program = compile_cel(expr)?;
 
 		let refs = program.references();
 		let binds_props = refs.has_variable(PROPS_VAR);
 		let binds_zoom = refs.has_variable(ZOOM_VAR);
+		let binds_layer = refs.has_variable(LAYER_VAR);
 		let binds_is_num = refs.has_function(IS_NUM_FN);
 		let referenced_vars: Vec<String> = refs
 			.variables()
 			.into_iter()
-			.filter(|v| *v != PROPS_VAR && *v != ZOOM_VAR)
+			.filter(|v| ![PROPS_VAR, ZOOM_VAR, LAYER_VAR].contains(v))
 			.map(String::from)
 			.collect();
 
@@ -289,34 +491,49 @@ impl FeatureExpr {
 			referenced_vars,
 			binds_props,
 			binds_zoom,
+			binds_layer,
 			binds_is_num,
 		})
 	}
 
-	/// Whether the expression's answer is the same for every feature in a tile.
+	/// How much of a tile the expression's answer depends on.
 	///
-	/// `zoom >= 12` reads nothing about the feature, so evaluating it per feature asks the same
+	/// `$zoom >= 12` reads nothing about the feature, so evaluating it per feature asks the same
 	/// question thousands of times — and a zoom range with no predicate is the shape a generated
 	/// pipeline emits most. A caller evaluates such an expression once and keeps or drops whole
-	/// layers, which also skips decoding and re-encoding their properties.
-	pub(crate) fn depends_only_on_zoom(&self) -> bool {
-		self.binds_zoom && !self.binds_props && self.referenced_vars.is_empty()
+	/// layers, which also skips decoding and re-encoding their properties. An expression reading
+	/// `$layer` as well is answered once per layer, the same way.
+	pub(crate) fn scope(&self) -> ExprScope {
+		if self.binds_props || !self.referenced_vars.is_empty() {
+			ExprScope::Feature
+		} else if self.binds_layer {
+			ExprScope::Layer
+		} else {
+			ExprScope::Tile
+		}
 	}
 
-	/// Whether a feature with `props`, in the tile at `coord`, passes.
+	/// Whether a feature with `props`, in the layer named `layer` of the tile at
+	/// `coord`, passes.
 	///
-	/// An evaluation error or a result that is not a boolean is `false`.
-	pub(crate) fn evaluate(&self, coord: &TileCoord, props: &GeoProperties) -> bool {
+	/// An evaluation error or a result that is not a boolean is `false`. For an
+	/// expression whose [`scope`](Self::scope) is wider than a feature, `props`
+	/// is not read, and for [`ExprScope::Tile`] neither is `layer`.
+	pub(crate) fn evaluate(&self, coord: &TileCoord, layer: &str, props: &GeoProperties) -> bool {
 		// A child of the prepared context: it carries only this feature's variables and resolves
 		// functions through its parent, so the builtins are not reinstalled per feature.
 		let mut ctx = self.context.new_inner_scope();
 
 		if self.binds_zoom {
-			// `Int` because CEL's integer literals are signed, so `zoom` and the `12` in
-			// `zoom >= 12` are the same type. `cel-interpreter` compares `UInt` against a signed
+			// `Int` because CEL's integer literals are signed, so `$zoom` and the `12` in
+			// `$zoom >= 12` are the same type. `cel-interpreter` compares `UInt` against a signed
 			// literal correctly too, so this is a matter of matching the literal rather than a
 			// correctness requirement.
 			ctx.add_variable_from_value(ZOOM_VAR, CelValue::Int(i64::from(coord.level)));
+		}
+
+		if self.binds_layer {
+			ctx.add_variable_from_value(LAYER_VAR, CelValue::String(Arc::new(layer.to_string())));
 		}
 
 		if self.binds_props {
@@ -357,8 +574,125 @@ mod tests {
 		// Registered per evaluation, so an expression that does not mention it should not pay for
 		// it — and an expression that calls an undefined function errors, which is what makes the
 		// absence observable at all.
-		assert!(!FeatureExpr::new("props.v == 1").unwrap().binds_is_num);
-		assert!(FeatureExpr::new("is_num(props.v)").unwrap().binds_is_num);
+		assert!(!FeatureExpr::new("$props.v == 1").unwrap().binds_is_num);
+		assert!(FeatureExpr::new("is_num($props.v)").unwrap().binds_is_num);
+	}
+
+	fn rewrite(expr: &str) -> String {
+		rewrite_special_names(expr).unwrap()
+	}
+
+	fn rewrite_error(expr: &str) -> String {
+		format!("{:#}", rewrite_special_names(expr).unwrap_err())
+	}
+
+	#[test]
+	fn special_names_are_rewritten_in_code() {
+		assert_eq!(
+			rewrite("$zoom >= 12 && $layer == 'x' && has($props.a) && 'b' in $props"),
+			"_zoom >= 12 && _layer == 'x' && has(_props.a) && 'b' in _props"
+		);
+		assert_eq!(rewrite("($zoom)"), "(_zoom)");
+	}
+
+	#[test]
+	fn string_literals_are_left_alone_in_every_form() {
+		for expr in [
+			"name == '$zoom'",
+			r#"name == "$zoom""#,
+			"name == '''$zoom\n$layer'''",
+			"name == \"\"\"it's $zoom\"\"\"",
+			r"name == 'it\'s $zoom'",
+			r#"name == "a \" $zoom""#,
+			"name == b'$zoom'",
+			"name == R'$zoom'",
+			"name == br'$zoom'",
+		] {
+			assert_eq!(rewrite(expr), expr, "{expr}");
+		}
+	}
+
+	#[test]
+	fn a_raw_string_ends_at_its_quote_despite_a_backslash() {
+		// In a raw string `\` escapes nothing, so `r'\'` is a complete literal and what follows
+		// is code again.
+		assert_eq!(rewrite(r"name == r'\' || $zoom > 1"), r"name == r'\' || _zoom > 1");
+	}
+
+	#[test]
+	fn an_empty_string_does_not_swallow_what_follows() {
+		assert_eq!(rewrite("name == '' || $zoom > 1"), "name == '' || _zoom > 1");
+	}
+
+	#[test]
+	fn comments_are_left_alone_and_do_not_open_strings() {
+		assert_eq!(
+			rewrite("// it's $zoom\n$zoom > 1 // $layer"),
+			"// it's $zoom\n_zoom > 1 // $layer"
+		);
+	}
+
+	#[test]
+	fn letters_in_numbers_are_not_names() {
+		assert_eq!(
+			rewrite("v > 1e5 && w < 1000u && $zoom > 0x1F"),
+			"v > 1e5 && w < 1000u && _zoom > 0x1F"
+		);
+	}
+
+	#[test]
+	fn an_unknown_special_name_is_refused() {
+		let message = rewrite_error("$zooom > 1");
+		assert!(message.contains("`$zooom`"), "{message}");
+		assert!(message.contains("`$zoom`, `$layer` and `$props`"), "{message}");
+		assert!(rewrite_error("$ > 1").contains("`$`"));
+	}
+
+	#[test]
+	fn a_special_name_cannot_be_a_field() {
+		assert!(rewrite_error("$props.$zoom > 1").contains("cannot follow a `.`"));
+	}
+
+	#[test]
+	fn the_compiled_names_are_reserved_but_reachable_as_fields() {
+		let message = rewrite_error("_zoom > 1");
+		assert!(message.contains("`$props._zoom`"), "{message}");
+		assert!(
+			rewrite_special_names("_layerx == 1").is_ok(),
+			"only the exact names are reserved"
+		);
+		assert_eq!(rewrite("$props._zoom > 1"), "_props._zoom > 1");
+		assert_eq!(rewrite("$props . _zoom > 1"), "_props . _zoom > 1");
+	}
+
+	#[test]
+	fn the_former_bare_names_are_refused_with_their_new_spelling() {
+		for (expr, hint) in [
+			("zoom >= 12", "`zoom` is written `$zoom` now"),
+			("has(props.name)", "`props` is written `$props` now"),
+		] {
+			let message = format!("{:#}", compile_cel(expr).unwrap_err());
+			assert!(message.contains(hint), "{message}");
+		}
+		assert!(compile_cel("$props.zoom == 1 && $props.props == 2").is_ok());
+		assert!(compile_cel("layer == 1").is_ok(), "`layer` was never reserved");
+	}
+
+	#[test]
+	fn a_parser_error_shows_the_expression_as_written() {
+		let message = format!("{:#}", compile_cel("$zoom >= && $layer").unwrap_err());
+		assert!(!message.contains("_zoom"), "{message}");
+		assert!(!message.contains("_layer"), "{message}");
+	}
+
+	#[test]
+	fn the_scope_follows_the_names_read() {
+		let scope = |expr: &str| FeatureExpr::new(expr).unwrap().scope();
+		assert_eq!(scope("$zoom >= 12"), ExprScope::Tile);
+		assert_eq!(scope("true"), ExprScope::Tile);
+		assert_eq!(scope("$layer == 'a' && $zoom > 1"), ExprScope::Layer);
+		assert_eq!(scope("$layer == 'a' && kind == 'b'"), ExprScope::Feature);
+		assert_eq!(scope("has($props.a)"), ExprScope::Feature);
 	}
 
 	/// `Program::execute` runs per feature on the tiling thread, with none of
@@ -368,7 +702,7 @@ mod tests {
 	#[test]
 	fn a_deeply_nested_expression_is_refused_at_compile_time() {
 		let depth = 4_000;
-		let expr = format!("{}zoom > 1{}", "(".repeat(depth), ")".repeat(depth));
+		let expr = format!("{}$zoom > 1{}", "(".repeat(depth), ")".repeat(depth));
 
 		let error = compile_cel(&expr).expect_err("nesting this deep must be refused");
 		let message = format!("{error:#}");
@@ -382,7 +716,7 @@ mod tests {
 	#[test]
 	fn a_long_shallow_chain_still_compiles() {
 		let expr = (0..5_000)
-			.map(|i| format!("(zoom > {i})"))
+			.map(|i| format!("($zoom > {i})"))
 			.collect::<Vec<_>>()
 			.join(" || ");
 
@@ -404,11 +738,11 @@ mod tests {
 	/// Ordinary expressions are unaffected, right up to the limit.
 	#[test]
 	fn ordinary_expressions_are_unaffected() {
-		assert!(ensure_cel_nesting_is_bounded("zoom >= 12").is_ok());
-		assert!(ensure_cel_nesting_is_bounded("has(props.name) && props.population >= 1000").is_ok());
+		assert!(ensure_cel_nesting_is_bounded("$zoom >= 12").is_ok());
+		assert!(ensure_cel_nesting_is_bounded("has($props.name) && $props.population >= 1000").is_ok());
 
 		let at_limit = format!(
-			"{}zoom > 1{}",
+			"{}$zoom > 1{}",
 			"(".repeat(MAX_CEL_NESTING_DEPTH),
 			")".repeat(MAX_CEL_NESTING_DEPTH)
 		);
@@ -418,7 +752,7 @@ mod tests {
 		);
 
 		let past_limit = format!(
-			"{}zoom > 1{}",
+			"{}$zoom > 1{}",
 			"(".repeat(MAX_CEL_NESTING_DEPTH + 1),
 			")".repeat(MAX_CEL_NESTING_DEPTH + 1)
 		);

@@ -43,7 +43,7 @@ pub fn feature_expressions(requirement: &Requirement) -> Vec<(String, String)> {
 		}
 
 		// Parenthesise only when there is something to disambiguate. A single entry is already
-		// the whole expression, and `((zoom >= 14 && zoom <= 14))` is noise in a pipeline someone
+		// the whole expression, and `(($zoom >= 14 && $zoom <= 14))` is noise in a pipeline someone
 		// is expected to read and edit.
 		let expression = if terms.len() == 1 {
 			terms.into_iter().next().unwrap()
@@ -62,10 +62,10 @@ fn entry(entry: &KeepEntry) -> String {
 	let mut terms: Vec<String> = Vec::new();
 
 	if let Some(min) = entry.minzoom {
-		terms.push(format!("zoom >= {min}"));
+		terms.push(format!("$zoom >= {min}"));
 	}
 	if let Some(max) = entry.maxzoom {
-		terms.push(format!("zoom <= {max}"));
+		terms.push(format!("$zoom <= {max}"));
 	}
 
 	if let Some(predicate) = &entry.predicate {
@@ -133,8 +133,8 @@ mod tests {
 		assert_eq!(
 			expressions(&r),
 			[
-				"buildings: zoom >= 14",
-				"streets: (zoom >= 5 && ((has(props.kind) && props.kind in ['motorway', 'trunk']) && !((has(props.bridge) && props.bridge == true)))) || (zoom >= 12)",
+				"buildings: $zoom >= 14",
+				"streets: ($zoom >= 5 && ((has($props.kind) && $props.kind in ['motorway', 'trunk']) && !((has($props.bridge) && $props.bridge == true)))) || ($zoom >= 12)",
 			]
 		);
 	}
@@ -186,7 +186,7 @@ mod tests {
 		// An unreadable filter contributes nothing, so the entry is its zoom test alone — which
 		// `vector_filter_features` then answers once per tile rather than once per feature.
 		let r = parse(r#"{"layers":[{"id":"a","source-layer":"a","minzoom":12,"filter":["sorcery","k"]}]}"#);
-		assert_eq!(expressions(&r), ["a: zoom >= 12"]);
+		assert_eq!(expressions(&r), ["a: $zoom >= 12"]);
 	}
 
 	/// What `check` makes of every expression, as a `vector_filter_features` node.
