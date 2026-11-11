@@ -216,6 +216,7 @@ mod tests {
 			tag_ids: vec![],
 			geom_type: crate::vector_tile::GeomType::MultiPolygon,
 			geom_data: writer.into_blob(),
+			position: None,
 		};
 		let mut layer = VectorTileLayer::new("water".to_string(), 4096, 2);
 		layer.features.push(feature);

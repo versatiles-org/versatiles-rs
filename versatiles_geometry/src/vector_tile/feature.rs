@@ -29,6 +29,14 @@ pub struct VectorTileFeature {
 	pub geom_type: GeomType,
 	/// Geometry as an MVT command stream in tile coordinates (MVT field 4).
 	pub geom_data: Blob,
+	/// The feature's position in its layer before the layer was split, for
+	/// putting the parts back together in their original order.
+	///
+	/// Held in memory only: never encoded, and `None` for every decoded
+	/// feature. Order within a layer is visible on the map, because a renderer
+	/// draws features and places labels in it, so code that rebuilds a feature
+	/// must carry this over rather than leave it `None`.
+	pub position: Option<u32>,
 }
 
 impl Default for VectorTileFeature {
@@ -38,6 +46,7 @@ impl Default for VectorTileFeature {
 			tag_ids: Vec::new(),
 			geom_type: GeomType::Unknown,
 			geom_data: Blob::new_empty(),
+			position: None,
 		}
 	}
 }
@@ -709,6 +718,7 @@ impl VectorTileFeature {
 			tag_ids,
 			geom_type,
 			geom_data,
+			position: None,
 		})
 	}
 
@@ -1003,6 +1013,7 @@ mod tests {
 			tag_ids: vec![],
 			geom_type: GeomType::MultiPolygon,
 			geom_data: writer.into_blob(),
+			position: None,
 		}
 	}
 

@@ -80,11 +80,17 @@ pub fn repair_tile(tile: VectorTile, drop_offenders: bool) -> Result<VectorTile>
 			let name = layer.name.clone();
 
 			let mut geo_features = Vec::with_capacity(layer.features.len());
+			// `GeoFeature` has no position, so it is carried beside the features
+			// and put back after the rebuild, which keeps them one to one.
+			let mut positions = Vec::with_capacity(layer.features.len());
 			let mut decode_failed = false;
 
 			for feature in &layer.features {
 				match feature.to_feature_lenient(&layer) {
-					Ok(gf) => geo_features.push(gf),
+					Ok(gf) => {
+						geo_features.push(gf);
+						positions.push(feature.position);
+					}
 					Err(_) if drop_offenders => {
 						// Drop this feature silently.
 					}
@@ -99,6 +105,9 @@ pub fn repair_tile(tile: VectorTile, drop_offenders: bool) -> Result<VectorTile>
 			if !decode_failed {
 				// All features decoded (or offenders were dropped): rebuild.
 				layer = VectorTileLayer::from_features(name, geo_features, extent, version)?;
+				for (feature, position) in layer.features.iter_mut().zip(positions) {
+					feature.position = position;
+				}
 			}
 			// If decode_failed && !drop_offenders: layer keeps structural fixes
 			// but geometry bytes are left as-is (features unchanged).
@@ -150,6 +159,7 @@ mod tests {
 			tag_ids: vec![],
 			geom_type: GeomType::MultiPolygon,
 			geom_data: writer.into_blob(),
+			position: None,
 		}
 	}
 
@@ -159,6 +169,7 @@ mod tests {
 			tag_ids: vec![],
 			geom_type: GeomType::MultiPolygon,
 			geom_data: Blob::from(vec![0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+			position: None,
 		}
 	}
 
@@ -184,6 +195,7 @@ mod tests {
 			tag_ids: vec![],
 			geom_type: GeomType::MultiPolygon,
 			geom_data: writer.into_blob(),
+			position: None,
 		}
 	}
 
@@ -288,6 +300,31 @@ mod tests {
 			1,
 			"malformed feature should be dropped"
 		);
+		Ok(())
+	}
+
+	/// Rebuilding a layer goes through `GeoFeature`, which has no position, so
+	/// it is the one place in repair that could lose it.
+	#[test]
+	fn a_rebuilt_layer_keeps_the_positions_of_its_features() -> Result<()> {
+		let positioned = |mut feature: VectorTileFeature, position: u32| {
+			feature.position = Some(position);
+			feature
+		};
+		let good = || raw_polygon_feature(&[vec![(0, 0), (4, 0), (4, 4), (0, 4)]]);
+		let layer = layer_with(
+			"l",
+			vec![
+				positioned(good(), 10),
+				positioned(malformed_feature(), 11),
+				positioned(unclosed_polygon_feature(), 12),
+				positioned(good(), 13),
+			],
+		);
+
+		let repaired = repair_tile(VectorTile::new(vec![layer]), true)?;
+		let positions: Vec<_> = repaired.layers[0].features.iter().map(|f| f.position).collect();
+		assert_eq!(positions, [Some(10), Some(12), Some(13)]);
 		Ok(())
 	}
 

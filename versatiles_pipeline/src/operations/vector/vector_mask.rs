@@ -301,7 +301,8 @@ impl Operation {
 			_ => return Ok(Cut::Unchanged(feature)),
 		};
 
-		let cut = VectorTileFeature::from_geometry(feature.id, feature.tag_ids, cut)?;
+		let mut cut = VectorTileFeature::from_geometry(feature.id, feature.tag_ids, cut)?;
+		cut.position = feature.position;
 		// Rounding to the tile grid can collapse a sliver to nothing, and the
 		// encoder then skips its rings.
 		if cut.count_geometry_points() == 0 {
@@ -510,6 +511,33 @@ mod tests {
 		let c = edge_coord();
 		let input = tile(vec![("places", vec![point(&c, 20.0, 20.0, "outside")])]);
 		assert!(operation(None).cut_tile(&c, input).unwrap().is_none());
+	}
+
+	/// A cut feature is a new one, built from its cut geometry, so it is where
+	/// a position could be lost. Dropping a feature also rebuilds the layer's
+	/// property tables, which must not lose it either.
+	#[test]
+	fn features_keep_their_positions_when_cut_or_kept() {
+		let c = edge_coord();
+		let line = LineString(vec![to_tile(&c, 2.0, 2.0), to_tile(&c, 20.0, 2.0)]);
+		let points = MultiPoint(vec![Point(to_tile(&c, 2.0, 3.0)), Point(to_tile(&c, 20.0, 3.0))]);
+		let mut input = tile(vec![(
+			"mixed",
+			vec![
+				point(&c, 2.0, 2.0, "kept"),
+				point(&c, 20.0, 20.0, "dropped"),
+				feature(Geometry::LineString(line), "cut line"),
+				feature(Geometry::MultiPoint(points), "cut points"),
+				point(&c, 9.0, 8.0, "kept too"),
+			],
+		)]);
+		for (position, feature) in (10..).zip(&mut input.layers[0].features) {
+			feature.position = Some(position);
+		}
+
+		let out = operation(None).cut_tile(&c, input).unwrap().unwrap();
+		let positions: Vec<_> = out.layers[0].features.iter().map(|f| f.position).collect();
+		assert_eq!(positions, [Some(10), Some(12), Some(13), Some(14)]);
 	}
 
 	#[test]

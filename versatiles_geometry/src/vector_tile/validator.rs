@@ -363,6 +363,7 @@ mod tests {
 			tag_ids: vec![],
 			geom_type,
 			geom_data: writer.into_blob(),
+			position: None,
 		}
 	}
 
@@ -441,6 +442,7 @@ mod tests {
 			tag_ids: vec![],
 			geom_type: GeomType::MultiPolygon,
 			geom_data: writer.into_blob(),
+			position: None,
 		};
 		let tile = tile_with_layer(layer_with_features("l", vec![feature]));
 		let issues = validate_tile(&tile);
@@ -462,6 +464,7 @@ mod tests {
 			tag_ids: vec![],
 			geom_type: GeomType::Unknown,
 			geom_data: Blob::new_empty(),
+			position: None,
 		};
 		let tile = tile_with_layer(layer_with_features("l", vec![feature]));
 		assert_eq!(validate_tile(&tile), []);
@@ -475,6 +478,7 @@ mod tests {
 			tag_ids: vec![],
 			geom_type: GeomType::Unknown,
 			geom_data: Blob::from(vec![0x09, 0x00, 0x00]),
+			position: None,
 		};
 		let tile = tile_with_layer(layer_with_features("l", vec![feature]));
 		let issues = validate_tile(&tile);
@@ -494,6 +498,7 @@ mod tests {
 				tag_ids: vec![],
 				geom_type,
 				geom_data: Blob::new_empty(),
+				position: None,
 			};
 			let tile = tile_with_layer(layer_with_features("l", vec![feature]));
 			let issues = validate_tile(&tile);
@@ -510,6 +515,7 @@ mod tests {
 			tag_ids: vec![],
 			geom_type: GeomType::MultiPolygon,
 			geom_data: Blob::from(vec![0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+			position: None,
 		};
 		let tile = tile_with_layer(layer_with_features("l", vec![feature]));
 		let issues = validate_tile(&tile);

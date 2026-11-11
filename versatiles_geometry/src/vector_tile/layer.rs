@@ -399,6 +399,44 @@ mod tests {
 	// Core functionality tests
 	// ========================================================================
 
+	/// The operations that edit properties or merge layers move features
+	/// rather than rebuild them, so a position survives without any of them
+	/// knowing it exists. This pins that down.
+	#[test]
+	fn property_edits_and_merges_keep_feature_positions() -> Result<()> {
+		let positioned = |first: u32| -> Result<VectorTileLayer> {
+			let mut layer = make_layer(vec![
+				point_feature_with_props(1, 1.0, 1.0, vec![("keep", GeoValue::from(true))]),
+				point_feature_with_props(2, 2.0, 2.0, vec![("keep", GeoValue::from(false))]),
+				point_feature_with_props(3, 3.0, 3.0, vec![("keep", GeoValue::from(true))]),
+			])?;
+			for (position, feature) in (first..).zip(&mut layer.features) {
+				feature.position = Some(position);
+			}
+			Ok(layer)
+		};
+		let positions = |layer: &VectorTileLayer| layer.features.iter().map(|f| f.position).collect::<Vec<_>>();
+
+		let mut layer = positioned(0)?;
+		layer.filter_map_properties(|p| (p.get("keep") == Some(&GeoValue::from(true))).then_some(p))?;
+		assert_eq!(positions(&layer), [Some(0), Some(2)]);
+
+		let mut layer = positioned(0)?;
+		layer.map_properties(|mut p| {
+			p.insert("added".to_string(), GeoValue::from(1));
+			p
+		})?;
+		assert_eq!(positions(&layer), [Some(0), Some(1), Some(2)]);
+
+		let mut layer = positioned(0)?;
+		layer.add_from_layer(positioned(10)?)?;
+		assert_eq!(
+			positions(&layer),
+			[Some(0), Some(1), Some(2), Some(10), Some(11), Some(12)]
+		);
+		Ok(())
+	}
+
 	#[test]
 	fn test_read_vector_tile_layer() -> Result<()> {
 		// Example data for a vector tile layer
