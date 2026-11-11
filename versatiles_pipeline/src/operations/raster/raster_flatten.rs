@@ -5,11 +5,7 @@ use versatiles_core::TileCoord;
 use versatiles_derive::context;
 use versatiles_image::{color::HexColor, traits::DynamicImageTraitOperation};
 
-use crate::{
-	PipelineFactory,
-	operations::transform::{TileTransform, TransformOp},
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, operations::transform::TileTransform, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Composites translucent raster tiles onto an opaque background colour.
@@ -28,11 +24,11 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_flatten operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
+	async fn build_transform(
 		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		factory: &PipelineFactory,
-	) -> Result<TransformOp<Operation>> {
+		source: &dyn TileSource,
+		_factory: &PipelineFactory,
+	) -> Result<Operation> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		// Opaque by construction: compositing onto a translucent background is
 		// not a thing this operation can do, so `RRGGBBAA` is refused here
@@ -46,7 +42,7 @@ impl Operation {
 				.as_ref()
 				.is_some_and(versatiles_core::TileSchema::is_elevation),
 		};
-		Ok(TransformOp::new(source, operation, factory.runtime()))
+		Ok(operation)
 	}
 }
 
@@ -68,7 +64,7 @@ impl TileTransform for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("raster_flatten", Args, Operation, requires: Raster);
+crate::operations::macros::define_transform_factory!("raster_flatten", Args, Operation, requires: Raster, per_tile);
 
 #[cfg(test)]
 mod tests {

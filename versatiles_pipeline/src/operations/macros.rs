@@ -13,12 +13,44 @@
 /// and `TransformOperationFactoryTrait`, delegating to `Operation::build`.
 /// `build` consults `compatibility()` first and refuses with its reason, so an
 /// operation that a picker would leave out cannot be built by hand either.
+///
+/// Add `, per_tile` after `requires:` for an operation that is a single
+/// [`TileTransform`](crate::operations::transform::TileTransform). Instead of
+/// `build`, `$op` then has an inherent
+/// `async fn build_transform(VPLNode, &dyn TileSource, &PipelineFactory) -> Result<T>`
+/// returning the transform. The pipeline's `build` wraps it in a
+/// [`TransformOp`](crate::operations::transform::TransformOp), and `Factory`
+/// also implements [`TileTransformFactoryTrait`](crate::factory::TileTransformFactoryTrait),
+/// so the transform can be built on its own. Register it with `per_tile` in
+/// `operations/mod.rs`.
 macro_rules! define_transform_factory {
 	($tag:literal, $args:ty, $op:ty) => {
-		$crate::operations::macros::define_transform_factory!(@impl $tag, $args, $op,);
+		$crate::operations::macros::define_transform_factory!(@impl $tag, $args, $op, build,);
 	};
 	($tag:literal, $args:ty, $op:ty, requires: $tile_type:ident) => {
-		$crate::operations::macros::define_transform_factory!(@impl $tag, $args, $op,
+		$crate::operations::macros::define_transform_factory!(@requires $tag, $args, $op, $tile_type, build);
+	};
+	($tag:literal, $args:ty, $op:ty, requires: $tile_type:ident, per_tile) => {
+		$crate::operations::macros::define_transform_factory!(@requires $tag, $args, $op, $tile_type, per_tile);
+
+		#[async_trait::async_trait]
+		impl $crate::factory::TileTransformFactoryTrait for Factory {
+			async fn build_tile_transform<'a>(
+				&self,
+				vpl_node: $crate::vpl::VPLNode,
+				input: &dyn versatiles_container::TileSource,
+				factory: &'a $crate::PipelineFactory,
+			) -> anyhow::Result<std::sync::Arc<dyn $crate::operations::transform::DynTileTransform>> {
+				$crate::factory::check_compatibility(
+					<Self as $crate::factory::TransformOperationFactoryTrait>::compatibility(self, input).await,
+				)?;
+				let transform = <$op>::build_transform(vpl_node, input, factory).await?;
+				Ok(std::sync::Arc::new(transform))
+			}
+		}
+	};
+	(@requires $tag:literal, $args:ty, $op:ty, $tile_type:ident, $mode:ident) => {
+		$crate::operations::macros::define_transform_factory!(@impl $tag, $args, $op, $mode,
 			async fn compatibility(
 				&self,
 				source: &dyn versatiles_container::TileSource,
@@ -27,7 +59,21 @@ macro_rules! define_transform_factory {
 			}
 		);
 	};
-	(@impl $tag:literal, $args:ty, $op:ty, $($compatibility:tt)*) => {
+	(@build build, $op:ty, $vpl_node:ident, $source:ident, $factory:ident) => {
+		<$op>::build($vpl_node, $source, $factory)
+			.await
+			.map(|op| Box::new(op) as Box<dyn versatiles_container::TileSource>)
+	};
+	(@build per_tile, $op:ty, $vpl_node:ident, $source:ident, $factory:ident) => {{
+		let transform = <$op>::build_transform($vpl_node, $source.as_ref(), $factory).await?;
+		Ok(Box::new($crate::operations::transform::TransformOp::new(
+			$source,
+			transform,
+			$factory.runtime(),
+		)) as Box<dyn versatiles_container::TileSource>)
+	}};
+	(@impl $tag:literal, $args:ty, $op:ty, $mode:ident, $($compatibility:tt)*) => {
+		#[derive(Clone)]
 		pub struct Factory {}
 
 		impl $crate::factory::OperationFactoryTrait for Factory {
@@ -66,9 +112,7 @@ macro_rules! define_transform_factory {
 				$crate::factory::check_compatibility(
 					<Self as $crate::factory::TransformOperationFactoryTrait>::compatibility(self, source.as_ref()).await,
 				)?;
-				<$op>::build(vpl_node, source, factory)
-					.await
-					.map(|op| Box::new(op) as Box<dyn versatiles_container::TileSource>)
+				$crate::operations::macros::define_transform_factory!(@build $mode, $op, vpl_node, source, factory)
 			}
 
 			$($compatibility)*

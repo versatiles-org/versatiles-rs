@@ -14,35 +14,71 @@ pub(crate) mod removed;
 pub(crate) mod transform;
 mod vector;
 
-use crate::factory::{ReadOperationFactoryTrait, TransformOperationFactoryTrait};
+use crate::factory::{ReadOperationFactoryTrait, TileTransformFactoryTrait, TransformOperationFactoryTrait};
+
+/// A transform operation, and the same operation as a per-tile transform if it is one.
+struct Registered {
+	operation: Box<dyn TransformOperationFactoryTrait>,
+	per_tile: Option<Box<dyn TileTransformFactoryTrait>>,
+}
+
+fn plain(factory: impl TransformOperationFactoryTrait + 'static) -> Registered {
+	Registered {
+		operation: Box::new(factory),
+		per_tile: None,
+	}
+}
+
+fn per_tile<F>(factory: F) -> Registered
+where
+	F: TransformOperationFactoryTrait + TileTransformFactoryTrait + Clone + 'static,
+{
+	Registered {
+		operation: Box::new(factory.clone()),
+		per_tile: Some(Box::new(factory)),
+	}
+}
+
+/// Every transform operation, each marked by whether it is a single per-tile transform.
+///
+/// One list rather than two, so that a per-tile operation cannot be registered as an
+/// operation and forgotten as a transform, or the other way round.
+fn transform_operations() -> Vec<Registered> {
+	vec![
+		plain(general::filter::Factory {}),
+		plain(general::meta_update::Factory {}),
+		plain(general::remap_coords::Factory {}),
+		per_tile(dem::dem_colorize::Factory {}),
+		plain(dem::dem_hillshade::Factory {}),
+		plain(dem::dem_overscale::Factory {}),
+		plain(dem::dem_overview::Factory {}),
+		per_tile(dem::dem_quantize::Factory {}),
+		plain(dem::dem_tile_resize::Factory {}),
+		per_tile(raster::raster_flatten::Factory {}),
+		per_tile(raster::raster_format::Factory {}),
+		per_tile(raster::raster_levels::Factory {}),
+		per_tile(raster::raster_mask::Factory {}),
+		plain(raster::raster_overscale::Factory {}),
+		plain(raster::raster_overview::Factory {}),
+		plain(raster::raster_tile_resize::Factory {}),
+		per_tile(vector::vector_filter_features::Factory {}),
+		per_tile(vector::vector_filter_layers::Factory {}),
+		per_tile(vector::vector_filter_properties::Factory {}),
+		per_tile(vector::vector_mask::Factory {}),
+		plain(vector::vector_overzoom::Factory {}),
+		per_tile(vector::vector_reduce_to_style::Factory {}),
+		per_tile(vector::vector_repair::Factory {}),
+		per_tile(vector::vector_update_properties::Factory {}),
+	]
+}
 
 pub fn transform_operation_factories() -> Vec<Box<dyn TransformOperationFactoryTrait>> {
-	vec![
-		Box::new(general::filter::Factory {}),
-		Box::new(general::meta_update::Factory {}),
-		Box::new(general::remap_coords::Factory {}),
-		Box::new(dem::dem_colorize::Factory {}),
-		Box::new(dem::dem_hillshade::Factory {}),
-		Box::new(dem::dem_overscale::Factory {}),
-		Box::new(dem::dem_overview::Factory {}),
-		Box::new(dem::dem_quantize::Factory {}),
-		Box::new(dem::dem_tile_resize::Factory {}),
-		Box::new(raster::raster_flatten::Factory {}),
-		Box::new(raster::raster_format::Factory {}),
-		Box::new(raster::raster_levels::Factory {}),
-		Box::new(raster::raster_mask::Factory {}),
-		Box::new(raster::raster_overscale::Factory {}),
-		Box::new(raster::raster_overview::Factory {}),
-		Box::new(raster::raster_tile_resize::Factory {}),
-		Box::new(vector::vector_filter_features::Factory {}),
-		Box::new(vector::vector_filter_layers::Factory {}),
-		Box::new(vector::vector_filter_properties::Factory {}),
-		Box::new(vector::vector_mask::Factory {}),
-		Box::new(vector::vector_overzoom::Factory {}),
-		Box::new(vector::vector_reduce_to_style::Factory {}),
-		Box::new(vector::vector_repair::Factory {}),
-		Box::new(vector::vector_update_properties::Factory {}),
-	]
+	transform_operations().into_iter().map(|r| r.operation).collect()
+}
+
+/// The transform operations that can be built as a bare per-tile transform.
+pub(crate) fn tile_transform_factories() -> Vec<Box<dyn TileTransformFactoryTrait>> {
+	transform_operations().into_iter().filter_map(|r| r.per_tile).collect()
 }
 
 pub fn read_operation_factories() -> Vec<Box<dyn ReadOperationFactoryTrait>> {

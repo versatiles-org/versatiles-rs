@@ -9,11 +9,7 @@ use super::{
 	color_ramp::{ColorRamp, DEFAULT_RAMP},
 	encoding::{DemEncoding, decode_elevation, resolve_encoding},
 };
-use crate::{
-	PipelineFactory,
-	operations::transform::{TileTransform, TransformOp},
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, operations::transform::TileTransform, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Colours DEM tiles by elevation, the way MapLibre's `color-relief` layer colours them.
@@ -53,11 +49,11 @@ struct Operation {
 
 impl Operation {
 	#[context("Building dem_colorize operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
+	async fn build_transform(
 		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		factory: &PipelineFactory,
-	) -> Result<TransformOp<Operation>> {
+		source: &dyn TileSource,
+		_factory: &PipelineFactory,
+	) -> Result<Operation> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let ramp = match args.ramp {
 			Some(ramp) => ramp,
@@ -73,7 +69,7 @@ impl Operation {
 			encoding: resolve_encoding(args.encoding, source.tilejson().tile_schema.as_ref())?,
 			format,
 		};
-		Ok(TransformOp::new(source, operation, factory.runtime()))
+		Ok(operation)
 	}
 }
 
@@ -115,14 +111,16 @@ impl TileTransform for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("dem_colorize", Args, Operation, requires: Raster);
+crate::operations::macros::define_transform_factory!("dem_colorize", Args, Operation, requires: Raster, per_tile);
 
 #[cfg(test)]
 mod tests {
 	use versatiles_core::TileCoord;
 
 	use super::*;
-	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
+	use crate::{
+		factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource, operations::transform::TransformOp,
+	};
 
 	#[expect(
 		clippy::cast_possible_truncation,
@@ -154,12 +152,10 @@ mod tests {
 	}
 
 	async fn colorize(source: Result<DummyImageSource>, vpl: &str) -> Result<TransformOp<Operation>> {
-		Operation::build(
-			VPLNode::try_from_str(vpl)?,
-			Box::new(source?),
-			&PipelineFactory::new_dummy(),
-		)
-		.await
+		let source = Box::new(source?);
+		let factory = PipelineFactory::new_dummy();
+		let transform = Operation::build_transform(VPLNode::try_from_str(vpl)?, source.as_ref(), &factory).await?;
+		Ok(TransformOp::new(source, transform, factory.runtime()))
 	}
 
 	async fn pixel(op: &TransformOp<Operation>, x: u32) -> Result<[u8; 4]> {

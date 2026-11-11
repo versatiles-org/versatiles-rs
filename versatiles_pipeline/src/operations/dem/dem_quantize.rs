@@ -8,11 +8,7 @@ use super::{
 	encoding::{DemEncoding, raw_unit_meters, resolve_encoding, to_tile_schema},
 	slope::maplibre_slope_exaggeration,
 };
-use crate::{
-	PipelineFactory,
-	operations::transform::{TileTransform, TransformOp},
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, operations::transform::TileTransform, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Quantizes DEM raster tiles by rounding elevations to a per-tile power-of-two step.
@@ -116,11 +112,11 @@ fn quantize_pixel(r: &mut u8, g: &mut u8, b: &mut u8, mask_24: u32, round_add: u
 
 impl Operation {
 	#[context("Building dem_quantize operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
+	async fn build_transform(
 		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		factory: &PipelineFactory,
-	) -> Result<TransformOp<Operation>> {
+		source: &dyn TileSource,
+		_factory: &PipelineFactory,
+	) -> Result<Operation> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		let operation = Operation {
@@ -129,7 +125,7 @@ impl Operation {
 			// Read from the source's schema before `update_tilejson` overwrites it.
 			encoding: resolve_encoding(args.encoding, source.tilejson().tile_schema.as_ref())?,
 		};
-		Ok(TransformOp::new(source, operation, factory.runtime()))
+		Ok(operation)
 	}
 }
 
@@ -178,7 +174,7 @@ impl TileTransform for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("dem_quantize", Args, Operation, requires: Raster);
+crate::operations::macros::define_transform_factory!("dem_quantize", Args, Operation, requires: Raster, per_tile);
 
 #[cfg(test)]
 mod tests {
@@ -187,7 +183,9 @@ mod tests {
 	use versatiles_image::{DynamicImage, traits::DynamicImageTraitConvert};
 
 	use super::*;
-	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
+	use crate::{
+		factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource, operations::transform::TransformOp,
+	};
 
 	/// Combine RGB channels into a single 24-bit raw value for test assertions.
 	fn pixel_to_raw(r: u8, g: u8, b: u8) -> u32 {

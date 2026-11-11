@@ -21,16 +21,12 @@
 //! allocation.
 
 use anyhow::{Result, ensure};
-use versatiles_container::{Tile, TileSource, TilesRuntime};
+use versatiles_container::{Tile, TileSource};
 use versatiles_core::{TileCoord, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::repair_tile;
 
-use crate::{
-	PipelineFactory,
-	operations::transform::{TileTransform, TransformOp},
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, operations::transform::TileTransform, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Repairs vector tiles so that they conform to MVT 2.1.
@@ -65,25 +61,19 @@ pub struct Operation {
 
 impl Operation {
 	#[context("Building vector_repair operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
+	async fn build_transform(
 		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		factory: &PipelineFactory,
-	) -> Result<TransformOp<Operation>> {
+		source: &dyn TileSource,
+		_factory: &PipelineFactory,
+	) -> Result<Operation> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-		Self::new(source, args.drop_offenders.unwrap_or(false), factory.runtime())
-	}
-
-	pub fn new(
-		source: Box<dyn TileSource>,
-		drop_offenders: bool,
-		runtime: TilesRuntime,
-	) -> Result<TransformOp<Operation>> {
 		ensure!(
 			source.metadata().tile_format().to_type() == TileType::Vector,
 			"vector_repair requires a vector tile source"
 		);
-		Ok(TransformOp::new(source, Operation { drop_offenders }, runtime))
+		Ok(Operation {
+			drop_offenders: args.drop_offenders.unwrap_or(false),
+		})
 	}
 }
 
@@ -110,7 +100,7 @@ fn do_repair(mut tile: Tile, drop_offenders: bool) -> Result<Tile> {
 	Tile::from_vector(repaired, tile_format)
 }
 
-crate::operations::macros::define_transform_factory!("vector_repair", Args, Operation, requires: Vector);
+crate::operations::macros::define_transform_factory!("vector_repair", Args, Operation, requires: Vector, per_tile);
 
 #[cfg(test)]
 mod tests {
@@ -118,6 +108,17 @@ mod tests {
 	use versatiles_core::TilePyramid;
 
 	use super::*;
+	use crate::operations::transform::TransformOp;
+
+	/// The operation as a pipeline builds it.
+	async fn build(
+		vpl_node: VPLNode,
+		source: Box<dyn TileSource>,
+		factory: &PipelineFactory,
+	) -> Result<TransformOp<Operation>> {
+		let transform = Operation::build_transform(vpl_node, source.as_ref(), factory).await?;
+		Ok(TransformOp::new(source, transform, factory.runtime()))
+	}
 	use crate::{factory::OperationFactoryTrait, helpers::dummy_vector_source::DummyVectorSource};
 
 	#[tokio::test]
@@ -152,7 +153,7 @@ mod tests {
 
 		use crate::helpers::dummy_image_source::DummyImageSource;
 		let source = Box::new(DummyImageSource::from_color(&[128u8, 0, 0], 4, TileFormat::PNG, None).unwrap());
-		let result = Operation::build(
+		let result = build(
 			VPLNode::try_from_str("vector_repair").unwrap(),
 			source,
 			&PipelineFactory::new_dummy(),
@@ -167,7 +168,7 @@ mod tests {
 			&[("dummy", &[&[("k", "v")]])],
 			Some(TilePyramid::new_full_up_to(2)),
 		));
-		let op = Operation::build(
+		let op = build(
 			VPLNode::try_from_str("vector_repair")?,
 			source,
 			&PipelineFactory::new_dummy(),
@@ -183,7 +184,7 @@ mod tests {
 			&[("dummy", &[&[("k", "v")]])],
 			Some(TilePyramid::new_full_up_to(1)),
 		));
-		let op = Operation::build(
+		let op = build(
 			VPLNode::try_from_str("vector_repair")?,
 			source,
 			&PipelineFactory::new_dummy(),
@@ -199,7 +200,7 @@ mod tests {
 			&[("dummy", &[&[("k", "v")]])],
 			Some(TilePyramid::new_full_up_to(1)),
 		));
-		let op = Operation::build(
+		let op = build(
 			VPLNode::try_from_str("vector_repair drop_offenders=true")?,
 			source,
 			&PipelineFactory::new_dummy(),
@@ -252,7 +253,7 @@ mod tests {
 		let runtime = TilesRuntime::new_silent();
 		let reader = MBTilesReader::open(&path, runtime)?;
 		let source: Box<dyn TileSource> = Box::new(reader);
-		let op = Operation::new(source, false, TilesRuntime::new_silent())?;
+		let op = TransformOp::new(source, Operation { drop_offenders: false }, TilesRuntime::new_silent());
 
 		let pyramid = op.tile_pyramid().await?;
 		let mut total_tiles = 0u64;

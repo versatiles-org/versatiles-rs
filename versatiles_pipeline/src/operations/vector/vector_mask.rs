@@ -16,7 +16,7 @@ use crate::{
 			blur_function::BlurFunction,
 			mask_geometry::{MaskGeometry, TileClassification, read_mask_polygons},
 		},
-		transform::{TileTransform, TransformOp},
+		transform::TileTransform,
 	},
 	vpl::VPLNode,
 };
@@ -144,11 +144,11 @@ fn grow_bbox(bbox: [f64; 4], tiles: f64) -> [f64; 4] {
 
 impl Operation {
 	#[context("Building vector_mask operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
+	async fn build_transform(
 		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
+		source: &dyn TileSource,
 		factory: &PipelineFactory,
-	) -> Result<TransformOp<Operation>> {
+	) -> Result<Operation> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let geojson = args.geojson.read_all(factory).await?;
 		let polygons =
@@ -156,7 +156,7 @@ impl Operation {
 
 		let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();
 		let operation = Self::new(polygons, args.layer, &mut tile_pyramid)?;
-		Ok(TransformOp::new(source, operation, factory.runtime()))
+		Ok(operation)
 	}
 
 	/// Builds the operation from mask polygons in Web Mercator metres, clipping
@@ -352,7 +352,7 @@ impl TileTransform for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("vector_mask", Args, Operation, requires: Vector);
+crate::operations::macros::define_transform_factory!("vector_mask", Args, Operation, requires: Vector, per_tile);
 
 #[cfg(test)]
 mod tests {

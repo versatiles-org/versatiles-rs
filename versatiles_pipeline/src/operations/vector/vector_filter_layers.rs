@@ -8,7 +8,7 @@ use versatiles_geometry::vector_tile::VectorTile;
 
 use crate::{
 	PipelineFactory,
-	operations::transform::{AsTileTransform, TransformOp, VectorTransform},
+	operations::transform::{AsTileTransform, VectorTransform},
 	vpl::VPLNode,
 };
 
@@ -60,21 +60,17 @@ impl VectorTransform for Runner {
 
 impl Runner {
 	#[context("Building vector_filter_layers operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
+	async fn build_transform(
 		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		factory: &PipelineFactory,
-	) -> Result<TransformOp<AsTileTransform<Runner>>> {
+		_source: &dyn TileSource,
+		_factory: &PipelineFactory,
+	) -> Result<AsTileTransform<Runner>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-		Ok(TransformOp::new(
-			source,
-			AsTileTransform(Runner::from_args(&args)),
-			factory.runtime(),
-		))
+		Ok(AsTileTransform(Runner::from_args(&args)))
 	}
 }
 
-crate::operations::macros::define_transform_factory!("vector_filter_layers", Args, Runner, requires: Vector);
+crate::operations::macros::define_transform_factory!("vector_filter_layers", Args, Runner, requires: Vector, per_tile);
 
 // ───────────────────────── TESTS ─────────────────────────
 #[cfg(test)]

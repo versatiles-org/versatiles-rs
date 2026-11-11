@@ -52,6 +52,52 @@ pub trait TileTransform: Debug + Send + Sync + 'static {
 	fn run(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>>;
 }
 
+/// A [`TileTransform`] as a trait object, for applying transforms that are not
+/// known until a pipeline is read, such as the steps of a `vector_branch`.
+///
+/// `TileTransform` cannot be one itself because of its `TAG` constant. The
+/// methods have their own names so that a type implementing both traits, which
+/// every transform does, never leaves a call ambiguous.
+#[cfg_attr(
+	not(test),
+	expect(
+		dead_code,
+		reason = "vector_branch, its first caller, is the next step of this change"
+	)
+)]
+pub(crate) trait DynTileTransform: Debug + Send + Sync {
+	/// [`TileTransform::TAG`].
+	fn tag(&self) -> &'static str;
+	/// [`TileTransform::update_metadata`].
+	fn adjust_metadata(&self, metadata: &mut TileSourceMetadata);
+	/// [`TileTransform::update_tilejson`].
+	fn adjust_tilejson(&self, tilejson: &mut TileJSON);
+	/// [`TileTransform::run`].
+	///
+	/// # Errors
+	///
+	/// When the transform fails on this tile.
+	fn apply(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>>;
+}
+
+impl<T: TileTransform> DynTileTransform for T {
+	fn tag(&self) -> &'static str {
+		T::TAG
+	}
+
+	fn adjust_metadata(&self, metadata: &mut TileSourceMetadata) {
+		self.update_metadata(metadata);
+	}
+
+	fn adjust_tilejson(&self, tilejson: &mut TileJSON) {
+		self.update_tilejson(tilejson);
+	}
+
+	fn apply(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
+		self.run(coord, tile)
+	}
+}
+
 /// The typed convenience for vector operations: [`TileTransform`] with the
 /// decoding and re-encoding already done.
 ///

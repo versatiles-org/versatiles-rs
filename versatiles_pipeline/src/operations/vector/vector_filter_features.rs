@@ -9,7 +9,7 @@ use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 use crate::{
 	PipelineFactory,
 	helpers::feature_expr::{CelExpression, ExprScope, FeatureExpr},
-	operations::transform::{TileTransform, TransformOp},
+	operations::transform::TileTransform,
 	vpl::VPLNode,
 };
 
@@ -271,17 +271,13 @@ impl Runner {
 
 impl Runner {
 	#[context("Building vector_filter_features operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
-		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		factory: &PipelineFactory,
-	) -> Result<TransformOp<Runner>> {
+	async fn build_transform(vpl_node: VPLNode, _source: &dyn TileSource, _factory: &PipelineFactory) -> Result<Runner> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-		Ok(TransformOp::new(source, Runner::from_args(&args)?, factory.runtime()))
+		Runner::from_args(&args)
 	}
 }
 
-crate::operations::macros::define_transform_factory!("vector_filter_features", Args, Runner, requires: Vector);
+crate::operations::macros::define_transform_factory!("vector_filter_features", Args, Runner, requires: Vector, per_tile);
 
 // ───────────────────────── TESTS ─────────────────────────
 #[cfg(test)]

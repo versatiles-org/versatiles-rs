@@ -27,12 +27,7 @@ use versatiles_core::{TileCoord, TileFormat, TilePyramid};
 use versatiles_derive::context;
 use versatiles_image::DynamicImage;
 
-use crate::{
-	PipelineFactory,
-	helpers::location::FileLocation,
-	operations::transform::{TileTransform, TransformOp},
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, helpers::location::FileLocation, operations::transform::TileTransform, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Makes raster pixels outside a GeoJSON polygon transparent.
@@ -72,11 +67,11 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_mask operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
+	async fn build_transform(
 		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
+		source: &dyn TileSource,
 		factory: &PipelineFactory,
-	) -> Result<TransformOp<Operation>> {
+	) -> Result<Operation> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		// Validate source format is raster
@@ -120,7 +115,7 @@ impl Operation {
 				.as_ref()
 				.is_some_and(versatiles_core::TileSchema::is_elevation),
 		};
-		Ok(TransformOp::new(source, operation, factory.runtime()))
+		Ok(operation)
 	}
 }
 
@@ -176,7 +171,7 @@ impl TileTransform for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("raster_mask", Args, Operation, requires: Raster);
+crate::operations::macros::define_transform_factory!("raster_mask", Args, Operation, requires: Raster, per_tile);
 
 #[cfg(test)]
 mod tests {

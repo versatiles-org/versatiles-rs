@@ -30,7 +30,9 @@ use versatiles_derive::context;
 use crate::{
 	build_error,
 	helpers::{dummy_image_source::DummyImageSource, dummy_vector_source::DummyVectorSource},
-	operations::{read_operation_factories, transform_operation_factories},
+	operations::{
+		read_operation_factories, tile_transform_factories, transform::DynTileTransform, transform_operation_factories,
+	},
 	vpl::{VPLNode, VPLPipeline, parse_vpl},
 };
 
@@ -65,6 +67,35 @@ pub trait ReadOperationFactoryTrait: OperationFactoryTrait {
 	/// Returns a boxed [`TileSource`] (which also implements [`TileSource`]
 	/// via blanket implementation) that can be used as the start of a pipeline.
 	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSource>>;
+}
+
+/// Builds an operation's per-tile transform on its own, without the source it
+/// would wrap.
+///
+/// Implemented by the operations that are a single
+/// [`TileTransform`](crate::operations::transform::TileTransform): one tile in,
+/// one tile out or dropped, at the same coordinate. Those are the operations
+/// that can run on part of a tile, which is what `vector_branch` does with
+/// them. The others read tiles other than the one they produce.
+#[async_trait]
+pub(crate) trait TileTransformFactoryTrait: OperationFactoryTrait {
+	/// Builds the transform for tiles described by `input`.
+	///
+	/// `input` is asked about, for its metadata, `TileJSON` or pyramid, but no
+	/// tile is read from it, so it can describe tiles that come from elsewhere.
+	#[cfg_attr(
+		not(test),
+		expect(
+			dead_code,
+			reason = "vector_branch, its first caller, is the next step of this change"
+		)
+	)]
+	async fn build_tile_transform<'a>(
+		&self,
+		vpl_node: VPLNode,
+		input: &dyn TileSource,
+		factory: &'a PipelineFactory,
+	) -> Result<Arc<dyn DynTileTransform>>;
 }
 
 /// Whether a transform can be applied to a particular source.
@@ -195,12 +226,14 @@ type Callback =
 ///
 /// `PipelineFactory` maintains:
 /// - `read_ops` and `tran_ops`: registries keyed by VPL tag name.
+/// - `tile_ops`: the transform operations that can also be built as a bare per-tile transform.
 /// - `dir`: base directory used to resolve relative filenames.
 /// - `create_reader`: callback to open external containers as [`TileSource`].
 /// - `runtime`: runtime configuration forwarded to operations.
 pub struct PipelineFactory {
 	read_ops: HashMap<String, Box<dyn ReadOperationFactoryTrait>>,
 	tran_ops: HashMap<String, Box<dyn TransformOperationFactoryTrait>>,
+	tile_ops: HashMap<String, Box<dyn TileTransformFactoryTrait>>,
 	dir: DataLocation,
 	create_reader: Callback,
 	runtime: TilesRuntime,
@@ -222,6 +255,7 @@ impl PipelineFactory {
 		PipelineFactory {
 			read_ops: HashMap::new(),
 			tran_ops: HashMap::new(),
+			tile_ops: HashMap::new(),
 			dir,
 			create_reader,
 			runtime,
@@ -239,6 +273,10 @@ impl PipelineFactory {
 
 		for f in transform_operation_factories() {
 			factory.add_tran_factory(f);
+		}
+
+		for f in tile_transform_factories() {
+			factory.tile_ops.insert(f.tag_name().to_string(), f);
 		}
 
 		factory
@@ -538,6 +576,35 @@ impl PipelineFactory {
 		factory.build(node, source, self).await
 	}
 
+	/// Builds the per-tile transform of the transform operation `node`, for
+	/// tiles described by `input`.
+	///
+	/// `Ok(None)` for a transform operation that is not a single per-tile
+	/// transform, such as `vector_overzoom`, which reads tiles other than the one
+	/// it produces. See [`TileTransformFactoryTrait`].
+	#[cfg_attr(
+		not(test),
+		expect(
+			dead_code,
+			reason = "vector_branch, its first caller, is the next step of this change"
+		)
+	)]
+	#[context("Failed to create tile transform from VPL node")]
+	pub(crate) async fn tile_transform_from_node(
+		&self,
+		node: VPLNode,
+		input: &dyn TileSource,
+	) -> Result<Option<Arc<dyn DynTileTransform>>> {
+		if let Some(factory) = self.tile_ops.get(&node.name) {
+			return factory.build_tile_transform(node, input, self).await.map(Some);
+		}
+		if self.tran_ops.contains_key(&node.name) {
+			Ok(None)
+		} else {
+			bail!("transform operation '{}' unknown", node.name)
+		}
+	}
+
 	/// Resolves a VPL-referenced location against `dir` and returns a new `DataLocation`.
 	///
 	/// In a VPL loaded from a URL every path becomes a URL, by the rules a
@@ -722,6 +789,7 @@ mod tests {
 	use std::{path::Path, sync::Arc};
 
 	use versatiles_container::SharedTileSource;
+	use versatiles_core::TileCoord;
 
 	use super::*;
 
@@ -750,6 +818,80 @@ mod tests {
 		assert_eq!(Arc::strong_count(&head), 3);
 		assert!(head.tile_pyramid().await.is_ok());
 
+		Ok(())
+	}
+
+	/// A per-tile operation built on its own applies the same transform a pipeline would.
+	#[tokio::test]
+	async fn a_tile_transform_built_alone_matches_the_pipeline() -> Result<()> {
+		const OPERATION: &str = r#"vector_filter_features layer=["debug_x"] expr="$zoom >= 2""#;
+		let factory = PipelineFactory::new_dummy();
+		let source = factory.operation_from_vpl("from_debug format=mvt").await?;
+		let piped = factory
+			.operation_from_vpl(&format!("from_debug format=mvt | {OPERATION}"))
+			.await?;
+
+		let transform = factory
+			.tile_transform_from_node(VPLNode::try_from_str(OPERATION)?, source.as_ref())
+			.await?
+			.expect("vector_filter_features is a per-tile transform");
+		assert_eq!(transform.tag(), "vector_filter_features");
+
+		// What `TransformOp::new` does to describe its output.
+		let mut metadata = source.metadata().clone();
+		transform.adjust_metadata(&mut metadata);
+		let mut tilejson = source.tilejson().clone();
+		transform.adjust_tilejson(&mut tilejson);
+		metadata.update_tilejson(&mut tilejson);
+		assert_eq!(&metadata, piped.metadata());
+		assert_eq!(&tilejson, piped.tilejson());
+
+		for coord in [TileCoord::new(1, 0, 0)?, TileCoord::new(3, 2, 5)?] {
+			let alone = match source.tile(&coord).await? {
+				Some(tile) => transform.apply(&coord, tile)?,
+				None => None,
+			};
+			assert_eq!(alone, piped.tile(&coord).await?, "at {coord:?}");
+		}
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn an_operation_that_reads_other_tiles_has_no_tile_transform() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let source = factory.operation_from_vpl("from_debug format=mvt").await?;
+
+		let overzoom = VPLNode::try_from_str("vector_overzoom level_max=14")?;
+		assert!(
+			factory
+				.tile_transform_from_node(overzoom, source.as_ref())
+				.await?
+				.is_none()
+		);
+
+		let unknown = VPLNode::try_from_str("vector_nonsense")?;
+		assert!(
+			factory
+				.tile_transform_from_node(unknown, source.as_ref())
+				.await
+				.is_err()
+		);
+		Ok(())
+	}
+
+	/// The hook refuses what the pipeline refuses, so a branch cannot run a raster operation
+	/// on vector tiles.
+	#[tokio::test]
+	async fn a_tile_transform_is_refused_for_the_wrong_kind_of_tile() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let source = factory.operation_from_vpl("from_debug format=mvt").await?;
+		let levels = VPLNode::try_from_str("raster_levels brightness=10")?;
+
+		let error = factory
+			.tile_transform_from_node(levels, source.as_ref())
+			.await
+			.expect_err("raster_levels needs raster tiles");
+		assert!(format!("{error:#}").contains("needs raster tiles"), "{error:#}");
 		Ok(())
 	}
 

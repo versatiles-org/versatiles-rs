@@ -10,7 +10,7 @@ use crate::{
 	PipelineFactory,
 	helpers::location::FileLocation,
 	operations::{
-		transform::{AsTileTransform, TransformOp, VectorTransform},
+		transform::{AsTileTransform, VectorTransform},
 		vector::vector_filter_features,
 	},
 	reduce::{self, Properties, from_style},
@@ -180,11 +180,11 @@ impl VectorTransform for Runner {
 
 impl Runner {
 	#[context("Building vector_reduce_to_style operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
+	async fn build_transform(
 		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
+		source: &dyn TileSource,
 		factory: &PipelineFactory,
-	) -> Result<TransformOp<AsTileTransform<Runner>>> {
+	) -> Result<AsTileTransform<Runner>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		let json = args
@@ -214,15 +214,11 @@ impl Runner {
 		)
 		.with_context(|| format!("reading style {}", args.style))?;
 
-		Ok(TransformOp::new(
-			source,
-			AsTileTransform(Runner::from_requirement(&requirement)?),
-			factory.runtime(),
-		))
+		Ok(AsTileTransform(Runner::from_requirement(&requirement)?))
 	}
 }
 
-crate::operations::macros::define_transform_factory!("vector_reduce_to_style", Args, Runner, requires: Vector);
+crate::operations::macros::define_transform_factory!("vector_reduce_to_style", Args, Runner, requires: Vector, per_tile);
 
 // ───────────────────────── TESTS ─────────────────────────
 #[cfg(test)]

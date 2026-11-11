@@ -9,7 +9,7 @@ use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 use crate::{
 	PipelineFactory,
 	helpers::{CsvReader, SeparatorChar, location::FileLocation},
-	operations::transform::{AsTileTransform, TransformOp, VectorTransform},
+	operations::transform::{AsTileTransform, VectorTransform},
 	vpl::VPLNode,
 };
 
@@ -167,11 +167,11 @@ impl VectorTransform for Runner {
 
 impl Runner {
 	#[context("Building vector_update_properties operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
+	async fn build_transform(
 		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
+		_source: &dyn TileSource,
 		factory: &PipelineFactory,
-	) -> Result<TransformOp<AsTileTransform<Runner>>> {
+	) -> Result<AsTileTransform<Runner>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		let input = args.data_source_path.open(factory).await?;
@@ -190,15 +190,11 @@ impl Runner {
 			.await
 			.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
 
-		Ok(TransformOp::new(
-			source,
-			AsTileTransform(Runner::from_args(args, data)?),
-			factory.runtime(),
-		))
+		Ok(AsTileTransform(Runner::from_args(args, data)?))
 	}
 }
 
-crate::operations::macros::define_transform_factory!("vector_update_properties", Args, Runner, requires: Vector);
+crate::operations::macros::define_transform_factory!("vector_update_properties", Args, Runner, requires: Vector, per_tile);
 
 /// Parses a separator string into a single character.
 /// Supports escape sequences like "\t" for tab.

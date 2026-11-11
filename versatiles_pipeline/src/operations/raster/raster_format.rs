@@ -7,10 +7,7 @@ use versatiles_derive::context;
 use versatiles_image::DynamicImageTraitConvert;
 
 use crate::{
-	PipelineFactory,
-	helpers::tile_format_subset::RasterTileFormat,
-	operations::transform::{TileTransform, TransformOp},
-	vpl::VPLNode,
+	PipelineFactory, helpers::tile_format_subset::RasterTileFormat, operations::transform::TileTransform, vpl::VPLNode,
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -86,11 +83,11 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_format operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
+	async fn build_transform(
 		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		factory: &PipelineFactory,
-	) -> Result<TransformOp<Operation>> {
+		source: &dyn TileSource,
+		_factory: &PipelineFactory,
+	) -> Result<Operation> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		// The one thing that has to happen here rather than in `update_metadata`:
@@ -153,7 +150,7 @@ impl Operation {
 				operation.format
 			);
 		}
-		Ok(TransformOp::new(source, operation, factory.runtime()))
+		Ok(operation)
 	}
 }
 
@@ -293,7 +290,7 @@ fn parse_quality(text: &str) -> Result<[Option<u8>; 32]> {
 	Ok(result)
 }
 
-crate::operations::macros::define_transform_factory!("raster_format", Args, Operation, requires: Raster);
+crate::operations::macros::define_transform_factory!("raster_format", Args, Operation, requires: Raster, per_tile);
 
 #[cfg(test)]
 mod tests {

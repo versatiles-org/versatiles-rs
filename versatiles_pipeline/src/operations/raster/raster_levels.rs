@@ -4,11 +4,7 @@ use versatiles_core::{TileCoord, bounded_number};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
 
-use crate::{
-	PipelineFactory,
-	operations::transform::{TileTransform, TransformOp},
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, operations::transform::TileTransform, vpl::VPLNode};
 
 bounded_number! {
 	/// An offset added to every colour channel, in 0..=255 terms.
@@ -44,18 +40,18 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_levels operation in VPL node {:?}", vpl_node.name)]
-	async fn build(
+	async fn build_transform(
 		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		factory: &PipelineFactory,
-	) -> Result<TransformOp<Operation>> {
+		_source: &dyn TileSource,
+		_factory: &PipelineFactory,
+	) -> Result<Operation> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let operation = Operation {
 			brightness: args.brightness.map_or(0.0, Brightness::get) / 255.0,
 			contrast: args.contrast.map_or(1.0, Contrast::get) / 255.0,
 			gamma: args.gamma.map_or(1.0, Gamma::get),
 		};
-		Ok(TransformOp::new(source, operation, factory.runtime()))
+		Ok(operation)
 	}
 }
 
@@ -78,7 +74,7 @@ impl TileTransform for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("raster_levels", Args, Operation, requires: Raster);
+crate::operations::macros::define_transform_factory!("raster_levels", Args, Operation, requires: Raster, per_tile);
 
 #[cfg(test)]
 mod tests {
@@ -88,7 +84,9 @@ mod tests {
 	use versatiles_image::DynamicImageTraitOperation;
 
 	use super::*;
-	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
+	use crate::{
+		factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource, operations::transform::TransformOp,
+	};
 
 	#[rstest]
 	#[case::no_change(&[102], 0.0, 1.0, 1.0, &[102])]
