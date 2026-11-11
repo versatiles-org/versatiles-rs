@@ -84,6 +84,27 @@ describe('VPL Builder', () => {
 			expectVpl(stacked, 'from_stacked [ from_container filename=a.versatiles | filter level_max=10 ]');
 		});
 
+		it('should serialize vectorBranch with branches made by VPL.branch()', () => {
+			const vpl = VPL.fromContainer({ filename: 'a.versatiles' }).vectorBranch(
+				[VPL.branch().vectorFilterLayers({ filter: ['poi'] }), VPL.branch().vectorRepair()],
+				{ expr: "$layer == 'poi'" },
+			);
+			expectVpl(
+				vpl,
+				`from_container filename=a.versatiles | vector_branch expr="$layer == 'poi'" [ vector_filter_layers filter=poi, vector_repair ]`,
+			);
+			expect(VPL.parse(vpl.toString()).toString()).toBe(vpl.toString());
+		});
+
+		it('should serialize vectorBranch without an else branch, and nested', () => {
+			const inner = VPL.branch().vectorBranch([VPL.branch().vectorRepair()], { expr: "kind == 'a'" });
+			const vpl = VPL.fromContainer({ filename: 'a.versatiles' }).vectorBranch([inner], { expr: '$zoom > 5' });
+			expectVpl(
+				vpl,
+				`from_container filename=a.versatiles | vector_branch expr='$zoom > 5' [ vector_branch expr="kind == 'a'" [ vector_repair ] ]`,
+			);
+		});
+
 		it('should escape double quotes in string values', () => {
 			const vpl = VPL.fromContainer({ filename: 'test.versatiles' }).metaUpdate({
 				description: 'A "quoted" value',

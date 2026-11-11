@@ -378,6 +378,10 @@ fn generate_vpl_class(out: &mut String, ops: &[OperationMeta]) {
 		generate_read_method(out, op);
 	}
 
+	if ops.iter().any(|op| op.fields.iter().any(|f| f.sources_are_branches)) {
+		generate_branch_method(out);
+	}
+
 	// Instance transform methods
 	for op in ops.iter().filter(|o| o.kind == "transform") {
 		generate_transform_method(out, op);
@@ -401,6 +405,22 @@ fn generate_vpl_class(out: &mut String, ops: &[OperationMeta]) {
 
 /// Generate a static read method on the VPL class.
 fn generate_read_method(out: &mut String, op: &OperationMeta) {
+	generate_method(out, op, true);
+}
+
+/// Generate an instance transform method on the VPL class.
+fn generate_transform_method(out: &mut String, op: &OperationMeta) {
+	generate_method(out, op, false);
+}
+
+/// Generate a method on the VPL class: `static` for a read operation, which
+/// starts a pipeline, and an instance method for a transform, which appends to
+/// one.
+///
+/// Either may take sources. For a read operation they are pipelines of their
+/// own; for a transform such as `vector_branch` they are branches, made with
+/// `VPL.branch()`.
+fn generate_method(out: &mut String, op: &OperationMeta, is_read: bool) {
 	let method_name = to_camel_case(&op.tag_name);
 	let interface_name = format!("{}Options", to_pascal_case(&op.tag_name));
 	let has_src = has_sources(op);
@@ -408,6 +428,7 @@ fn generate_read_method(out: &mut String, op: &OperationMeta) {
 	let has_opts = !fields.is_empty();
 	let all_optional = all_fields_optional(op);
 	let tag = &op.tag_name;
+	let prefix = if is_read { "static " } else { "" };
 
 	// JSDoc. Use the summary rather than slicing `doc`: a summary that wraps
 	// onto a second line would otherwise be emitted truncated mid-sentence.
@@ -423,106 +444,64 @@ fn generate_read_method(out: &mut String, op: &OperationMeta) {
 			let optional = if all_optional { "?" } else { "" };
 			writeln!(
 				out,
-				"\tstatic {method_name}(sources: VPL[], options{optional}: Omit<{interface_name}, 'sources'>): VPL {{"
+				"\t{prefix}{method_name}(sources: VPL[], options{optional}: Omit<{interface_name}, 'sources'>): VPL {{"
 			)
 			.expect("writing to string never fails");
 		}
 		(true, false) => {
-			writeln!(out, "\tstatic {method_name}(sources: VPL[]): VPL {{").expect("writing to string never fails");
+			writeln!(out, "\t{prefix}{method_name}(sources: VPL[]): VPL {{").expect("writing to string never fails");
 		}
 		(false, true) if all_optional => {
-			writeln!(out, "\tstatic {method_name}(options?: {interface_name}): VPL {{")
+			writeln!(out, "\t{prefix}{method_name}(options?: {interface_name}): VPL {{")
 				.expect("writing to string never fails");
 		}
 		(false, true) => {
-			writeln!(out, "\tstatic {method_name}(options: {interface_name}): VPL {{")
+			writeln!(out, "\t{prefix}{method_name}(options: {interface_name}): VPL {{")
 				.expect("writing to string never fails");
 		}
 		(false, false) => {
-			writeln!(out, "\tstatic {method_name}(): VPL {{").expect("writing to string never fails");
+			writeln!(out, "\t{prefix}{method_name}(): VPL {{").expect("writing to string never fails");
 		}
 	}
 
 	// Method body
-	if has_opts {
-		out.push_str("\t\tconst params: Record<string, unknown> = {};\n");
-		let use_optional_chaining = all_optional;
-		for field in &fields {
-			let camel = to_camel_case(&field.name);
-			let snake = &field.name;
-			let accessor = if use_optional_chaining { "?" } else { "" };
-			if field.is_required && !use_optional_chaining {
-				writeln!(out, "\t\tparams['{snake}'] = options.{camel};").expect("writing to string never fails");
-			} else {
-				writeln!(
-					out,
-					"\t\tif (options{accessor}.{camel} !== undefined) params['{snake}'] = options{accessor}.{camel};"
-				)
-				.expect("writing to string never fails");
-			}
+	out.push_str("\t\tconst params: Record<string, unknown> = {};\n");
+	for field in &fields {
+		let camel = to_camel_case(&field.name);
+		let snake = &field.name;
+		if field.is_required && !all_optional {
+			writeln!(out, "\t\tparams['{snake}'] = options.{camel};").expect("writing to string never fails");
+		} else {
+			let accessor = if all_optional { "?" } else { "" };
+			writeln!(
+				out,
+				"\t\tif (options{accessor}.{camel} !== undefined) params['{snake}'] = options{accessor}.{camel};"
+			)
+			.expect("writing to string never fails");
 		}
-	} else {
-		out.push_str("\t\tconst params: Record<string, unknown> = {};\n");
 	}
 
-	if has_src {
-		writeln!(out, "\t\treturn new VPL([{{ name: '{tag}', params, sources }}]);")
-			.expect("writing to string never fails");
-	} else {
-		writeln!(out, "\t\treturn new VPL([{{ name: '{tag}', params }}]);").expect("writing to string never fails");
-	}
+	let before = if is_read { "" } else { "...this.steps, " };
+	let sources = if has_src { ", sources" } else { "" };
+	writeln!(
+		out,
+		"\t\treturn new VPL([{before}{{ name: '{tag}', params{sources} }}]);"
+	)
+	.expect("writing to string never fails");
 
 	out.push_str("\t}\n\n");
 }
 
-/// Generate an instance transform method on the VPL class.
-fn generate_transform_method(out: &mut String, op: &OperationMeta) {
-	let method_name = to_camel_case(&op.tag_name);
-	let interface_name = format!("{}Options", to_pascal_case(&op.tag_name));
-	let fields = non_source_fields(op);
-	let has_opts = !fields.is_empty();
-	let all_optional = all_fields_optional(op);
-	let tag = &op.tag_name;
-
-	// JSDoc. Use the summary rather than slicing `doc`: a summary that wraps
-	// onto a second line would otherwise be emitted truncated mid-sentence.
-	if !op.summary.is_empty() {
-		writeln!(out, "\t/** {} */", op.summary.replace("*/", "* /")).expect("writing to string never fails");
-	}
-
-	// Method signature
-	if has_opts && all_optional {
-		writeln!(out, "\t{method_name}(options?: {interface_name}): VPL {{").expect("writing to string never fails");
-	} else if has_opts {
-		writeln!(out, "\t{method_name}(options: {interface_name}): VPL {{").expect("writing to string never fails");
-	} else {
-		writeln!(out, "\t{method_name}(): VPL {{").expect("writing to string never fails");
-	}
-
-	// Method body
-	if has_opts {
-		out.push_str("\t\tconst params: Record<string, unknown> = {};\n");
-		for field in &fields {
-			let camel = to_camel_case(&field.name);
-			let snake = &field.name;
-			if field.is_required && !all_optional {
-				writeln!(out, "\t\tparams['{snake}'] = options.{camel};").expect("writing to string never fails");
-			} else {
-				let accessor = if all_optional { "?" } else { "" };
-				writeln!(
-					out,
-					"\t\tif (options{accessor}.{camel} !== undefined) params['{snake}'] = options{accessor}.{camel};"
-				)
-				.expect("writing to string never fails");
-			}
-		}
-	} else {
-		out.push_str("\t\tconst params: Record<string, unknown> = {};\n");
-	}
-
-	writeln!(out, "\t\treturn new VPL([...this.steps, {{ name: '{tag}', params }}]);")
-		.expect("writing to string never fails");
-
+/// Generate `VPL.branch()`, which starts a chain of transforms with no read
+/// in front, for the operations whose sources are branches.
+fn generate_branch_method(out: &mut String) {
+	out.push_str("\t/**\n");
+	out.push_str("\t * Starts a branch: a chain of transforms with no read in front of it, for an operation\n");
+	out.push_str("\t * that runs it on its own tiles, such as `vectorBranch`. A branch is not a pipeline on\n");
+	out.push_str("\t * its own.\n");
+	out.push_str("\t */\n");
+	out.push_str("\tstatic branch(): VPL {\n");
+	out.push_str("\t\treturn new VPL([]);\n");
 	out.push_str("\t}\n\n");
 }
 
@@ -770,6 +749,19 @@ mod tests {
 
 		let filename = find_field(&all_operation_metadata(), "from_container", "filename");
 		assert_eq!(filename.default, None, "a required parameter has no default");
+	}
+
+	/// A transform whose sources are branches takes them, and `VPL.branch()`
+	/// exists to start one, since every other way in begins with a read.
+	#[test]
+	fn a_transform_with_branches_takes_them() {
+		let ts = generate_vpl_typescript();
+		assert!(ts.contains("\tstatic branch(): VPL {"), "no VPL.branch()");
+		assert!(
+			ts.contains("\tvectorBranch(sources: VPL[], options: Omit<VectorBranchOptions, 'sources'>): VPL {"),
+			"vectorBranch does not take its branches"
+		);
+		assert!(ts.contains("{ name: 'vector_branch', params, sources }"));
 	}
 
 	#[test]
