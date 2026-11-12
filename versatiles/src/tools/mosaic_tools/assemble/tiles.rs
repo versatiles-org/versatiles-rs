@@ -86,7 +86,10 @@ pub(super) fn encode_tiles_parallel(
 				.map(|(coord, mut tile)| {
 					let cfg = &config;
 					s.spawn(move || {
-						let quality = if cfg.lossless {
+						// `--lossless` is for tiles that are still translucent. Along a
+						// seam, two half tiles usually composite into an opaque one,
+						// which is as lossy as its neighbours (#319).
+						let quality = if cfg.lossless && !tile.is_opaque()? {
 							Some(100)
 						} else {
 							cfg.quality.at(&coord)
@@ -290,13 +293,63 @@ mod tests {
 			lossless: true,
 			..test_config()
 		};
-		let tiles = vec![(coord(0, 0, 0), opaque_rgb_tile())];
+		let tiles = vec![(coord(0, 0, 0), translucent_rgba_tile(128))];
 
 		let results = encode_tiles_parallel(tiles, &config);
 		assert_eq!(results.len(), 1);
 		let (c, blob) = results.into_iter().next().unwrap()?;
 		assert_eq!(c, coord(0, 0, 0));
-		assert!(!blob.is_empty());
+		assert_eq!(webp_chunk(&blob), *b"VP8L", "a translucent tile is lossless");
+		Ok(())
+	}
+
+	/// The chunk after the RIFF header: `VP8 ` is lossy, `VP8L` lossless, and
+	/// `VP8X` the extended format, which carries alpha.
+	fn webp_chunk(blob: &Blob) -> [u8; 4] {
+		blob.as_slice()[12..16].try_into().unwrap()
+	}
+
+	/// A 2×2 tile with one column opaque and the other transparent.
+	fn half_tile(left: bool) -> Tile {
+		let (a, b) = if left { (255, 0) } else { (0, 255) };
+		let data = vec![200, 100, 50, a, 50, 100, 200, b, 120, 60, 30, a, 30, 60, 120, b];
+		let img = DynamicImage::ImageRgba8(ImageBuffer::from_vec(2, 2, data).unwrap());
+		Tile::from_image(img, TileFormat::PNG).unwrap()
+	}
+
+	/// `--lossless` is for translucent tiles, and an opaque one stays lossy (#319).
+	#[test]
+	fn encode_tiles_parallel_lossless_keeps_an_opaque_tile_lossy() -> Result<()> {
+		let config = AssembleConfig {
+			lossless: true,
+			..test_config()
+		};
+		let results = encode_tiles_parallel(vec![(coord(0, 0, 0), opaque_rgb_tile())], &config);
+		let (_, blob) = results.into_iter().next().unwrap()?;
+		assert_eq!(webp_chunk(&blob), *b"VP8 ");
+		Ok(())
+	}
+
+	/// The seam between two source images: each gives half a tile, and the
+	/// two together are opaque, so the tile is as lossy as its neighbours (#319).
+	#[test]
+	fn a_seam_composited_to_opaque_is_encoded_lossy() -> Result<()> {
+		let config = AssembleConfig {
+			lossless: true,
+			..test_config()
+		};
+		let seam = composite_two_tiles(half_tile(true), half_tile(false))?;
+		let results = encode_tiles_parallel(vec![(coord(0, 0, 0), seam)], &config);
+		let (_, blob) = results.into_iter().next().unwrap()?;
+		assert_eq!(webp_chunk(&blob), *b"VP8 ");
+
+		let half = encode_tiles_parallel(vec![(coord(0, 0, 0), half_tile(true))], &config);
+		let (_, blob) = half.into_iter().next().unwrap()?;
+		assert_eq!(
+			webp_chunk(&blob),
+			*b"VP8L",
+			"a half tile is still translucent, so lossless"
+		);
 		Ok(())
 	}
 
