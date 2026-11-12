@@ -776,6 +776,42 @@ pub async fn compatible_transforms(source: &dyn TileSource) -> Vec<(OperationMet
 	out
 }
 
+/// Every transform, paired with whether it could be a step of a
+/// `vector_branch` whose tiles are those of `source`.
+///
+/// The question a node picker asks inside a branch. It answers as
+/// [`compatible_transforms`] does, and refuses besides every transform that is
+/// not per-tile, such as `vector_overzoom`, which reads tiles other than the
+/// one it makes: a branch cannot run those. The refusal has the words building
+/// the branch would fail with, and `check` reports, so a picker and the error
+/// it prevents say the same thing.
+///
+/// `source` is what arrives at the step: the tiles arriving at the branch,
+/// as the steps before it in the same branch changed them.
+#[cfg(feature = "codegen")]
+pub async fn compatible_branch_transforms(source: &dyn TileSource) -> Vec<(OperationMeta, Compatibility)> {
+	use crate::operations::{tile_transform_factories, vector::vector_branch::not_per_tile_message};
+
+	let per_tile: std::collections::HashSet<String> = tile_transform_factories()
+		.iter()
+		.map(|f| f.tag_name().to_string())
+		.collect();
+	compatible_transforms(source)
+		.await
+		.into_iter()
+		.map(|(meta, verdict)| {
+			// A transform that isn't per-tile can never run in a branch, whatever
+			// the tiles; that reason comes first.
+			let verdict = if per_tile.contains(&meta.tag_name) {
+				verdict
+			} else {
+				Compatibility::Wrong(not_per_tile_message(&meta.tag_name))
+			};
+			(meta, verdict)
+		})
+		.collect()
+}
+
 #[cfg(test)]
 mod tests {
 	use std::{path::Path, sync::Arc};
@@ -1243,6 +1279,47 @@ mod tests {
 		}
 		assert!(pairs.iter().any(|(_, c)| c.fits()));
 		assert!(pairs.iter().any(|(_, c)| !c.fits()));
+	}
+
+	/// Inside a branch, a picker offers the per-tile transforms that fit the
+	/// tiles, and says of the rest what building the branch would say.
+	#[cfg(feature = "codegen")]
+	#[tokio::test]
+	async fn compatible_branch_transforms_refuse_what_a_branch_cannot_run() {
+		use crate::operations::vector::vector_branch::not_per_tile_message;
+
+		let source = vector_source();
+		let anywhere = compatible_transforms(&*source).await;
+		let in_branch = compatible_branch_transforms(&*source).await;
+		assert_eq!(in_branch.len(), anywhere.len());
+
+		let verdict = |name: &str| {
+			in_branch
+				.iter()
+				.find(|(meta, _)| meta.tag_name == name)
+				.map(|(_, verdict)| verdict.clone())
+				.unwrap()
+		};
+		assert_eq!(
+			verdict("vector_overzoom"),
+			Compatibility::Wrong(not_per_tile_message("vector_overzoom"))
+		);
+		assert!(verdict("vector_filter_features").fits());
+		assert!(
+			!verdict("raster_flatten").fits(),
+			"raster transforms still don't fit vector tiles"
+		);
+
+		// A per-tile transform gets the verdict it gets outside a branch.
+		let per_tile: Vec<String> = crate::operations::tile_transform_factories()
+			.iter()
+			.map(|f| f.tag_name().to_string())
+			.collect();
+		for ((meta, inside), (_, outside)) in in_branch.iter().zip(&anywhere) {
+			if per_tile.contains(&meta.tag_name) {
+				assert_eq!(inside, outside, "{}", meta.tag_name);
+			}
+		}
 	}
 
 	#[test]

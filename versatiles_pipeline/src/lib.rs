@@ -39,7 +39,7 @@ pub use factory::{
 	require_tile_type,
 };
 #[cfg(feature = "codegen")]
-pub use factory::{OperationMeta, all_operation_metadata, compatible_transforms};
+pub use factory::{OperationMeta, all_operation_metadata, compatible_branch_transforms, compatible_transforms};
 pub use helpers::{
 	CsvReader, PipelineReader,
 	quality::{QualityByZoom, QualityMap, TileQuality},
