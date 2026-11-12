@@ -8,7 +8,7 @@ use versatiles_geometry::vector_tile::VectorTile;
 
 use crate::{
 	PipelineFactory,
-	helpers::feature_expr::{CelExpression, ExprScope, FeatureExpr},
+	helpers::feature_expr::{CelExpression, ExpressionScope, FeatureExpr},
 	operations::{removed::refuse_removed_parameters, transform::TileTransform},
 	vpl::VPLNode,
 };
@@ -235,7 +235,7 @@ impl TileTransform for Runner {
 	fn run(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
 		// An expression reading at most `$zoom` has one answer for the whole tile, and it can be
 		// had without looking inside.
-		if self.expr.scope() == ExprScope::Tile && self.expr.evaluate_tile(coord) {
+		if self.expr.scope() == ExpressionScope::Tile && self.expr.evaluate_tile(coord) {
 			// Every feature is kept, so there is nothing to rewrite. Hand back the original bytes.
 			//
 			// The `false` case is not symmetrical: dropping the in-scope layers means knowing
@@ -259,7 +259,7 @@ impl Runner {
 		// Still worth asking: a zoom-only expression that answered `false` reaches here, and then
 		// every in-scope layer goes rather than being walked feature by feature.
 		let scope = self.expr.scope();
-		let same_for_the_tile = (scope == ExprScope::Tile).then(|| self.expr.evaluate_tile(coord));
+		let same_for_the_tile = (scope == ExpressionScope::Tile).then(|| self.expr.evaluate_tile(coord));
 
 		// Not `retain_mut`: filtering can fail, and a closure returning `bool` has nowhere to put
 		// the error but the floor. A tile whose properties do not decode is reported and dropped
@@ -272,7 +272,7 @@ impl Runner {
 			}
 			// An expression reading `$layer` but no property has one answer per layer.
 			let same_for_the_layer = same_for_the_tile
-				.or_else(|| (scope == ExprScope::Layer).then(|| self.expr.evaluate_layer(coord, &layer.name)));
+				.or_else(|| (scope == ExpressionScope::Layer).then(|| self.expr.evaluate_layer(coord, &layer.name)));
 			match same_for_the_layer {
 				Some(true) => kept.push(layer),
 				Some(false) => (),
@@ -417,8 +417,25 @@ mod tests {
 
 	#[test]
 	fn test_expr_compile_error_on_err_path_includes_location() {
-		// Unknown / unsupported token — cel-parser returns ParseErrors with line/column info
+		// A token where none can follow — cel-parser returns ParseErrors with line/column info
 		// rather than panicking. The error should surface that location report to the user.
+		let err = CelExpression::try_from("foo bar").unwrap_err();
+		assert_eq!(
+			err.to_string().split('\n').collect::<Vec<_>>(),
+			[
+				"Failed to compile CEL expression:",
+				"  foo bar",
+				"",
+				"ERROR: <input>:1:5: Syntax error: extraneous input 'bar' expecting <EOF>",
+				"| foo bar",
+				"| ....^",
+			]
+		);
+	}
+
+	#[test]
+	fn test_expr_compile_error_for_a_character_no_expression_has() {
+		// Refused before parsing, since the parser can panic on it (`kind == @`).
 		let err = CelExpression::try_from("foo @@").unwrap_err();
 		assert_eq!(
 			err.to_string().split('\n').collect::<Vec<_>>(),
@@ -426,12 +443,9 @@ mod tests {
 				"Failed to compile CEL expression:",
 				"  foo @@",
 				"",
-				"ERROR: <input>:1:5: Syntax error: token recognition error at: '@'",
+				"ERROR: <input>:1:5: Syntax error: `@` cannot appear in an expression",
 				"| foo @@",
 				"| ....^",
-				"ERROR: <input>:1:6: Syntax error: token recognition error at: '@'",
-				"| foo @@",
-				"| .....^",
 			]
 		);
 	}

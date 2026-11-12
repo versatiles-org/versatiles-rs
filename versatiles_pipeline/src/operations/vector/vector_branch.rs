@@ -9,7 +9,7 @@ use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
 use crate::{
 	PipelineFactory, build_error,
-	helpers::feature_expr::{CelExpression, ExprScope, FeatureExpr},
+	helpers::feature_expr::{CelExpression, ExpressionScope, FeatureExpr},
 	operations::transform::{DynTileTransform, TileTransform},
 	vpl::{VPLNode, VPLPipeline},
 };
@@ -285,7 +285,7 @@ impl Operation {
 	/// numbered belongs to an enclosing `vector_branch`, whose numbers are kept so
 	/// that it can restore the order of the whole layer.
 	fn split(&self, coord: &TileCoord, tile: VectorTile) -> Result<(VectorTile, VectorTile, Split)> {
-		let by_layer = self.expr.scope() == ExprScope::Layer;
+		let by_layer = self.expr.scope() == ExpressionScope::Layer;
 		let mut chosen_layers = Vec::new();
 		let mut other_layers = Vec::new();
 		let mut split = Split::default();
@@ -410,7 +410,7 @@ impl TileTransform for Operation {
 	#[context("Failed to run vector_branch")]
 	fn run(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
 		// One answer for the whole tile: it goes to one branch as it arrived.
-		if self.expr.scope() == ExprScope::Tile {
+		if self.expr.scope() == ExpressionScope::Tile {
 			let branch = if self.expr.evaluate_tile(coord) {
 				&self.then
 			} else {

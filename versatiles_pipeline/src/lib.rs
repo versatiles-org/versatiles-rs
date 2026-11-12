@@ -16,6 +16,10 @@
 //! [`CsvReader`] is exported too: it is the reader `from_csv` uses, so a consumer that
 //! needs to inspect a CSV before building a pipeline sees exactly what the pipeline will.
 //!
+//! An editor for the expressions of `vector_branch` and `vector_filter_features` asks
+//! [`check_expression`]: what is wrong and where, the tokens to highlight, and what a compiling
+//! expression reads. [`expression_names`] lists the `$` names to offer as completions.
+//!
 //! The operation factory traits — [`OperationFactoryTrait`], [`ReadOperationFactoryTrait`]
 //! and [`TransformOperationFactoryTrait`] — are public so a consumer can ask an operation
 //! about itself: its docs, its parameters, and via
@@ -42,7 +46,9 @@ pub use factory::{
 pub use factory::{OperationMeta, all_operation_metadata, compatible_branch_transforms, compatible_transforms};
 pub use helpers::{
 	CsvReader, PipelineReader,
-	feature_expr::expression_names,
+	expression_check::{ExpressionCheck, check_expression},
+	expression_tokens::{ExpressionToken, ExpressionTokenKind},
+	feature_expr::{ExpressionProblem, ExpressionReads, ExpressionScope, expression_names},
 	quality::{QualityByZoom, QualityMap, TileQuality},
 	register_pipeline_readers,
 };
