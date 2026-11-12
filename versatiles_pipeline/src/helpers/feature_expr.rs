@@ -221,19 +221,19 @@ fn ensure_cel_nesting_is_bounded(expr: &str) -> Result<()> {
 /// read the zoom level without saying so.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Special {
-	/// `$zoom`: the zoom level of the tile.
+	/// `$zoom`. See [`Special::doc`] for each name's meaning.
 	Zoom,
-	/// `$x`: the column of the tile.
+	/// `$x`.
 	X,
-	/// `$y`: the row of the tile.
+	/// `$y`.
 	Y,
-	/// `$layer`: the name of the feature's layer.
+	/// `$layer`.
 	Layer,
-	/// `$type`: the feature's geometry type, `'Point'`, `'LineString'` or `'Polygon'`.
+	/// `$type`.
 	Type,
-	/// `$id`: the feature's id, or `null`.
+	/// `$id`.
 	Id,
-	/// `$props`: all of the feature's properties, as a map.
+	/// `$props`.
 	Props,
 }
 
@@ -248,16 +248,34 @@ impl Special {
 		Special::Props,
 	];
 
+	/// The name as written, `$` included.
+	const fn written(self) -> &'static str {
+		match self {
+			Special::Zoom => "$zoom",
+			Special::X => "$x",
+			Special::Y => "$y",
+			Special::Layer => "$layer",
+			Special::Type => "$type",
+			Special::Id => "$id",
+			Special::Props => "$props",
+		}
+	}
+
 	/// The name as written after the `$`.
 	fn name(self) -> &'static str {
+		&self.written()[1..]
+	}
+
+	/// What the name's value is, in one sentence, for an editor to show.
+	const fn doc(self) -> &'static str {
 		match self {
-			Special::Zoom => "zoom",
-			Special::X => "x",
-			Special::Y => "y",
-			Special::Layer => "layer",
-			Special::Type => "type",
-			Special::Id => "id",
-			Special::Props => "props",
+			Special::Zoom => "The zoom level of the tile.",
+			Special::X => "The column of the tile.",
+			Special::Y => "The row of the tile.",
+			Special::Layer => "The name of the feature's layer.",
+			Special::Type => "The feature's geometry type: 'Point', 'LineString' or 'Polygon', as in MapLibre.",
+			Special::Id => "The feature's id, or null if it has none.",
+			Special::Props => "All of the feature's properties, as a map: $props.name is the same as name.",
 		}
 	}
 
@@ -300,6 +318,30 @@ impl Special {
 		let (last, rest) = names.split_last().expect("there are special names");
 		format!("{} and {last}", rest.join(", "))
 	}
+}
+
+/// Every `$` name with its doc, in [`Special::ALL`]'s order: the table
+/// [`expression_names`] hands out, built from the one the parser reads.
+const EXPRESSION_NAMES: [(&str, &str); Special::ALL.len()] = {
+	let mut names = [("", ""); Special::ALL.len()];
+	let mut index = 0;
+	while index < names.len() {
+		names[index] = (Special::ALL[index].written(), Special::ALL[index].doc());
+		index += 1;
+	}
+	names
+};
+
+/// Every name a feature expression can read besides a feature's own
+/// properties, `$` included, with what its value is.
+///
+/// For an editor offering the names as completions: these are the names that
+/// compile, because the parser reads the same table, so a name added or
+/// renamed here reaches the editor without a copy to update. The names are
+/// those of `vector_branch expr=` and `vector_filter_features expr=`.
+#[must_use]
+pub fn expression_names() -> &'static [(&'static str, &'static str)] {
+	&EXPRESSION_NAMES
 }
 
 /// The bare words that meant `$zoom` and `$props` before the `$` was required.
@@ -686,6 +728,18 @@ fn geo_to_cel(v: &GeoValue) -> CelValue {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// What an editor offers is what compiles: every listed name is read by
+	/// an expression, and they are listed in the order of the table.
+	#[test]
+	fn every_listed_name_compiles() {
+		let names: Vec<&str> = expression_names().iter().map(|(name, _)| *name).collect();
+		assert_eq!(names, ["$zoom", "$x", "$y", "$layer", "$type", "$id", "$props"]);
+		for (name, doc) in expression_names() {
+			FeatureExpr::new(&format!("{name} != null")).unwrap_or_else(|e| panic!("{name}: {e:#}"));
+			assert!(doc.ends_with('.') && !doc.is_empty(), "{name}: {doc:?}");
+		}
+	}
 
 	#[test]
 	fn is_num_is_only_registered_when_referenced() {

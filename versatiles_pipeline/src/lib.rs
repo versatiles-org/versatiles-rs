@@ -42,6 +42,7 @@ pub use factory::{
 pub use factory::{OperationMeta, all_operation_metadata, compatible_branch_transforms, compatible_transforms};
 pub use helpers::{
 	CsvReader, PipelineReader,
+	feature_expr::expression_names,
 	quality::{QualityByZoom, QualityMap, TileQuality},
 	register_pipeline_readers,
 };
