@@ -62,6 +62,7 @@ impl ExpressionTokenKind {
 /// `start` and `end` count characters (Unicode scalar values) of the text as
 /// written, `end` exclusive, so a `$` name counts with its `$`.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ExpressionToken {
 	/// What the token is.
 	pub kind: ExpressionTokenKind,

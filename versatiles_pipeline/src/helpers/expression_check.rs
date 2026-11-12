@@ -7,6 +7,7 @@ use super::{
 
 /// What [`check_expression`] finds in an expression.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ExpressionCheck {
 	/// What is wrong with it, each with where. Empty when it compiles.
 	pub problems: Vec<ExpressionProblem>,

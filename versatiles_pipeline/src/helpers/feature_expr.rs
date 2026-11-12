@@ -57,6 +57,7 @@ impl TryFrom<&str> for CelExpression {
 /// written, `end` exclusive, so a `$` name counts with its `$`, as the tokens
 /// of [`check_expression`](crate::check_expression) do.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ExpressionProblem {
 	/// What is wrong, without the expression or the position.
 	pub message: String,
@@ -704,6 +705,7 @@ pub enum ExpressionScope {
 /// What a compiled expression reads, and so how much of a tile its answer
 /// depends on.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ExpressionReads {
 	/// The `$` names it reads, `$` included, in the order of [`expression_names`].
 	pub names: Vec<&'static str>,
