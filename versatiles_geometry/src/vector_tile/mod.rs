@@ -21,6 +21,7 @@
 mod feature;
 mod geometry_type;
 mod layer;
+mod lon_lat;
 #[cfg(feature = "mlt")]
 mod mlt;
 mod property_manager;

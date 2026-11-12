@@ -5,11 +5,13 @@
 //! from this crate's root); helpers in [`crate::ext`] provide projection, GeoJSON
 //! output, and validation over those primitives.
 
+mod clip;
 mod collection;
 mod feature;
 mod properties;
 mod value;
 
+pub use clip::clip_to_bbox;
 pub use collection::*;
 pub use feature::*;
 pub use properties::*;
