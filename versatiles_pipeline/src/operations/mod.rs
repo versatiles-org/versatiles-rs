@@ -12,7 +12,7 @@ mod raster;
 mod read;
 pub(crate) mod removed;
 pub(crate) mod transform;
-mod vector;
+pub(crate) mod vector;
 
 pub use dem::named_ramps;
 

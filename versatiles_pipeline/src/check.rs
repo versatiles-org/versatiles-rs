@@ -16,16 +16,27 @@
 //! that is merely the wrong *format* for an unenumerated type — `color=red` is
 //! not hex — still needs building.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
 	PipelineFactory,
-	operations::{read_operation_factories, removed::removed_parameter_message, transform_operation_factories},
+	operations::{
+		read_operation_factories, removed::removed_parameter_message, tile_transform_factories,
+		transform_operation_factories, vector::vector_branch::not_per_tile_message,
+	},
 	vpl::{VPLFieldMeta, VPLNode, VPLPipeline},
 };
 
 /// Parameter metadata for every operation of one kind, by name.
 type Registry = HashMap<String, Vec<VPLFieldMeta>>;
+
+/// What `check` knows about the operations: their parameters, and which
+/// transforms are per-tile, which are the ones a branch can run.
+struct Registries {
+	read: Registry,
+	transform: Registry,
+	per_tile: HashSet<String>,
+}
 
 /// Checks a pipeline against the built-in operations without building it.
 ///
@@ -34,21 +45,27 @@ type Registry = HashMap<String, Vec<VPLFieldMeta>>;
 /// and no reader callback, so it cannot perform I/O even by accident.
 #[must_use]
 pub fn check_pipeline(pipeline: &VPLPipeline) -> Vec<VplProblem> {
-	let read = read_operation_factories()
-		.iter()
-		.map(|f| (f.tag_name().to_string(), f.field_metadata()))
-		.collect::<Registry>();
-	let transform = transform_operation_factories()
-		.iter()
-		.map(|f| (f.tag_name().to_string(), f.field_metadata()))
-		.collect::<Registry>();
+	let registries = Registries {
+		read: read_operation_factories()
+			.iter()
+			.map(|f| (f.tag_name().to_string(), f.field_metadata()))
+			.collect(),
+		transform: transform_operation_factories()
+			.iter()
+			.map(|f| (f.tag_name().to_string(), f.field_metadata()))
+			.collect(),
+		per_tile: tile_transform_factories()
+			.iter()
+			.map(|f| f.tag_name().to_string())
+			.collect(),
+	};
 
-	check_against(pipeline, &read, &transform)
+	check_against(pipeline, &registries)
 }
 
-fn check_against(pipeline: &VPLPipeline, read: &Registry, transform: &Registry) -> Vec<VplProblem> {
+fn check_against(pipeline: &VPLPipeline, registries: &Registries) -> Vec<VplProblem> {
 	let mut problems = Vec::new();
-	check_pipeline_at(pipeline, false, read, transform, &mut Vec::new(), &mut problems);
+	check_pipeline_at(pipeline, false, registries, &mut Vec::new(), &mut problems);
 	problems
 }
 
@@ -118,15 +135,19 @@ impl PipelineFactory {
 	/// hand and the built-in operations are enough.
 	#[must_use]
 	pub fn check(&self, pipeline: &VPLPipeline) -> Vec<VplProblem> {
-		check_against(pipeline, &self.read_registry(), &self.transform_registry())
+		let registries = Registries {
+			read: self.read_registry(),
+			transform: self.transform_registry(),
+			per_tile: self.per_tile_names(),
+		};
+		check_against(pipeline, &registries)
 	}
 }
 
 fn check_pipeline_at(
 	pipeline: &VPLPipeline,
 	is_branch: bool,
-	read: &Registry,
-	transform: &Registry,
+	registries: &Registries,
 	path: &mut Vec<usize>,
 	problems: &mut Vec<VplProblem>,
 ) {
@@ -139,31 +160,48 @@ fn check_pipeline_at(
 		path.push(index);
 		// The head reads; everything after it transforms. A branch has no head: it starts from
 		// the input of the operation it belongs to, so every node of it transforms.
-		check_node(
-			node,
-			index == 0 && !is_branch,
-			index == 0 && is_branch,
-			read,
-			transform,
-			path,
-			problems,
-		);
+		let position = match (is_branch, index) {
+			(false, 0) => Position::Head,
+			(false, _) => Position::Pipeline,
+			(true, 0) => Position::BranchStart,
+			(true, _) => Position::Branch,
+		};
+		check_node(node, position, registries, path, problems);
 		path.pop();
 	}
 }
 
+/// Where a node stands, which decides what kind of operation it may be.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Position {
+	/// The first node of a pipeline, which reads.
+	Head,
+	/// Any later node of a pipeline, which transforms.
+	Pipeline,
+	/// The first node of a branch, which transforms the tiles arriving at the branch.
+	BranchStart,
+	/// Any later node of a branch.
+	Branch,
+}
+
 fn check_node(
 	node: &VPLNode,
-	is_head: bool,
-	starts_branch: bool,
-	read: &Registry,
-	transform: &Registry,
+	position: Position,
+	registries: &Registries,
 	path: &mut Vec<usize>,
 	problems: &mut Vec<VplProblem>,
 ) {
+	let Registries {
+		read,
+		transform,
+		per_tile,
+	} = registries;
 	let name = node.name.as_str();
 	let is_read = read.contains_key(name);
 	let is_transform = transform.contains_key(name);
+	let is_head = position == Position::Head;
+	let starts_branch = position == Position::BranchStart;
+	let in_branch = matches!(position, Position::BranchStart | Position::Branch);
 
 	// Position first: an operation used in the wrong place is a different
 	// mistake from one that does not exist, and saying so is more useful than
@@ -197,6 +235,12 @@ fn check_node(
 		}
 	};
 
+	// A branch runs its steps tile by tile, so a transform that reads other
+	// tiles than the one it makes cannot be one of them.
+	if in_branch && is_transform && !per_tile.contains(name) {
+		problems.push(VplProblem::new(path, not_per_tile_message(name)));
+	}
+
 	if let Some(fields) = fields {
 		check_properties(node, fields, path, problems);
 		check_sources(node, fields, path, problems);
@@ -207,7 +251,7 @@ fn check_node(
 	let are_branches = fields.is_some_and(|fields| fields.iter().any(|f| f.is_sources && f.sources_are_branches));
 	for (source_index, source) in node.sources.iter().enumerate() {
 		path.push(source_index);
-		check_pipeline_at(source, are_branches, read, transform, path, problems);
+		check_pipeline_at(source, are_branches, registries, path, problems);
 		path.pop();
 	}
 }
@@ -300,6 +344,7 @@ fn check_sources(node: &VPLNode, fields: &[VPLFieldMeta], path: &[usize], proble
 mod tests {
 	use anyhow::Result;
 
+	use super::{check_pipeline, not_per_tile_message};
 	use crate::{PipelineFactory, vpl::parse_vpl};
 
 	fn problems(vpl: &str) -> Vec<String> {
@@ -324,6 +369,48 @@ mod tests {
 			[
 				"'from_debug' is a read operation, but a branch starts from the tiles of the operation it belongs to, so it begins with a transform"
 			]
+		);
+	}
+
+	/// A branch runs its steps tile by tile, which an operation that reads
+	/// other tiles cannot do. Building refuses it; `check` has to say so too,
+	/// wherever in the branch it stands, and with the same words.
+	#[test]
+	fn a_branch_runs_only_per_tile_operations() {
+		let message = not_per_tile_message("vector_overzoom");
+		for vpl in [
+			r#"from_debug format=mvt | vector_branch expr="$zoom > 1" [ vector_overzoom ]"#,
+			r#"from_debug format=mvt | vector_branch expr="$zoom > 1" [ vector_repair | vector_overzoom ]"#,
+			r#"from_debug format=mvt | vector_branch expr="$zoom > 1" [ vector_repair, vector_overzoom ]"#,
+		] {
+			assert_eq!(problems(vpl), std::slice::from_ref(&message), "{vpl}");
+			assert_eq!(
+				check_pipeline(&parse_vpl(vpl).unwrap())
+					.into_iter()
+					.map(|p| p.message)
+					.collect::<Vec<_>>(),
+				std::slice::from_ref(&message),
+				"check_pipeline: {vpl}"
+			);
+		}
+		// Outside a branch it is an ordinary transform.
+		assert_eq!(
+			problems("from_debug format=mvt | vector_overzoom"),
+			Vec::<String>::new()
+		);
+	}
+
+	/// What `check` refuses is what building refuses, so the two cannot drift.
+	#[tokio::test]
+	async fn check_and_build_agree_on_what_a_branch_runs() {
+		let factory = PipelineFactory::new_dummy();
+		let vpl = r#"from_debug format=mvt | vector_branch expr="$zoom > 1" [ vector_overzoom ]"#;
+		let Err(error) = factory.operation_from_vpl(vpl).await else {
+			panic!("building should refuse {vpl}");
+		};
+		assert!(
+			format!("{error:#}").contains(&not_per_tile_message("vector_overzoom")),
+			"{error:#}"
 		);
 	}
 

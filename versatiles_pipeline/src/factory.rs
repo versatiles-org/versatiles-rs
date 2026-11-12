@@ -411,6 +411,12 @@ impl PipelineFactory {
 			.collect()
 	}
 
+	/// The names of the transform operations that are per-tile, which are the
+	/// ones a branch can run.
+	pub(crate) fn per_tile_names(&self) -> std::collections::HashSet<String> {
+		self.tile_ops.keys().cloned().collect()
+	}
+
 	/// Parameter metadata for every registered transform operation, by name.
 	pub(crate) fn transform_registry(&self) -> std::collections::HashMap<String, Vec<crate::vpl::VPLFieldMeta>> {
 		self

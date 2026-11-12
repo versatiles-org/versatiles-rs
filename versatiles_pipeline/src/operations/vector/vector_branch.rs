@@ -147,13 +147,20 @@ impl Described {
 			!factory.has_read_operation(&name),
 			"'{name}' is a read operation, but a branch starts from the tiles arriving at `vector_branch`, so it begins with a transform"
 		);
-		factory.tile_transform_from_node(node, input).await?.ok_or_else(|| {
-			anyhow!(
-				"'{name}' cannot run inside `vector_branch`: it reads tiles other than the one it makes. \
-				 Put it before or after the branch."
-			)
-		})
+		factory
+			.tile_transform_from_node(node, input)
+			.await?
+			.ok_or_else(|| anyhow!(not_per_tile_message(&name)))
 	}
+}
+
+/// Why `name`, a transform that is not per-tile, cannot be a step of a branch.
+/// One text for building and for `check`, which says it without building.
+pub(crate) fn not_per_tile_message(name: &str) -> String {
+	format!(
+		"'{name}' cannot run inside `vector_branch`: it reads tiles other than the one it makes. \
+		 Put it before or after the branch."
+	)
 }
 
 /// What a step of a branch is built for: the tiles arriving at the branch, as
