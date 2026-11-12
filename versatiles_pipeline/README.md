@@ -614,6 +614,8 @@ Set `force_reencode=true` to re-encode those tiles as well, e.g. to shrink an ex
 
 `quality` and `quality_translucent` take a zoom-dependent list as well as a single number. In `quality="70,14:50,15:20"` the first value is the default and each `zoom:value` pair applies from that zoom level upwards — so zoom 0 to 13 use 70, zoom 14 uses 50, and zoom 15 and above use 20. A value without a zoom applies to the zoom after the previous one: `"70,50"` is 70 at zoom 0 and 50 from zoom 1 upwards. `quality` is ignored for PNG, which is always lossless.
 
+In place of a number, a zoom level can take a range that a quality map chooses from: with `quality="70,16:30-50" quality_map="quality.png"`, zoom 16 and above use 30 where the map is black, 50 where it is white, and an interpolated quality in between. The map is an 8-bit grayscale PNG covering the Web Mercator world, square, with a power of two as its side, so that a pixel is a tile: in a map of 16384 pixels, a tile at zoom 14. A finer tile takes the pixel it lies in. A coarser tile covers several pixels and takes the highest quality any of them gives, so a tile with one white pixel in it is encoded as if it were all white. A plain number ignores the map.
+
 For elevation tiles (tile schema `dem/…`), `quality` defaults to `100`: their channels are heights, and a lossy encoder would change them. `avif` and `jpg` have no lossless encoding, so converting elevation tiles into one of them needs a `quality` for every zoom level.
 
 At a zoom level its list does not name, `quality_translucent` falls back to `quality`. `quality_translucent` is typically `100`: lossy encoders handle an alpha channel badly. Setting it makes every tile that is encoded be checked for opacity.
@@ -625,6 +627,7 @@ With `lossless_if_smaller=true`, each tile that is encoded is encoded twice, los
 - _`format`: RasterTileFormat (optional)_ - Values: `avif`, `jpg`, `png`, `webp`. Format to encode the tiles into. Defaults to the source's.
 - _`quality`: u8 | zoom:u8,... (optional)_ - Encoder quality, `0` (worst) to `100` (lossless). Defaults to the encoder's own.
 - _`quality_translucent`: u8 | zoom:u8,... (optional)_ - Encoder quality for tiles with translucent pixels. Defaults to using `quality` throughout.
+- _`quality_map`: path or URL (optional)_ - Grayscale PNG that chooses a value within each quality range. Defaults to none.
 - _`effort`: 0-100 (optional)_ - Encoder effort, `0` is fastest and `100` smallest. Defaults to the encoder's own.
 - _`force_reencode`: bool (optional)_ - Whether to re-encode tiles that are already encoded in the target format. Defaults to `false`.
 - _`lossless_if_smaller`: bool (optional)_ - Whether to also encode each tile lossless and keep the smaller of the two. Defaults to `false`.

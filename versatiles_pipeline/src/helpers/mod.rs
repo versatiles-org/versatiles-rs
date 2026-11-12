@@ -11,6 +11,7 @@ pub mod location;
 pub mod overview;
 pub mod overview_cache;
 mod pipeline_reader;
+pub mod quality;
 pub mod separator;
 #[cfg(test)]
 pub mod test_server;

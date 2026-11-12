@@ -1,4 +1,4 @@
-use std::str;
+use std::{str, sync::Arc};
 
 use anyhow::{Result, ensure};
 use versatiles_container::{Tile, TileSource, TileSourceMetadata};
@@ -7,7 +7,14 @@ use versatiles_derive::context;
 use versatiles_image::DynamicImageTraitConvert;
 
 use crate::{
-	PipelineFactory, helpers::tile_format_subset::RasterTileFormat, operations::transform::TileTransform, vpl::VPLNode,
+	PipelineFactory,
+	helpers::{
+		location::FileLocation,
+		quality::{QualityByZoom, QualityMap, TileQuality},
+		tile_format_subset::RasterTileFormat,
+	},
+	operations::transform::TileTransform,
+	vpl::VPLNode,
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -31,6 +38,16 @@ use crate::{
 /// without a zoom applies to the zoom after the previous one: `"70,50"` is 70
 /// at zoom 0 and 50 from zoom 1 upwards. `quality` is ignored for PNG, which is
 /// always lossless.
+///
+/// In place of a number, a zoom level can take a range that a quality map
+/// chooses from: with `quality="70,16:30-50" quality_map="quality.png"`, zoom
+/// 16 and above use 30 where the map is black, 50 where it is white, and an
+/// interpolated quality in between. The map is an 8-bit grayscale PNG covering
+/// the Web Mercator world, square, with a power of two as its side, so that a
+/// pixel is a tile: in a map of 16384 pixels, a tile at zoom 14. A finer tile
+/// takes the pixel it lies in. A coarser tile covers several pixels and takes
+/// the highest quality any of them gives, so a tile with one white pixel in it
+/// is encoded as if it were all white. A plain number ignores the map.
 ///
 /// For elevation tiles (tile schema `dem/…`), `quality` defaults to `100`:
 /// their channels are heights, and a lossy encoder would change them. `avif`
@@ -59,6 +76,9 @@ struct Args {
 	quality: Option<QualityByZoom>,
 	/// Encoder quality for tiles with translucent pixels. Defaults to using `quality` throughout.
 	quality_translucent: Option<QualityByZoom>,
+	/// Grayscale PNG that chooses a value within each quality range. Defaults to none.
+	#[vpl(accepts = "png")]
+	quality_map: Option<FileLocation>,
 	/// Encoder effort, `0` is fastest and `100` smallest. Defaults to the encoder's own.
 	effort: Option<Effort>,
 	/// Whether to re-encode tiles that are already encoded in the target format. Defaults to `false`.
@@ -72,8 +92,8 @@ struct Args {
 #[derive(Debug)]
 struct Operation {
 	format: TileFormat,
-	quality: [Option<u8>; 32],
-	quality_translucent: Option<[Option<u8>; 32]>,
+	quality: TileQuality,
+	quality_translucent: Option<TileQuality>,
 	effort: Option<u8>,
 	force_reencode: bool,
 	lossless_if_smaller: bool,
@@ -86,7 +106,7 @@ impl Operation {
 	async fn build_transform(
 		vpl_node: VPLNode,
 		source: &dyn TileSource,
-		_factory: &PipelineFactory,
+		factory: &PipelineFactory,
 	) -> Result<Operation> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
@@ -101,11 +121,32 @@ impl Operation {
 		// Parsed already: `QualityByZoom` is what `Args` decodes into, so a bad
 		// zoom list fails in `from_vpl_node` — and in `check`, which asks the
 		// same parser without building anything.
+		let quality = args.quality.unwrap_or_default();
+		let uses_map = quality.uses_map() || args.quality_translucent.is_some_and(|qt| qt.uses_map());
+		// A map nothing reads is a pipeline that does not do what it says.
+		let map = match &args.quality_map {
+			None => None,
+			Some(location) => {
+				ensure!(
+					uses_map,
+					"quality_map is read only by a quality range such as '16:30-50', \
+					 and neither quality nor quality_translucent has one"
+				);
+				let png = location.read_all(factory).await?;
+				let map =
+					QualityMap::from_png(png.as_slice()).with_context(|| format!("reading the quality map {location}"))?;
+				Some(Arc::new(map))
+			}
+		};
+		let with_map = |levels: QualityByZoom| {
+			TileQuality::new(levels, map.clone()).context("give the map with quality_map=\"….png\"")
+		};
+
 		let schema = source.tilejson().tile_schema.as_ref();
 		let operation = Operation {
 			format: format.into(),
-			quality: args.quality.unwrap_or_default().into_levels(),
-			quality_translucent: args.quality_translucent.map(QualityByZoom::into_levels),
+			quality: with_map(quality)?,
+			quality_translucent: args.quality_translucent.map(with_map).transpose()?,
 			effort: args.effort.map(Effort::get),
 			force_reencode: args.force_reencode.unwrap_or(false),
 			lossless_if_smaller: args.lossless_if_smaller.unwrap_or(false),
@@ -129,7 +170,7 @@ impl Operation {
 		// the encoder says so only at the first tile, from inside a stream.
 		// Said here, it is an error of the pipeline and names the remedy.
 		if !operation.format.can_be_lossless() {
-			let asks_for_lossless = |levels: &[Option<u8>; 32]| levels.contains(&Some(100));
+			let asks_for_lossless = |quality: &TileQuality| quality.levels().can_give(100);
 			ensure!(
 				!asks_for_lossless(&operation.quality)
 					&& !operation.quality_translucent.as_ref().is_some_and(asks_for_lossless),
@@ -141,7 +182,7 @@ impl Operation {
 			// are passed on as they are.
 			let changes_format = operation.format != *source.metadata().tile_format();
 			ensure!(
-				!(operation.elevation && changes_format && operation.quality.contains(&None)),
+				!(operation.elevation && changes_format && !operation.quality.levels().is_set_at_every_level()),
 				"cannot encode elevation tiles ('{}') as '{}' without loss: '{}' has no lossless encoding. \
 				 Use format=webp or format=png, or give a quality below 100 for every zoom level \
 				 to accept that the heights change",
@@ -173,18 +214,17 @@ impl TileTransform for Operation {
 			return Ok(Some(tile));
 		}
 
-		let level = coord.level as usize;
 		// Heights are not something to shave bits off by default: a lossy
 		// encoder changes the low byte of a channel, which here is a height
 		// off by hundreds of steps, or by far more where a byte carries over.
 		// Whoever wants that has to ask for it with `quality`.
-		let quality = self.quality[level].or(self.elevation.then_some(100));
+		let quality = self.quality.at(coord).or(self.elevation.then_some(100));
 		// A zoom list for translucent tiles need not start at level 0. Below its
 		// first entry there is no value, and "no value" has to mean "as for
 		// any other tile": it used to mean the encoder's own default, whatever
 		// `quality` said, and whatever the tiles held.
-		let effective_quality = match self.quality_translucent {
-			Some(qt) if !tile.is_opaque()? => qt[level].or(quality),
+		let effective_quality = match &self.quality_translucent {
+			Some(qt) if !tile.is_opaque()? => qt.at(coord).or(quality),
 			_ => quality,
 		};
 		if self.lossless_if_smaller && effective_quality.is_none_or(|q| q < 100) {
@@ -228,66 +268,9 @@ impl Operation {
 bounded_number! {
 	/// How hard an encoder should work, from `0` (fastest) to `100` (smallest).
 	///
-	/// The same range `quality` enforces below, and for the same encoders — it
+	/// The same range `quality` enforces, and for the same encoders — it
 	/// was documented here and enforced nowhere until it had a type (#260).
 	Effort: u8, 0..=100;
-}
-
-/// An encoder quality setting resolved per zoom level.
-///
-/// Carries the format of `quality=` in its type, so that `70,14:50,15:20` is
-/// judged where a value is decoded rather than by whatever parses it later —
-/// including by `check`, which never builds anything (#257).
-///
-/// `Default` is "nothing set at any zoom", which is what an absent `quality=`
-/// means and what the encoder's own default fills in.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct QualityByZoom([Option<u8>; 32]);
-
-impl QualityByZoom {
-	/// The per-zoom levels, indexed by zoom.
-	#[must_use]
-	pub fn into_levels(self) -> [Option<u8>; 32] {
-		self.0
-	}
-}
-
-impl TryFrom<&str> for QualityByZoom {
-	type Error = anyhow::Error;
-
-	fn try_from(value: &str) -> Result<Self> {
-		parse_quality(value).map(Self)
-	}
-}
-
-#[context("Parsing quality string")]
-fn parse_quality(text: &str) -> Result<[Option<u8>; 32]> {
-	let mut result: [Option<u8>; 32] = [None; 32];
-	let mut zoom: i32 = -1;
-	for part in text.split(',') {
-		let mut part = part.trim();
-		zoom += 1;
-		if part.is_empty() {
-			continue;
-		}
-		if let Some(idx) = part.find(':') {
-			zoom = part[0..idx].trim().parse()?;
-			ensure!(
-				(0..=31).contains(&zoom),
-				"zoom level must be between 0 and 31, but is {zoom}"
-			);
-			part = &part[(idx + 1)..];
-		}
-		let quality_val: u8 = part.trim().parse()?;
-		ensure!(
-			quality_val <= 100,
-			"quality must be between 0 and 100, but is {quality_val}"
-		);
-		for z in zoom..32 {
-			result[usize::try_from(z).expect("zoom in 0..32 fits in usize")] = Some(quality_val);
-		}
-	}
-	Ok(result)
 }
 
 crate::operations::macros::define_transform_factory!("raster_format", Args, Operation, requires: Raster, per_tile);
@@ -295,62 +278,23 @@ crate::operations::macros::define_transform_factory!("raster_format", Args, Oper
 #[cfg(test)]
 mod tests {
 	use rstest::rstest;
+	// --- which tiles the settings reach (#285) ---
+	use versatiles_core::{Blob, TileFormat::*};
 	use versatiles_core::{TileCompression, TileCoord};
+	use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
 
 	use super::*;
 
-	#[rstest]
-	#[case("80 -> 80,80,80,80,80,80,80,80,80,80,80,80,80,80,80,80")]
-	#[case("80,70 -> 80,70,70,70,70,70,70,70,70,70,70,70,70,70,70,70")]
-	#[case("10:30 -> ,,,,,,,,,,30,30,30,30,30,30")]
-	#[case("80,70,14:50,15:20 -> 80,70,70,70,70,70,70,70,70,70,70,70,70,70,50,20")]
-	#[case(" -> ,,,,,,,,,,,,,,,")]
-	#[case(", , -> ,,,,,,,,,,,,,,,")]
-	#[case(" ,80 , ,  -> ,80,80,80,80,80,80,80,80,80,80,80,80,80,80,80")]
-	fn parse_quality_cases(#[case] case: &str) -> Result<()> {
-		let (input_str, expected_str) = case.split_once(" -> ").unwrap();
-		let result = super::parse_quality(input_str)?;
-		assert_eq!(result.len(), 32);
-		let result_str = result[0..16]
-			.iter()
-			.map(|x| x.map_or(String::new(), |v| v.to_string()))
-			.collect::<Vec<String>>()
-			.join(",");
-
-		assert_eq!(result_str, expected_str);
-		Ok(())
+	/// One quality at every level, or none at any.
+	fn constant(quality: Option<u8>) -> TileQuality {
+		let text = quality.map_or_else(String::new, |q| q.to_string());
+		TileQuality::new(QualityByZoom::try_from(text.as_str()).unwrap(), None).unwrap()
 	}
-
-	#[rstest]
-	#[case("32:10", "zoom level must be between 0 and 31, but is 32")] // invalid zoom
-	#[case("5:101", "quality must be between 0 and 100, but is 101")] // invalid quality
-	fn parse_quality_errors(#[case] input: &str, #[case] needle: &str) {
-		let msg = super::parse_quality(input)
-			.unwrap_err()
-			.chain()
-			.map(std::string::ToString::to_string)
-			.collect::<Vec<_>>()
-			.join("|");
-		assert!(msg.contains(needle), "error '{msg}' should contain '{needle}'");
-	}
-
-	#[rstest]
-	#[case("foo")]
-	#[case("a:b")]
-	#[case("5:x")]
-	fn parse_quality_non_numeric_errors(#[case] input: &str) {
-		assert!(super::parse_quality(input).is_err());
-	}
-
-	// --- which tiles the settings reach (#285) ---
-
-	use versatiles_core::{Blob, TileFormat::*};
-	use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
 
 	fn operation(format: TileFormat, quality: Option<u8>, effort: Option<u8>, force_reencode: bool) -> Operation {
 		Operation {
 			format,
-			quality: [quality; 32],
+			quality: constant(quality),
 			quality_translucent: None,
 			effort,
 			force_reencode,
@@ -441,7 +385,7 @@ mod tests {
 	#[test]
 	fn quality_translucent_does_not_touch_an_existing_tile() -> Result<()> {
 		let mut op = operation(WEBP, Some(30), None, false);
-		op.quality_translucent = Some([Some(100); 32]);
+		op.quality_translucent = Some(constant(Some(100)));
 
 		let (tile, original) = existing_tile(WEBP)?;
 		let coord = TileCoord::new(3, 2, 2)?;
@@ -546,10 +490,8 @@ mod tests {
 		#[case] level: u8,
 		#[case] expected: Option<u8>,
 	) -> Result<()> {
-		let mut translucent = [None; 32];
-		translucent[10..].fill(Some(90));
 		let op = Operation {
-			quality_translucent: Some(translucent),
+			quality_translucent: Some(TileQuality::new(QualityByZoom::try_from("10:90")?, None)?),
 			elevation,
 			..operation(WEBP, quality, None, false)
 		};
@@ -560,6 +502,68 @@ mod tests {
 			.run(&TileCoord::new(level, 0, 0)?, Tile::from_image(image, WEBP)?)?
 			.unwrap();
 		assert_eq!(tile.format_quality(), expected);
+		Ok(())
+	}
+
+	// --- quality_map ---
+
+	/// A 2×2 map, a pixel per tile at zoom 1: black in the west, white in
+	/// the east. Returns the directory, which lives as long as it, and the
+	/// map's path in single quotes, which keep a Windows path's backslashes.
+	fn write_map() -> Result<(assert_fs::TempDir, String)> {
+		use imageproc::image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
+		let dir = assert_fs::TempDir::new()?;
+		let mut png = Vec::new();
+		PngEncoder::new(&mut png).write_image(&[0, 255, 0, 255], 2, 2, ExtendedColorType::L8)?;
+		let path = dir.path().join("quality.png");
+		std::fs::write(&path, png)?;
+		let quoted = format!("'{}'", path.display());
+		Ok((dir, quoted))
+	}
+
+	/// The quality each tile of zoom 0 to 2 in the north-west and the
+	/// north-east is encoded with.
+	#[tokio::test]
+	async fn a_quality_range_follows_the_map() -> Result<()> {
+		let (_dir, map) = write_map()?;
+		let op = PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!(
+				"from_debug format=png | raster_format format=webp quality=\"20,1:30-50,2:60\" quality_map={map}"
+			))
+			.await?;
+		let quality_of = async |level: u8, x: u32| -> Result<Option<u8>> {
+			let bbox = TileCoord::new(level, x, 0)?.to_tile_bbox();
+			Ok(op.tile_stream(bbox).await?.to_vec().await.remove(0).1.format_quality())
+		};
+		assert_eq!(quality_of(0, 0).await?, Some(20), "a number ignores the map");
+		assert_eq!(quality_of(1, 0).await?, Some(30), "black");
+		assert_eq!(quality_of(1, 1).await?, Some(50), "white");
+		assert_eq!(quality_of(2, 0).await?, Some(60));
+		Ok(())
+	}
+
+	#[rstest]
+	#[case("quality=\"70,1:30-50\"", "needs a quality map")]
+	#[case("quality=70 quality_map=MAP", "read only by a quality range")]
+	#[case("quality=\"30-50\" quality_map=MAP", "")]
+	#[case("quality=\"30-50\" quality_map='missing.png'", "missing.png")]
+	#[tokio::test]
+	async fn a_range_and_a_map_need_each_other(#[case] args: &str, #[case] needle: &str) -> Result<()> {
+		let (_dir, map) = write_map()?;
+		let vpl = format!(
+			"from_debug format=png | raster_format format=webp {}",
+			args.replace("MAP", &map)
+		);
+		let result = PipelineFactory::new_dummy().operation_from_vpl(&vpl).await;
+		if needle.is_empty() {
+			result?;
+			return Ok(());
+		}
+		let Err(error) = result else {
+			panic!("should be refused: {vpl}");
+		};
+		let message = format!("{error:#}");
+		assert!(message.contains(needle), "{message}");
 		Ok(())
 	}
 
