@@ -63,8 +63,21 @@ pub struct Tile {
 	/// Use "Z:Q" to jump to zoom Z explicitly, e.g. "70,14:50,15:20" means
 	/// z<14 → 70, z=14 → 50, z≥15 → 20. Translucent tiles ignore this and
 	/// are encoded losslessly.
+	///
+	/// In place of a number, a zoom can take a range for --quality-map to
+	/// choose from: "70,16:30-50" means 30 where the map is black and 50
+	/// where it is white from z=16 upwards.
 	#[arg(long, value_name = "str", default_value = "75")]
 	quality: String,
+
+	/// Grayscale PNG that chooses a quality within each range of --quality.
+	///
+	/// The map covers the Web Mercator world, square, with a power of two as
+	/// its side, so that a pixel is a tile: in a map of 16384 pixels, a tile
+	/// at z=14. A tile covering several pixels takes the highest quality any
+	/// of them gives.
+	#[arg(long, value_name = "file")]
+	quality_map: Option<String>,
 
 	/// 1-based band indices to map onto R, G, B (and optionally A).
 	///
@@ -104,7 +117,9 @@ pub struct Tile {
 pub async fn run(args: &Tile, runtime: &TilesRuntime) -> Result<()> {
 	log::info!("mosaic tile from {:?} to {:?}", args.input_image, args.output);
 
-	let pipeline = build_pipeline(args);
+	// Relative to where the command runs, not to the input image.
+	let quality_map = args.quality_map.as_deref().map(std::path::absolute).transpose()?;
+	let pipeline = build_pipeline(args, quality_map.as_deref());
 
 	// Resolve the input image directory for relative path resolution
 	let input_path = std::path::Path::new(&args.input_image);
@@ -123,7 +138,7 @@ pub async fn run(args: &Tile, runtime: &TilesRuntime) -> Result<()> {
 /// Build the VPL pipeline from CLI arguments.
 ///
 /// Constructs three nodes: `from_gdal_raster | raster_overview | raster_format`.
-fn build_pipeline(args: &Tile) -> VPLPipeline {
+fn build_pipeline(args: &Tile, quality_map: Option<&std::path::Path>) -> VPLPipeline {
 	// Build from_gdal_raster node
 	let mut gdal_props = BTreeMap::new();
 	gdal_props.insert("filename".to_string(), vec![args.input_image.clone()]);
@@ -163,6 +178,9 @@ fn build_pipeline(args: &Tile) -> VPLPipeline {
 	format_props.insert("format".to_string(), vec!["webp".to_string()]);
 	format_props.insert("quality".to_string(), vec![args.quality.clone()]);
 	format_props.insert("quality_translucent".to_string(), vec!["100".to_string()]);
+	if let Some(path) = quality_map {
+		format_props.insert("quality_map".to_string(), vec![path.display().to_string()]);
+	}
 
 	let format_node = VPLNode {
 		name: "raster_format".to_string(),
@@ -184,6 +202,7 @@ mod tests {
 			min_zoom: 0,
 			max_zoom: None,
 			quality: "75".to_string(),
+			quality_map: None,
 			bands: None,
 			nodata: None,
 			crs: None,
@@ -197,7 +216,7 @@ mod tests {
 
 	#[test]
 	fn pipeline_has_three_nodes() {
-		let pipeline = build_pipeline(&default_args());
+		let pipeline = build_pipeline(&default_args(), None);
 		assert_eq!(pipeline.pipeline.len(), 3);
 		assert_eq!(pipeline.pipeline[0].name, "from_gdal_raster");
 		assert_eq!(pipeline.pipeline[1].name, "raster_overview");
@@ -206,7 +225,7 @@ mod tests {
 
 	#[test]
 	fn gdal_node_has_required_props() {
-		let pipeline = build_pipeline(&default_args());
+		let pipeline = build_pipeline(&default_args(), None);
 		let gdal = &pipeline.pipeline[0];
 		assert_eq!(get_prop(gdal, "filename").unwrap(), "/path/to/image.tif");
 		assert_eq!(get_prop(gdal, "tile_size").unwrap(), "512");
@@ -220,7 +239,7 @@ mod tests {
 			max_zoom: Some(14),
 			..default_args()
 		};
-		let pipeline = build_pipeline(&args);
+		let pipeline = build_pipeline(&args, None);
 		let gdal = &pipeline.pipeline[0];
 		assert_eq!(get_prop(gdal, "level_max").unwrap(), "14");
 	}
@@ -231,7 +250,7 @@ mod tests {
 			min_zoom: 5,
 			..default_args()
 		};
-		let pipeline = build_pipeline(&args);
+		let pipeline = build_pipeline(&args, None);
 		let gdal = &pipeline.pipeline[0];
 		assert_eq!(get_prop(gdal, "level_min").unwrap(), "5");
 	}
@@ -242,7 +261,7 @@ mod tests {
 			bands: Some("4,3,2".to_string()),
 			..default_args()
 		};
-		let pipeline = build_pipeline(&args);
+		let pipeline = build_pipeline(&args, None);
 		let gdal = &pipeline.pipeline[0];
 		assert_eq!(get_prop(gdal, "bands").unwrap(), "4,3,2");
 	}
@@ -253,7 +272,7 @@ mod tests {
 			nodata: Some("0;255".to_string()),
 			..default_args()
 		};
-		let pipeline = build_pipeline(&args);
+		let pipeline = build_pipeline(&args, None);
 		let gdal = &pipeline.pipeline[0];
 		assert_eq!(get_prop(gdal, "nodata").unwrap(), "0;255");
 	}
@@ -264,7 +283,7 @@ mod tests {
 			crs: Some("25832".to_string()),
 			..default_args()
 		};
-		let pipeline = build_pipeline(&args);
+		let pipeline = build_pipeline(&args, None);
 		let gdal = &pipeline.pipeline[0];
 		assert_eq!(get_prop(gdal, "crs").unwrap(), "25832");
 	}
@@ -275,14 +294,14 @@ mod tests {
 			gdal_concurrency: Some(4),
 			..default_args()
 		};
-		let pipeline = build_pipeline(&args);
+		let pipeline = build_pipeline(&args, None);
 		let gdal = &pipeline.pipeline[0];
 		assert_eq!(get_prop(gdal, "gdal_concurrency_limit").unwrap(), "4");
 	}
 
 	#[test]
 	fn gdal_node_without_optional_props() {
-		let pipeline = build_pipeline(&default_args());
+		let pipeline = build_pipeline(&default_args(), None);
 		let gdal = &pipeline.pipeline[0];
 		assert!(!gdal.properties.contains_key("level_max"));
 		assert!(!gdal.properties.contains_key("bands"));
@@ -293,7 +312,7 @@ mod tests {
 
 	#[test]
 	fn overview_node_has_no_props() {
-		let pipeline = build_pipeline(&default_args());
+		let pipeline = build_pipeline(&default_args(), None);
 		let overview = &pipeline.pipeline[1];
 		assert!(overview.properties.is_empty());
 		assert_eq!(overview.sources, Vec::<VPLPipeline>::new());
@@ -301,7 +320,7 @@ mod tests {
 
 	#[test]
 	fn format_node_has_webp_config() {
-		let pipeline = build_pipeline(&default_args());
+		let pipeline = build_pipeline(&default_args(), None);
 		let format = &pipeline.pipeline[2];
 		assert_eq!(get_prop(format, "format").unwrap(), "webp");
 		assert_eq!(get_prop(format, "quality").unwrap(), "75");
@@ -314,9 +333,18 @@ mod tests {
 			quality: "70,14:50,15:20".to_string(),
 			..default_args()
 		};
-		let pipeline = build_pipeline(&args);
+		let pipeline = build_pipeline(&args, None);
 		let format = &pipeline.pipeline[2];
 		assert_eq!(get_prop(format, "quality").unwrap(), "70,14:50,15:20");
+		assert!(!format.properties.contains_key("quality_map"));
+	}
+
+	#[test]
+	fn format_node_with_quality_map() {
+		let path = std::path::Path::new("/maps/quality.png");
+		let pipeline = build_pipeline(&default_args(), Some(path));
+		let format = &pipeline.pipeline[2];
+		assert_eq!(get_prop(format, "quality_map").unwrap(), path.display().to_string());
 	}
 
 	#[test]
@@ -327,12 +355,13 @@ mod tests {
 			min_zoom: 3,
 			max_zoom: Some(18),
 			quality: "80".to_string(),
+			quality_map: None,
 			bands: Some("1,2,3".to_string()),
 			nodata: Some("0,0,0".to_string()),
 			crs: Some("4326".to_string()),
 			gdal_concurrency: Some(8),
 		};
-		let pipeline = build_pipeline(&args);
+		let pipeline = build_pipeline(&args, None);
 		let gdal = &pipeline.pipeline[0];
 
 		assert_eq!(get_prop(gdal, "filename").unwrap(), "/data/ortho.tif");
@@ -350,7 +379,7 @@ mod tests {
 
 	#[test]
 	fn all_nodes_have_empty_sources() {
-		let pipeline = build_pipeline(&default_args());
+		let pipeline = build_pipeline(&default_args(), None);
 		for node in &pipeline.pipeline {
 			assert_eq!(node.sources, Vec::<VPLPipeline>::new());
 		}
