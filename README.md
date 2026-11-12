@@ -466,6 +466,16 @@ versatiles export tile pipeline.vpl 16/35210/21490 -o tile.webp
 versatiles export area https://download.versatiles.org/satellite.versatiles --bbox 13.37,52.505,13.385,52.515 --zoom 16 -o berlin.webp
 ```
 
+Vector tiles export as GeoJSON: with `--as geojson` or a `.geojson` output file for one tile, and with a `.geojson` output file for an area. Coordinates are in degrees, and each feature gains the properties `$layer` and `$tile`. `--layer` keeps only the layers named. Tiles cut their features at the edge, so a feature that crosses tiles comes out in pieces, one per tile. In an area, `--clip` cuts every feature to the bbox:
+
+```sh
+# The buildings of one tile, on the terminal
+versatiles export tile tiles.versatiles 14/8801/5373 --as geojson --layer buildings
+
+# The buildings of an area, cut to the bbox
+versatiles export area tiles.versatiles --bbox 13.39,52.515,13.41,52.525 --zoom 14 --layer buildings --clip -o buildings.geojson
+```
+
 #### reduce - Strip a Tileset to What a Style Draws
 
 A tileset carries every layer, property and feature any style might ask for. A map that ships **one** style needs far less than that. The VersaTiles `colorful` style reads `name` and no `name_*` at all, so every translation in a Shortbread tileset can go; several layers are drawn as plain geometry and need no properties whatsoever.

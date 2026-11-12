@@ -1,12 +1,12 @@
 //! `versatiles export tile`: one tile out of a container, as a file of its own.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use versatiles_container::TilesRuntime;
-use versatiles_core::{TileCompression, TileCoord};
+use versatiles_core::{TileCompression, TileCoord, TileFormat, TileType};
 
-use super::output;
+use super::{geojson, output};
 
 #[derive(clap::Args, Debug)]
 #[command(
@@ -21,6 +21,10 @@ given. Address it as z/x/y, in XYZ order as in tile URLs, or as the tile at a
 point with --at and --zoom. A tile that the container does not have is an
 error.
 
+A vector tile can be decoded into GeoJSON instead, with --as geojson or an
+output file ending in .geojson. Coordinates are in degrees, and each feature
+gains the properties $layer and $tile. --layer keeps only the layers named.
+
 EXAMPLES
 
   # The tile 14/8801/5373, as a decompressed vector tile.
@@ -30,7 +34,10 @@ EXAMPLES
   versatiles export tile satellite.versatiles --at 13.40,52.52 --zoom 17 -o berlin.webp
 
   # The tile a pipeline produces, without writing a container.
-  versatiles export tile pipeline.vpl 16/35210/21490 > tile.webp"
+  versatiles export tile pipeline.vpl 16/35210/21490 > tile.webp
+
+  # The buildings of a vector tile, as GeoJSON on the terminal.
+  versatiles export tile osm.versatiles 14/8801/5373 --as geojson --layer buildings"
 )]
 pub struct Tile {
 	/// Tile container to read (path, URL, or data source expression).
@@ -51,19 +58,42 @@ pub struct Tile {
 	zoom: Option<u8>,
 
 	/// File to write the tile to. Its extension has to fit the tile, such as
-	/// `.pbf` for a vector tile or `.webp.gz` with --raw; a name without a
-	/// known extension is accepted as it is. Defaults to standard output,
-	/// which must not be a terminal.
+	/// `.pbf` for a vector tile or `.webp.gz` with --raw, or be `.geojson` to
+	/// decode a vector tile; a name without a known extension is accepted as
+	/// it is. Defaults to standard output, which must not be a terminal unless
+	/// the output is GeoJSON.
 	#[arg(short, long, value_name = "FILE", verbatim_doc_comment)]
 	output: Option<PathBuf>,
 
 	/// Write the tile as stored, without decompressing it.
 	#[arg(long)]
 	raw: bool,
+
+	/// Decode the tile into this format rather than writing it as it is.
+	#[arg(long = "as", value_name = "FORMAT", value_enum)]
+	format: Option<Decoded>,
+
+	/// With GeoJSON, keep only the features of this layer. Repeat for several layers.
+	#[arg(long, value_name = "NAME")]
+	layer: Vec<String>,
+}
+
+/// What `--as` decodes a tile into.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Decoded {
+	/// The features of a vector tile, in degrees.
+	Geojson,
 }
 
 pub async fn run(args: &Tile, runtime: &TilesRuntime) -> Result<()> {
 	let coord = address(args)?;
+	if wants_geojson(args) {
+		return run_geojson(args, coord, runtime).await;
+	}
+	ensure!(
+		args.layer.is_empty(),
+		"--layer selects the layers of GeoJSON output: add --as geojson, or name the output file .geojson"
+	);
 	if args.output.is_none() {
 		output::ensure_stdout_is_not_a_terminal()?;
 	}
@@ -89,6 +119,59 @@ pub async fn run(args: &Tile, runtime: &TilesRuntime) -> Result<()> {
 	let blob = tile.into_blob(&compression)?;
 	output::write(blob.as_slice(), args.output.as_deref())?;
 	log::info!("exported tile {} ({} bytes)", format_coord(&coord), blob.len());
+	Ok(())
+}
+
+/// Whether the tile is decoded into GeoJSON: asked for with `--as`, or by the
+/// extension of the output file.
+fn wants_geojson(args: &Tile) -> bool {
+	args.format == Some(Decoded::Geojson) || args.output.as_deref().is_some_and(names_geojson)
+}
+
+fn names_geojson(path: &Path) -> bool {
+	path
+		.extension()
+		.is_some_and(|extension| extension.eq_ignore_ascii_case("geojson"))
+}
+
+/// Writes the features of a vector tile as GeoJSON.
+async fn run_geojson(args: &Tile, coord: TileCoord, runtime: &TilesRuntime) -> Result<()> {
+	ensure!(
+		!args.raw,
+		"--raw writes the tile as it is stored, and GeoJSON is decoded from it: leave out one of the two"
+	);
+	if let Some(path) = &args.output {
+		output::check_extension(
+			path,
+			TileFormat::GEOJSON,
+			TileCompression::Uncompressed,
+			TileCompression::Uncompressed,
+		)?;
+	}
+
+	let reader = runtime
+		.reader_from_str(&args.input)
+		.await
+		.with_context(|| format!("opening {}", args.input))?;
+	let format = *reader.metadata().tile_format();
+	ensure!(
+		format.to_type() == TileType::Vector,
+		"GeoJSON is decoded from vector tiles, and {} holds {} tiles",
+		args.input,
+		format.as_str()
+	);
+	let Some(tile) = reader.tile(&coord).await? else {
+		bail!("{} has no tile {}", args.input, format_coord(&coord));
+	};
+
+	let selection = geojson::Selection {
+		layers: args.layer.clone(),
+		clip: None,
+	};
+	let mut writer = geojson::Writer::new(output::create(args.output.as_deref())?)?;
+	writer.write_tile(&coord, tile, &selection)?;
+	let features = writer.finish(&selection)?;
+	log::info!("exported {features} features of tile {}", format_coord(&coord));
 	Ok(())
 }
 
@@ -196,6 +279,8 @@ mod tests {
 			zoom,
 			output: None,
 			raw: false,
+			format: None,
+			layer: vec![],
 		}
 	}
 

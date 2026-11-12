@@ -1,15 +1,15 @@
-//! `versatiles export area`: the raster tiles of a bbox as one image.
+//! `versatiles export area`: the tiles of a bbox as one image, or as GeoJSON.
 
 use std::{f64::consts::PI, path::PathBuf};
 
 use anyhow::{Context, Result, bail, ensure};
-use versatiles_container::TilesRuntime;
+use versatiles_container::{SharedTileSource, TilesRuntime};
 use versatiles_core::{GeoBBox, TileBBox, TileFormat, TileType};
 use versatiles_image::{
 	DynamicImage, DynamicImageTraitConvert, DynamicImageTraitInfo, GenericImage, GenericImageView, ImageBuffer, Rgba,
 };
 
-use super::output;
+use super::{geojson, output};
 use crate::tools::convert::parse_bbox;
 
 /// Half the side of the Web Mercator square, in metres.
@@ -25,14 +25,16 @@ const WEBP_MAX_SIDE: u64 = 16_383;
 #[command(
 	arg_required_else_help = true,
 	disable_version_flag = true,
-	about = "Export the raster tiles of an area as one image",
+	about = "Export the tiles of an area as one image, or as GeoJSON",
 	long_about = "\
-Export the raster tiles of an area as one image.
+Export the tiles of an area as one image, or as GeoJSON.
 
-Reads the tiles at --zoom that cover --bbox, puts them together, crops the
-result to the bbox and encodes it in the format the extension of the output
-file names: .png, .webp or .jpg. The image stays in Web Mercator, at the
-resolution of the zoom level.
+Reads the tiles at --zoom that cover --bbox. The extension of the output file
+names what to write: .png, .webp or .jpg for raster tiles, .geojson for
+vector tiles.
+
+Raster tiles are put together, cropped to the bbox and encoded as one image.
+The image stays in Web Mercator, at the resolution of the zoom level.
 
 Next to the image goes a world file (.pgw, .wpw or .jgw) that places it in
 EPSG:3857, so GIS software shows it where it belongs.
@@ -43,11 +45,20 @@ with missing or translucent tiles has to be exported as PNG or WebP.
 An image larger than --max-pixels is refused rather than scaled down:
 choose a lower --zoom, a smaller bbox, or a higher --max-pixels.
 
+Vector tiles are decoded into features in degrees, each with the properties
+$layer and $tile. A feature that crosses tile edges comes out in pieces, one
+per tile, since tiles cut their features at the edge. --layer keeps only the
+layers named, and --clip cuts every feature to the bbox.
+
 EXAMPLES
 
   # Central Berlin at zoom 16
   versatiles export area satellite.versatiles \\
-    --bbox 13.37,52.50,13.42,52.53 --zoom 16 -o berlin.webp"
+    --bbox 13.37,52.50,13.42,52.53 --zoom 16 -o berlin.webp
+
+  # Its buildings, cut to the bbox
+  versatiles export area osm.versatiles \\
+    --bbox 13.37,52.50,13.42,52.53 --zoom 14 --layer buildings --clip -o buildings.geojson"
 )]
 pub struct Area {
 	/// Tile container to read (path, URL, or data source expression).
@@ -63,9 +74,17 @@ pub struct Area {
 	#[arg(long, value_name = "int")]
 	zoom: u8,
 
-	/// Image file to write: .png, .webp or .jpg.
+	/// File to write: .png, .webp or .jpg for raster tiles, .geojson for vector tiles.
 	#[arg(short, long, value_name = "FILE")]
 	output: PathBuf,
+
+	/// With GeoJSON, keep only the features of this layer. Repeat for several layers.
+	#[arg(long, value_name = "NAME")]
+	layer: Vec<String>,
+
+	/// With GeoJSON, cut every feature to the bbox.
+	#[arg(long)]
+	clip: bool,
 
 	/// Encoder quality for .webp and .jpg, 0 to 100. Defaults to the encoder's own.
 	#[arg(long, value_name = "int", value_parser = clap::value_parser!(u8).range(0..=100))]
@@ -78,19 +97,44 @@ pub struct Area {
 
 pub async fn run(args: &Area, runtime: &TilesRuntime) -> Result<()> {
 	let bbox = parse_bbox(&args.bbox)?;
-	let format = image_format(args)?;
+	let format = output_format(args)?;
+	let geojson = format == TileFormat::GEOJSON;
+	if geojson {
+		ensure!(
+			args.quality.is_none(),
+			"--quality applies to .webp and .jpg images, not to GeoJSON"
+		);
+	} else {
+		ensure!(
+			args.layer.is_empty() && !args.clip,
+			"--layer and --clip select the features of GeoJSON, and an image is always cropped to the bbox"
+		);
+	}
 
 	let reader = runtime
 		.reader_from_str(&args.input)
 		.await
 		.with_context(|| format!("opening {}", args.input))?;
 	let tile_format = *reader.metadata().tile_format();
-	ensure!(
-		tile_format.to_type() == TileType::Raster,
-		"export area writes raster tiles as an image, and {} holds {} tiles",
-		args.input,
-		tile_format.as_str()
-	);
+	match tile_format.to_type() {
+		TileType::Raster => ensure!(
+			!geojson,
+			"{} holds {} tiles, which are exported as an image: name the output .png, .webp or .jpg",
+			args.input,
+			tile_format.as_str()
+		),
+		TileType::Vector => ensure!(
+			geojson,
+			"{} holds {} tiles, which are exported as GeoJSON: name the output .geojson",
+			args.input,
+			tile_format.as_str()
+		),
+		TileType::Unknown => bail!(
+			"{} holds {} tiles, which cannot be exported",
+			args.input,
+			tile_format.as_str()
+		),
+	}
 
 	// Which tiles: the same for any tile size, so it is known before a tile is read.
 	let tiles = Crop::new(&bbox, args.zoom, 1);
@@ -102,6 +146,48 @@ pub async fn run(args: &Area, runtime: &TilesRuntime) -> Result<()> {
 		u32::try_from(tiles.y0 + tiles.height - 1)?,
 	)?;
 
+	if geojson {
+		export_features(args, &reader, bbox, tile_bbox).await
+	} else {
+		export_image(args, &reader, bbox, tile_bbox, format).await
+	}
+}
+
+/// Writes the features of the vector tiles as GeoJSON, tile by tile.
+async fn export_features(args: &Area, reader: &SharedTileSource, bbox: GeoBBox, tile_bbox: TileBBox) -> Result<()> {
+	let selection = geojson::Selection {
+		layers: args.layer.clone(),
+		clip: args.clip.then_some(bbox),
+	};
+	let mut writer = geojson::Writer::new(output::create(Some(&args.output))?)?;
+	let mut stream = reader.tile_stream(tile_bbox).await?;
+	let mut tiles = 0u64;
+	while let Some((coord, tile)) = stream.next().await {
+		writer.write_tile(&coord, tile, &selection)?;
+		tiles += 1;
+	}
+	let features = writer.finish(&selection)?;
+	ensure!(
+		tiles > 0,
+		"{} has no tiles in this area at zoom {}",
+		args.input,
+		args.zoom
+	);
+	log::info!(
+		"exported {features} features of {tiles} tiles to {}",
+		args.output.display()
+	);
+	Ok(())
+}
+
+/// Puts the raster tiles together into one image, cropped to the bbox.
+async fn export_image(
+	args: &Area,
+	reader: &SharedTileSource,
+	bbox: GeoBBox,
+	tile_bbox: TileBBox,
+	format: TileFormat,
+) -> Result<()> {
 	// Refuse an area that is too large before reading it, going by the tile
 	// size the container declares, or the smallest there is.
 	let declared_size = reader.tilejson().tile_size.map_or(256, |size| u64::from(size.size()));
@@ -170,13 +256,16 @@ pub async fn run(args: &Area, runtime: &TilesRuntime) -> Result<()> {
 	Ok(())
 }
 
-/// The image format the output file names.
-fn image_format(args: &Area) -> Result<TileFormat> {
+/// The format the output file names.
+fn output_format(args: &Area) -> Result<TileFormat> {
 	let name = args.output.to_string_lossy().to_string();
 	let mut stem = name.clone();
 	match TileFormat::from_filename(&mut stem) {
-		Some(format @ (TileFormat::PNG | TileFormat::WEBP | TileFormat::JPG)) => Ok(format),
-		_ => bail!("'{name}' has to end in .png, .webp or .jpg, which name the image format to write"),
+		Some(format @ (TileFormat::PNG | TileFormat::WEBP | TileFormat::JPG | TileFormat::GEOJSON)) => Ok(format),
+		_ => bail!(
+			"'{name}' has to end in .png, .webp or .jpg for an image, or .geojson for features, \
+			 which name the format to write"
+		),
 	}
 }
 

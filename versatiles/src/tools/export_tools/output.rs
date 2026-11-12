@@ -22,6 +22,16 @@ pub(super) fn ensure_stdout_is_not_a_terminal() -> Result<()> {
 	Ok(())
 }
 
+/// A buffered writer to `path`, or to standard output without one.
+pub(super) fn create(path: Option<&Path>) -> Result<Box<dyn Write>> {
+	Ok(match path {
+		Some(path) => Box::new(std::io::BufWriter::new(
+			std::fs::File::create(path).with_context(|| format!("creating {}", path.display()))?,
+		)),
+		None => Box::new(std::io::BufWriter::new(std::io::stdout().lock())),
+	})
+}
+
 /// Writes `bytes` to `path`, or to standard output without one.
 pub(super) fn write(bytes: &[u8], path: Option<&Path>) -> Result<()> {
 	if let Some(path) = path {
@@ -78,7 +88,7 @@ pub(super) fn check_extension(
 
 fn describe(format: TileFormat, compression: TileCompression) -> String {
 	match compression {
-		TileCompression::Uncompressed => format!("{} uncompressed", format.as_str()),
+		TileCompression::Uncompressed => format.as_str().to_string(),
 		other => format!("{} compressed with {}", format.as_str(), other.as_str()),
 	}
 }

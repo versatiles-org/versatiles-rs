@@ -124,3 +124,60 @@ fn e2e_export_area_refuses_what_it_cannot_write() {
 	assert!(!o.success);
 	assert_contains!(&o.stderr, "holds mvt tiles");
 }
+
+/// Parses GeoJSON and returns its features.
+fn features(geojson: &str) -> Vec<versatiles_core::json::JsonValue> {
+	let json = versatiles_core::json::parse_json_str(geojson).unwrap();
+	let object = json.as_object().unwrap();
+	object.get("features").unwrap().as_array().unwrap().0.clone()
+}
+
+fn property(feature: &versatiles_core::json::JsonValue, key: &str) -> String {
+	let properties = feature.as_object().unwrap().get("properties").unwrap();
+	properties
+		.as_object()
+		.unwrap()
+		.get(key)
+		.unwrap()
+		.as_str()
+		.unwrap()
+		.to_string()
+}
+
+#[test]
+fn e2e_export_tile_as_geojson() {
+	let input = get_testdata("berlin.mbtiles");
+	let o = versatiles_output(&format!(
+		"export tile -q {input} 14/8801/5373 --as geojson --layer buildings"
+	));
+	assert!(o.success, "{}", o.stderr);
+	let features = features(&o.stdout);
+	assert_ne!(features.len(), 0, "the tile has buildings");
+	for feature in &features {
+		assert_eq!(property(feature, "$layer"), "buildings");
+		assert_eq!(property(feature, "$tile"), "14/8801/5373");
+	}
+
+	let o = versatiles_output(&format!(
+		"export tile -q {input} 14/8801/5373 --layer buildings -o tile.pbf"
+	));
+	assert!(!o.success);
+	assert_contains!(&o.stderr, "--layer selects the layers of GeoJSON output");
+}
+
+#[test]
+fn e2e_export_area_as_geojson() {
+	let input = get_testdata("berlin.mbtiles");
+	let (_dir, output) = get_temp_output("buildings.geojson");
+
+	versatiles_run(&format!(
+		"export area -q {input} --bbox 13.39,52.515,13.41,52.525 --zoom 14 --layer buildings --clip -o {}",
+		output.to_str().unwrap()
+	));
+
+	let features = features(&std::fs::read_to_string(&output).unwrap());
+	assert!(features.len() > 100, "{} features", features.len());
+	let tiles: std::collections::BTreeSet<String> = features.iter().map(|f| property(f, "$tile")).collect();
+	assert!(tiles.len() > 1, "the bbox crosses tile edges: {tiles:?}");
+	assert!(features.iter().all(|f| property(f, "$layer") == "buildings"));
+}
