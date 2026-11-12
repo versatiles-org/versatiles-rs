@@ -512,6 +512,28 @@ jobs:
         if: matrix.run-tests
         run: cargo test --workspace ${{ matrix.features }}
 
+      # versatiles_pipeline/README.md and versatiles/CONFIG.md are generated from
+      # the binary, with `--features gdal`, which is what this entry has just
+      # built. Regenerating them here and comparing turns a reference left stale
+      # by a change into a red run, rather than into a release whose docs
+      # describe another program. Node.js is for Prettier, which the script
+      # formats the files with.
+      - name: Setup Node.js
+        if: matrix.name == 'gdal'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+
+      - name: Check generated docs
+        if: matrix.name == 'gdal'
+        run: |
+          ./scripts/build-docs-readme.sh
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          if ! git diff --exit-code -- versatiles_pipeline/README.md versatiles/CONFIG.md; then
+            echo "::error::The generated docs are out of date. Run ./scripts/build-docs-readme.sh and commit the result."
+            exit 1
+          fi
+
   # ============================================================================
   # Linux musl: Test
   # ============================================================================

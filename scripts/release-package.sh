@@ -264,22 +264,6 @@ preflight_checks() {
 	fi
 }
 
-# Run build-docs-readme.sh and, if it modified any tracked files, land those
-# changes as a standalone commit before the release commit.
-regenerate_readmes() {
-	log_step "Building README documentation..."
-	./scripts/build-docs-readme.sh
-
-	if [ -n "$(git status --porcelain)" ]; then
-		log_step "Generated READMEs changed — committing as a separate commit..."
-		git add -u
-		git commit -S -m "docs: regenerate auto-built READMEs"
-		log_success "Docs commit created"
-	else
-		log_success "Generated READMEs already up to date"
-	fi
-}
-
 # Push 'dev', then watch the CI run on the just-pushed commit and exit non-zero
 # if it fails. The 'main' branch protection requires a green 'CI Success' check
 # on the tip — we can't fast-forward main until this passes.
@@ -530,13 +514,10 @@ main() {
 		return
 	fi
 
-	# Regenerate auto-built READMEs. If anything changed, land it as its own
-	# commit before the release commit so the version-bump diff stays minimal.
-	regenerate_readmes
-
 	# Only the two quick checks most likely to turn the release CI red: it
-	# checks everything scripts/check.sh does and more, and the release waits
-	# for it before main and the tag move. Format, because `cargo fmt-check` is
+	# checks everything scripts/check.sh does and more, including that the
+	# generated READMEs are current, and the release waits for it before main
+	# and the tag move. So nothing is built here. Format, because `cargo fmt-check` is
 	# the cheapest way to fail; deny, because a new RustSec advisory reddens CI
 	# without any change in the repository.
 	log_step "Running checks..."

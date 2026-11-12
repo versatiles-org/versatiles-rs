@@ -165,8 +165,6 @@ This script will:
 
 - Check the branch, a clean tree, `cargo-deny`, `gh auth status`, and that
   `origin/main` is an ancestor of `dev`
-- Regenerate the auto-built READMEs, committing them as a separate signed
-  `docs:` commit if they changed
 - Run `cargo fmt-check` and `cargo deny check`, the two checks most likely to
   turn the release CI red. Everything else in `./scripts/check.sh` is checked by
   CI, which the release waits for

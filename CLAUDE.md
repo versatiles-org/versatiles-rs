@@ -77,7 +77,7 @@ npm run test:examples
 Regenerate after a change:
 
 ```bash
-./scripts/build-docs-readme.sh   # versatiles_pipeline/README.md, versatiles/CONFIG.md; never edit these by hand
+./scripts/build-docs-readme.sh   # versatiles_pipeline/README.md, versatiles/CONFIG.md; never edit these by hand, CI fails if they are stale
 UPDATE_METADATA_SNAPSHOT=1 cargo test -p versatiles_pipeline --features codegen,gdal --test metadata_surface
 ```
 
