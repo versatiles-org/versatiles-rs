@@ -12,8 +12,7 @@ use super::export_tools::{area, tile};
 Export tiles as ordinary files.
 
 `convert` keeps data as tiles, including a geographic subset with --bbox.
-`export` takes data out of the tile container: a tile as a file of its own,
-or the raster tiles of an area as one image.
+`export` takes data out of the tile container, into ordinary files.
 
 The format of an output file follows its extension."
 )]

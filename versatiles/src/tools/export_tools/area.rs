@@ -46,7 +46,8 @@ choose a lower --zoom, a smaller bbox, or a higher --max-pixels.
 EXAMPLES
 
   # Central Berlin at zoom 16
-  versatiles export area satellite.versatiles --bbox 13.37,52.50,13.42,52.53 --zoom 16 -o berlin.webp"
+  versatiles export area satellite.versatiles \\
+    --bbox 13.37,52.50,13.42,52.53 --zoom 16 -o berlin.webp"
 )]
 pub struct Area {
 	/// Tile container to read (path, URL, or data source expression).
@@ -70,7 +71,7 @@ pub struct Area {
 	#[arg(long, value_name = "int", value_parser = clap::value_parser!(u8).range(0..=100))]
 	quality: Option<u8>,
 
-	/// The largest image to write, in pixels.
+	/// The largest image to write, in pixels. The default is 8000 × 8000.
 	#[arg(long, value_name = "int", default_value_t = 64_000_000)]
 	max_pixels: u64,
 }
