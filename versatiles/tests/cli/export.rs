@@ -63,3 +63,64 @@ fn e2e_export_tile_refuses_a_missing_tile_and_a_misleading_name() {
 	assert!(!o.success);
 	assert_contains!(&o.stderr, "or add --raw");
 }
+
+/// A raster source: `from_debug` draws every tile, 512 pixels wide.
+fn debug_source(dir: &std::path::Path) -> String {
+	let path = dir.join("debug.vpl");
+	std::fs::write(&path, "from_debug format=png").unwrap();
+	path.to_str().unwrap().to_string()
+}
+
+#[test]
+fn e2e_export_area_writes_an_image_and_a_world_file() {
+	let (dir, output) = get_temp_output("area.png");
+	let input = debug_source(dir.path());
+
+	// From the prime meridian to 90° east and from the equator northwards, at
+	// zoom 2: exactly one tile, so 512 pixels square.
+	versatiles_run(&format!(
+		"export area -q {input} --bbox 0,0,90,66.5132604431 --zoom 2 -o {}",
+		output.to_str().unwrap()
+	));
+
+	let image = image_size(&std::fs::read(&output).unwrap());
+	assert_eq!(image, (512, 512));
+	let world_file = std::fs::read_to_string(output.with_extension("pgw")).unwrap();
+	let lines: Vec<f64> = world_file.lines().map(|line| line.parse().unwrap()).collect();
+	assert_eq!(lines.len(), 6);
+	let pixel = 2.0 * 20_037_508.342_789_244 / 2048.0;
+	assert!((lines[0] - pixel).abs() < 1e-6, "{world_file}");
+	assert!((lines[4] - pixel / 2.0).abs() < 1e-3, "{world_file}");
+}
+
+/// Width and height from a PNG header.
+fn image_size(png: &[u8]) -> (u32, u32) {
+	let read = |at: usize| u32::from_be_bytes(png[at..at + 4].try_into().unwrap());
+	(read(16), read(20))
+}
+
+#[test]
+fn e2e_export_area_refuses_what_it_cannot_write() {
+	let (dir, output) = get_temp_output("area.png");
+	let input = debug_source(dir.path());
+	let output = output.to_str().unwrap();
+
+	let o = versatiles_output(&format!(
+		"export area -q {input} --bbox -10,-10,10,10 --zoom 10 --max-pixels 1000 -o {output}"
+	));
+	assert!(!o.success);
+	assert_contains!(&o.stderr, "more than --max-pixels 1000");
+
+	let o = versatiles_output(&format!(
+		"export area -q {input} --bbox -10,-10,10,10 --zoom 2 -o area.tif"
+	));
+	assert!(!o.success);
+	assert_contains!(&o.stderr, "has to end in .png, .webp or .jpg");
+
+	let mbtiles = get_testdata("berlin.mbtiles");
+	let o = versatiles_output(&format!(
+		"export area -q {mbtiles} --bbox 13.3,52.4,13.5,52.6 --zoom 14 -o {output}"
+	));
+	assert!(!o.success);
+	assert_contains!(&o.stderr, "holds mvt tiles");
+}

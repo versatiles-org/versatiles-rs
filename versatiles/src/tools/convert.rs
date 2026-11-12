@@ -194,20 +194,7 @@ impl OutputOptions {
 
 		if let Some(bbox) = &self.bbox {
 			log::trace!("parsing bbox argument: {bbox:?}");
-			let values: Vec<f64> = bbox
-				.split(&[' ', ',', ';'])
-				.filter(|s| !s.is_empty())
-				.map(|s| {
-					s.parse::<f64>()
-						.map_err(|_| anyhow::anyhow!("bbox value '{s}' is not a valid number"))
-				})
-				.collect::<Result<Vec<f64>>>()?;
-
-			if values.len() != 4 {
-				bail!("bbox must contain exactly 4 values, got {}: {bbox:?}", values.len());
-			}
-
-			let bbox = GeoBBox::try_from(values)?;
+			let bbox = parse_bbox(bbox)?;
 			// Same rule the `filter` operation applies, so `--bbox-border N` and
 			// `filter bbox_border=N` cannot drift apart.
 			GeoCrop::new(bbox, self.bbox_border.unwrap_or(0)).apply_to_pyramid(&mut tile_pyramid)?;
@@ -216,6 +203,25 @@ impl OutputOptions {
 
 		Ok((Some(tile_pyramid), geo_bbox))
 	}
+}
+
+/// A `--bbox` argument, `lon_min,lat_min,lon_max,lat_max`, as every command
+/// that takes one reads it.
+pub(crate) fn parse_bbox(text: &str) -> Result<GeoBBox> {
+	let values: Vec<f64> = text
+		.split(&[' ', ',', ';'])
+		.filter(|s| !s.is_empty())
+		.map(|s| {
+			s.parse::<f64>()
+				.map_err(|_| anyhow::anyhow!("bbox value '{s}' is not a valid number"))
+		})
+		.collect::<Result<Vec<f64>>>()?;
+
+	if values.len() != 4 {
+		bail!("bbox must contain exactly 4 values, got {}: {text:?}", values.len());
+	}
+
+	GeoBBox::try_from(values)
 }
 
 #[derive(clap::Args, Debug)]

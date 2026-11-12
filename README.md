@@ -459,6 +459,13 @@ versatiles export tile satellite.versatiles --at 13.40,52.52 --zoom 17 -o berlin
 versatiles export tile pipeline.vpl 16/35210/21490 -o tile.webp
 ```
 
+`export area` puts the raster tiles of a bbox together into one image, cropped to the bbox, at the resolution of `--zoom`. The format follows the extension: `.png`, `.webp` or `.jpg`. A world file (`.pgw`, `.wpw` or `.jgw`) next to it places the image in EPSG:3857. An image larger than `--max-pixels` (64 million by default) is refused rather than scaled down:
+
+```sh
+# Central Berlin at zoom 16, read from the server
+versatiles export area https://download.versatiles.org/satellite.versatiles --bbox 13.37,52.505,13.385,52.515 --zoom 16 -o berlin.webp
+```
+
 #### reduce - Strip a Tileset to What a Style Draws
 
 A tileset carries every layer, property and feature any style might ask for. A map that ships **one** style needs far less than that. The VersaTiles `colorful` style reads `name` and no `name_*` at all, so every translation in a Shortbread tileset can go; several layers are drawn as plain geometry and need no properties whatsoever.
