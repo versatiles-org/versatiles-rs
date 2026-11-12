@@ -784,10 +784,10 @@ mod tests {
 		assert_eq!(found.len(), 1, "{found:?}");
 		assert!(found[0].contains("Failed to compile CEL expression"), "{found:?}");
 
-		// The input that panics the parser rather than erroring.
+		// An input that used to panic the parser, now refused before it (#325).
 		let found = problems(r#"from_debug format=mvt | vector_filter_features expr="population >=""#);
 		assert_eq!(found.len(), 1, "{found:?}");
-		assert!(found[0].contains("Parser crashed"), "{found:?}");
+		assert!(found[0].contains("the expression ends after `>=`"), "{found:?}");
 
 		for vpl in [
 			r#"from_debug format=mvt | vector_filter_properties regex="^name:""#,

@@ -395,10 +395,9 @@ mod tests {
 	}
 
 	#[test]
-	fn test_expr_compile_error_on_panic_path_is_helpful() {
-		// Incomplete trailing operator — `cel-parser 0.10.1` panics on this input.
-		// The error should: (a) echo the user's expression, (b) flag likely-malformed input,
-		// (c) point them at `versatiles help pipeline` for reference material.
+	fn test_expr_compile_error_for_a_trailing_operator_points_at_it() {
+		// A trailing operator — `cel-parser 0.10.1` panics on this input, so it is
+		// recognised before parsing and reported as a syntax error with a caret (#325).
 		//
 		// Asked of the type rather than of `Runner`: an expression that does not
 		// compile can no longer reach one, which is the point of the type.
@@ -409,9 +408,9 @@ mod tests {
 				"Failed to compile CEL expression:",
 				"  population >=",
 				"",
-				"Parser crashed (likely malformed CEL input): internal error: entered unreachable code: should have been properly implemented by generated context when reachable",
-				"",
-				"Common causes: unmatched brackets, trailing operators, unsupported tokens. Run `versatiles help pipeline` for the CEL operator cheat-sheet.",
+				"ERROR: <input>:1:14: Syntax error: the expression ends after `>=`, which needs something to compare with",
+				"| population >=",
+				"| .............^",
 			]
 		);
 	}

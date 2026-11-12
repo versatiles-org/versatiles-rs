@@ -8,7 +8,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, anyhow, bail, ensure};
 use cel_interpreter::{
 	Context as CelContext, Program, Value as CelValue,
 	extractors::This,
@@ -93,6 +93,11 @@ fn compile_cel(expr: &str) -> Result<Program> {
 
 	let compiled_text =
 		rewrite_special_names(expr).map_err(|e| anyhow!("Failed to compile CEL expression:\n  {expr}\n\n{e}"))?;
+
+	// The parser panics on these, so they never reach it (#325).
+	if let Some(report) = unfinished_ending(expr) {
+		bail!("Failed to compile CEL expression:\n  {expr}\n\n{report}");
+	}
 
 	// `ParseErrors` holds an `Rc` and so cannot cross a thread boundary; it is rendered to its
 	// message here, inside the thread, which is all the caller ever did with it.
@@ -437,12 +442,120 @@ fn rewrite_special_names(expr: &str) -> Result<String> {
 	Ok(out)
 }
 
+/// An expression that ends where nothing can end, reported in the layout of
+/// the parser's own syntax errors, or `None` for any other.
+///
+/// `cel-parser` 0.10 panics on an expression that ends in an operator, such
+/// as `$layer ==`, after the `:` of a conditional or a map entry, or inside a
+/// string, such as `kind == 'a`, where other
+/// unfinished expressions get a syntax error with a caret. Those two endings
+/// are the common case while typing: an editor that checks an expression as
+/// it is written meets one every time someone pauses before the right-hand
+/// side. And the panic, though caught, still runs the panic hook, which
+/// prints it to whatever terminal or log hosts the pipeline. So they are
+/// recognised here, and the parser never sees them.
+///
+/// Comments are skipped, and an operator inside a string is part of the string.
+fn unfinished_ending(expr: &str) -> Option<String> {
+	let chars: Vec<char> = expr.chars().collect();
+	// The last operator, with the index just past it, if it is the last token.
+	let mut last_operator: Option<(&str, usize)> = None;
+	let mut i = 0;
+
+	while i < chars.len() {
+		let c = chars[i];
+		if c == '/' && chars.get(i + 1) == Some(&'/') {
+			while i < chars.len() && chars[i] != '\n' {
+				i += 1;
+			}
+			continue;
+		}
+		if c.is_whitespace() {
+			i += 1;
+			continue;
+		}
+		if c == '\'' || c == '"' {
+			match string_end(&chars, i, false) {
+				Some(end) => i = end,
+				None => return Some(syntax_error(&chars, i, "the string that starts here is never closed")),
+			}
+			last_operator = None;
+			continue;
+		}
+		if c == '$' || is_identifier_char(c) {
+			let start = i;
+			i += 1;
+			while i < chars.len() && is_identifier_char(chars[i]) {
+				i += 1;
+			}
+			let word: String = chars[start..i].iter().collect();
+			if matches!(chars.get(i), Some('\'' | '"')) && is_string_prefix(&word) {
+				match string_end(&chars, i, word.contains(['r', 'R'])) {
+					Some(end) => i = end,
+					None => return Some(syntax_error(&chars, i, "the string that starts here is never closed")),
+				}
+				last_operator = None;
+			} else {
+				last_operator = (word == "in").then_some(("in", i));
+			}
+			continue;
+		}
+		let operator = [
+			"==", "!=", "<=", ">=", "&&", "||", "<", ">", "+", "-", "*", "/", "%", "!", ":",
+		]
+		.into_iter()
+		.find(|op| op.chars().enumerate().all(|(k, o)| chars.get(i + k) == Some(&o)));
+		if let Some(op) = operator {
+			i += op.len();
+			last_operator = Some((op, i));
+		} else {
+			i += 1;
+			last_operator = None;
+		}
+	}
+
+	let (operator, end) = last_operator?;
+	let needs = match operator {
+		"==" | "!=" | "<" | "<=" | ">" | ">=" => "something to compare with",
+		"&&" | "||" => "a second condition",
+		"!" => "a condition to negate",
+		"in" => "a list or a map to look in",
+		_ => "a value after it",
+	};
+	Some(syntax_error(
+		&chars,
+		end,
+		&format!("the expression ends after `{operator}`, which needs {needs}"),
+	))
+}
+
+/// A syntax error at `index` in the layout `cel-parser` uses: the position,
+/// the line, and a caret under the column.
+fn syntax_error(chars: &[char], index: usize, message: &str) -> String {
+	let line_start = chars[..index].iter().rposition(|c| *c == '\n').map_or(0, |n| n + 1);
+	let line_end = chars[line_start..]
+		.iter()
+		.position(|c| *c == '\n')
+		.map_or(chars.len(), |n| line_start + n);
+	let line_number = chars[..index].iter().filter(|c| **c == '\n').count() + 1;
+	let column = index - line_start + 1;
+	let text: String = chars[line_start..line_end].iter().collect();
+	let dots = ".".repeat(column - 1);
+	format!("ERROR: <input>:{line_number}:{column}: Syntax error: {message}\n| {text}\n| {dots}^")
+}
+
 /// The index just past the string literal whose opening quote is at `start`,
 /// or the end of `chars` if it is not closed, which the parser then reports.
+fn end_of_string(chars: &[char], start: usize, raw: bool) -> usize {
+	string_end(chars, start, raw).unwrap_or(chars.len())
+}
+
+/// The index just past the string literal whose opening quote is at `start`,
+/// or `None` if it is not closed.
 ///
 /// Handles both quotes, the tripled forms that may span lines, and `raw`
 /// strings, whose backslashes escape nothing.
-fn end_of_string(chars: &[char], start: usize, raw: bool) -> usize {
+fn string_end(chars: &[char], start: usize, raw: bool) -> Option<usize> {
 	let quote = chars[start];
 	let triple = chars.get(start + 1) == Some(&quote) && chars.get(start + 2) == Some(&quote);
 	let closes = |i: usize| {
@@ -454,12 +567,12 @@ fn end_of_string(chars: &[char], start: usize, raw: bool) -> usize {
 		if !raw && chars[i] == '\\' {
 			i += 2;
 		} else if closes(i) {
-			return i + if triple { 3 } else { 1 };
+			return Some(i + if triple { 3 } else { 1 });
 		} else {
 			i += 1;
 		}
 	}
-	chars.len()
+	None
 }
 
 /// Whether `word`, directly before a quote, makes it a raw or bytes literal.
@@ -728,6 +841,69 @@ fn geo_to_cel(v: &GeoValue) -> CelValue {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	fn compile_error(expr: &str) -> String {
+		format!("{:#}", FeatureExpr::new(expr).unwrap_err())
+	}
+
+	/// The endings that crash `cel-parser` get a syntax error of their own,
+	/// and never reach it, so nothing panics (#325).
+	#[test]
+	fn an_expression_that_ends_too_early_says_where() {
+		for (expr, needle) in [
+			("$layer ==", "ends after `==`, which needs something to compare with"),
+			("kind !=", "ends after `!=`"),
+			("$zoom >", "ends after `>`"),
+			("$zoom +", "ends after `+`, which needs a value after it"),
+			("kind &&", "ends after `&&`, which needs a second condition"),
+			("kind ||", "ends after `||`"),
+			("kind in", "ends after `in`, which needs a list or a map to look in"),
+			("!", "ends after `!`, which needs a condition to negate"),
+			("kind == 'a' &&", "ends after `&&`"),
+			("kind ? 1 :", "ends after `:`"),
+			("{'a':", "ends after `:`"),
+			("kind == 'a", "the string that starts here is never closed"),
+			("kind == r'a", "the string that starts here is never closed"),
+			("kind == '''a", "the string that starts here is never closed"),
+		] {
+			let error = compile_error(expr);
+			assert!(error.contains(needle), "{expr}: {error}");
+			assert!(!error.contains("Parser crashed"), "{expr}: {error}");
+		}
+	}
+
+	#[test]
+	fn the_error_has_the_parser_layout() {
+		let error = compile_error("$layer ==");
+		assert!(
+			error.ends_with(
+				"ERROR: <input>:1:10: Syntax error: the expression ends after `==`, which needs something to compare with\n\
+				 | $layer ==\n\
+				 | .........^"
+			),
+			"{error}"
+		);
+		// The caret stands at the opening quote, on the line it is on.
+		let error = compile_error("$zoom > 1 &&\n  kind == 'a");
+		assert!(error.contains("ERROR: <input>:2:11: "), "{error}");
+		assert!(error.ends_with("|   kind == 'a\n| ..........^"), "{error}");
+	}
+
+	/// An operator in a string or a comment is not where the expression ends.
+	#[test]
+	fn operators_in_strings_and_comments_end_nothing() {
+		for expr in [
+			"kind == 'a =='",
+			"kind == \"&&\"",
+			"kind == 'x' // ==",
+			"kind == '''a ||'''",
+			"$zoom > 1 ? 'a' : 'b'",
+			"{'a': 1}['a'] == 1",
+			"-1 < $zoom",
+		] {
+			FeatureExpr::new(expr).unwrap_or_else(|e| panic!("{expr}: {e:#}"));
+		}
+	}
 
 	/// What an editor offers is what compiles: every listed name is read by
 	/// an expression, and they are listed in the order of the table.
