@@ -1,14 +1,18 @@
-use crate::{EventBus, ProgressHandle};
+use crate::{EventBus, ProgressHandle, progress::handle::TerminalLine};
 
 /// Factory for creating progress bars
 ///
 /// The factory maintains a global counter for unique progress IDs and creates
 /// `ProgressHandle` instances that emit progress events through the event bus.
+///
+/// Its bars share one terminal line, so that only one of them draws at a time:
+/// see [`ProgressHandle`].
 #[derive(Clone)]
 pub struct ProgressFactory {
 	next_id: u32,
 	event_bus: EventBus,
 	silent: bool,
+	line: TerminalLine,
 }
 
 impl ProgressFactory {
@@ -19,6 +23,7 @@ impl ProgressFactory {
 			next_id: 0,
 			event_bus,
 			silent,
+			line: TerminalLine::default(),
 		}
 	}
 
@@ -44,6 +49,7 @@ impl ProgressFactory {
 			id: crate::ProgressId(self.next_id),
 			event_bus: self.event_bus.clone(),
 			silent: self.silent,
+			line: self.line.clone(),
 		}
 	}
 }
@@ -53,12 +59,20 @@ pub(crate) struct PreparedProgress {
 	id: crate::ProgressId,
 	event_bus: EventBus,
 	silent: bool,
+	line: TerminalLine,
 }
 
 impl PreparedProgress {
 	/// Creates the handle, emitting its first event.
 	pub(crate) fn create(self, message: &str, total: u64) -> ProgressHandle {
-		ProgressHandle::new(self.id, message.to_string(), total, self.event_bus, self.silent)
+		ProgressHandle::on_line(
+			self.id,
+			message.to_string(),
+			total,
+			self.event_bus,
+			self.silent,
+			self.line,
+		)
 	}
 }
 

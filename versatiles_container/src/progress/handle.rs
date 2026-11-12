@@ -163,6 +163,53 @@ pub fn release_terminal_reset_signals() {
 	}
 }
 
+/// The terminal line the bars of one factory share.
+///
+/// One bar draws on it at a time: the first one that is still running. Every
+/// bar used to draw whenever it changed, so a bar that starts while another
+/// one runs, such as each container reader's "reading the tile index" inside
+/// `mosaic assemble`'s own bar, painted over it, and the line jumped from one
+/// bar's numbers to the other's. A bar that doesn't hold the line still emits
+/// its events; only the terminal doesn't show it.
+#[derive(Clone, Default)]
+pub(crate) struct TerminalLine(Arc<Mutex<Option<u32>>>);
+
+impl TerminalLine {
+	/// Whether bar `id` may draw: it holds the line, or takes it because it is free.
+	fn claim(&self, id: u32) -> bool {
+		let mut owner = self.0.lock();
+		match *owner {
+			None => {
+				*owner = Some(id);
+				true
+			}
+			Some(current) => current == id,
+		}
+	}
+
+	/// Frees the line if bar `id` holds it.
+	fn release(&self, id: u32) {
+		let mut owner = self.0.lock();
+		if *owner == Some(id) {
+			*owner = None;
+		}
+	}
+}
+
+/// A bar's place on its terminal line, given up when the bar finishes or the
+/// last clone of its handle is dropped, so that a bar that never finishes
+/// can't keep the line from every bar after it.
+struct LineSeat {
+	id: u32,
+	line: TerminalLine,
+}
+
+impl Drop for LineSeat {
+	fn drop(&mut self) {
+		self.line.release(self.id);
+	}
+}
+
 /// Handle for tracking progress of an operation
 ///
 /// Progress handles can be cloned and shared across threads. All clones
@@ -172,6 +219,7 @@ pub struct ProgressHandle {
 	state: Arc<Mutex<ProgressState>>,
 	event_bus: EventBus,
 	silent: bool,
+	seat: Arc<LineSeat>,
 }
 
 impl ProgressHandle {
@@ -179,12 +227,28 @@ impl ProgressHandle {
 	///
 	/// `silent` suppresses terminal drawing but not events, which is what a
 	/// server or a test wants.
+	///
+	/// The bar has a terminal line of its own. Bars that a factory makes share
+	/// one, so that only one of them draws at a time.
 	#[must_use]
 	pub fn new(id: ProgressId, message: String, total: u64, event_bus: EventBus, silent: bool) -> Self {
+		Self::on_line(id, message, total, event_bus, silent, TerminalLine::default())
+	}
+
+	/// Starts a progress bar that draws on `line` when no other bar holds it.
+	pub(crate) fn on_line(
+		id: ProgressId,
+		message: String,
+		total: u64,
+		event_bus: EventBus,
+		silent: bool,
+		line: TerminalLine,
+	) -> Self {
 		// Deliberately does *not* install the terminal-reset hooks: see
 		// `install_terminal_reset_hooks`. Drawing a bar is not a reason to take
 		// over the host process's panic hook and signal handlers.
 		let start = Instant::now();
+		let seat = Arc::new(LineSeat { id: id.0, line });
 		let handle = Self {
 			state: Arc::new(Mutex::new(ProgressState {
 				id,
@@ -198,6 +262,7 @@ impl ProgressHandle {
 			})),
 			event_bus,
 			silent,
+			seat,
 		};
 
 		// Draw and emit initial progress event
@@ -250,6 +315,8 @@ impl ProgressHandle {
 		state.finished = true;
 		self.redraw(&mut state);
 		drop(state);
+		// The last frame stays on the line until the next bar draws over it.
+		self.seat.line.release(self.seat.id);
 		self.emit_update();
 	}
 
@@ -286,7 +353,7 @@ impl ProgressHandle {
 	/// Rate-limited to one repaint every 500 ms; a finished bar always draws, so
 	/// the last frame shows the final count.
 	pub fn redraw(&self, state: &mut ProgressState) {
-		if self.silent {
+		if self.silent || !self.seat.line.claim(self.seat.id) {
 			return;
 		}
 		if state.next_draw > Instant::now() && !state.finished {
@@ -493,6 +560,69 @@ mod tests {
 			assert_eq!(current_action(libc::SIGTERM), libc::SIG_DFL);
 			assert_eq!(current_action(libc::SIGINT), libc::SIG_DFL);
 		}
+	}
+
+	fn bar(id: u32, line: &TerminalLine, silent: bool) -> ProgressHandle {
+		ProgressHandle::on_line(
+			ProgressId(id),
+			format!("bar {id}"),
+			10,
+			EventBus::new(),
+			silent,
+			line.clone(),
+		)
+	}
+
+	fn holder(line: &TerminalLine) -> Option<u32> {
+		*line.0.lock()
+	}
+
+	/// A bar that starts inside a running one, as a container reader's does
+	/// inside `mosaic assemble`'s, used to paint over it on every update.
+	#[test]
+	fn only_the_first_running_bar_of_a_line_draws() {
+		let line = TerminalLine::default();
+		let outer = bar(1, &line, false);
+		assert_eq!(holder(&line), Some(1));
+
+		let inner = bar(2, &line, false);
+		inner.inc(5);
+		inner.finish();
+		assert_eq!(holder(&line), Some(1), "the inner bar never takes the line");
+
+		outer.finish();
+		assert_eq!(holder(&line), None, "a finished bar gives the line up");
+
+		let next = bar(3, &line, false);
+		assert_eq!(holder(&line), Some(3));
+		let clone = next.clone();
+		drop(next);
+		assert_eq!(holder(&line), Some(3), "a clone still holds it");
+		drop(clone);
+		assert_eq!(holder(&line), None, "the last handle dropped gives the line up");
+	}
+
+	#[test]
+	fn a_silent_bar_never_takes_the_line() {
+		let line = TerminalLine::default();
+		let silent = bar(1, &line, true);
+		silent.inc(3);
+		assert_eq!(holder(&line), None);
+		let _drawn = bar(2, &line, false);
+		assert_eq!(holder(&line), Some(2));
+	}
+
+	/// Bars of one factory share a line; a bar made on its own has its own.
+	#[test]
+	fn a_factory_gives_its_bars_one_line() {
+		let mut factory = crate::ProgressFactory::new(EventBus::new(), false);
+		let first = factory.create("first", 10);
+		let second = factory.create("second", 10);
+		assert_eq!(holder(&first.seat.line), Some(1));
+		assert!(Arc::ptr_eq(&first.seat.line.0, &second.seat.line.0));
+
+		let alone = ProgressHandle::new(ProgressId(9), "alone".to_string(), 10, EventBus::new(), false);
+		assert_eq!(holder(&alone.seat.line), Some(9));
 	}
 
 	#[test]
