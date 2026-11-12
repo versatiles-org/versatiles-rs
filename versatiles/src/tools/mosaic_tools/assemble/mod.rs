@@ -24,15 +24,16 @@ mod translucent_buffer;
 
 use std::sync::Arc;
 
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Context, Result, anyhow, ensure};
 pub use cli::Assemble;
 use versatiles_container::TilesRuntime;
 use versatiles_core::{TileCompression, TileFormat};
+use versatiles_pipeline::{QualityByZoom, QualityMap, TileQuality};
 
 /// Encoding configuration shared across assemble functions.
 #[derive(Clone)]
 struct AssembleConfig {
-	quality: [Option<u8>; 32],
+	quality: TileQuality,
 	lossless: bool,
 	tile_format: TileFormat,
 	tile_compression: TileCompression,
@@ -48,7 +49,7 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 	let paths = crate::tools::inputs::resolve_inputs(input_args)?;
 	ensure!(!paths.is_empty(), "no input container paths resolved");
 
-	let quality = cli::parse_quality(&args.quality)?;
+	let quality = read_quality(&args.quality, args.quality_map.as_deref())?;
 	let max_buffer_size = cli::parse_buffer_size(&args.max_buffer_size)?;
 
 	log::info!("assembling {} containers (two-pass)", paths.len());
@@ -73,4 +74,40 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 
 	log::info!("finished mosaic assemble");
 	Ok(())
+}
+
+/// `--quality`, with the map its ranges read.
+fn read_quality(quality: &str, quality_map: Option<&str>) -> Result<TileQuality> {
+	let levels = QualityByZoom::try_from(quality)?;
+	let map = match quality_map {
+		None => None,
+		Some(path) => {
+			// A map nothing reads is a command that does not do what it says.
+			ensure!(
+				levels.uses_map(),
+				"--quality-map is read only by a quality range such as '16:30-50', and --quality has none"
+			);
+			let png = std::fs::read(path).with_context(|| format!("reading the quality map {path}"))?;
+			let map = QualityMap::from_png(&png).with_context(|| format!("reading the quality map {path}"))?;
+			Some(Arc::new(map))
+		}
+	};
+	TileQuality::new(levels, map).context("give the map with --quality-map")
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn error(quality: &str, quality_map: Option<&str>) -> String {
+		format!("{:#}", read_quality(quality, quality_map).unwrap_err())
+	}
+
+	#[test]
+	fn a_range_and_a_map_need_each_other() {
+		assert!(read_quality("70,14:50", None).is_ok());
+		assert!(error("70,14:30-50", None).contains("--quality-map"));
+		assert!(error("70,14:50", Some("missing.png")).contains("read only by a quality range"));
+		assert!(error("70,14:30-50", Some("missing.png")).contains("missing.png"));
+	}
 }

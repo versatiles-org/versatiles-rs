@@ -9,6 +9,7 @@ use anyhow::{Context, Result, anyhow};
 use futures::{StreamExt, future::ready};
 use versatiles_container::{Tile, TileSink, TilesRuntime, open_tile_sink};
 use versatiles_core::{Blob, ConcurrencyLimits, TileCoord, TileJSON, TileStream, utils::HilbertIndex};
+use versatiles_pipeline::TileQuality;
 
 use super::{
 	AssembleConfig,
@@ -168,7 +169,7 @@ pub(super) struct FirstPassResult {
 pub(super) async fn scan_sources(
 	output: &str,
 	paths: &[String],
-	quality: &[Option<u8>; 32],
+	quality: &TileQuality,
 	lossless: bool,
 	min_zoom: Option<u8>,
 	max_zoom: Option<u8>,
@@ -199,7 +200,7 @@ pub(super) async fn scan_sources(
 			cfg.clone()
 		} else {
 			let cfg = AssembleConfig {
-				quality: *quality,
+				quality: quality.clone(),
 				lossless,
 				tile_format: *metadata.tile_format(),
 				tile_compression: *metadata.tile_compression(),
@@ -635,6 +636,7 @@ mod tests {
 	use versatiles_container::{MockReader, MockReaderProfile, TileSource, TilesRuntime};
 	use versatiles_core::{Blob, TileCompression, TileFormat, TileJSON};
 	use versatiles_image::{DynamicImage, ImageBuffer};
+	use versatiles_pipeline::QualityByZoom;
 
 	use super::*;
 
@@ -658,7 +660,7 @@ mod tests {
 
 	fn assemble_config() -> AssembleConfig {
 		AssembleConfig {
-			quality: [Some(75); 32],
+			quality: png_quality(),
 			lossless: false,
 			tile_format: TileFormat::PNG,
 			tile_compression: versatiles_core::TileCompression::Uncompressed,
@@ -811,8 +813,8 @@ mod tests {
 		(dir, path)
 	}
 
-	fn png_quality() -> [Option<u8>; 32] {
-		[Some(75); 32]
+	fn png_quality() -> TileQuality {
+		TileQuality::new(QualityByZoom::try_from("75").unwrap(), None).unwrap()
 	}
 
 	#[tokio::test]

@@ -58,8 +58,22 @@ argument is always treated as the output path."
 	/// ramps from z=0 upwards ("90,80,70" → z=0 → 90, z=1 → 80, z≥2 → 70).
 	/// Use "Z:Q" to jump to zoom Z ("70,14:50,15:20" → z<14 → 70, z=14 → 50,
 	/// z≥15 → 20). Translucent tiles ignore this (see --lossless).
+	///
+	/// In place of a number, a zoom can take a range for --quality-map to
+	/// choose from: "70,16:30-50" means 30 where the map is black and 50
+	/// where it is white from z=16 upwards.
 	#[arg(long, value_name = "str", default_value = "75")]
 	pub(super) quality: String,
+
+	/// Grayscale PNG that chooses a quality within each range of --quality.
+	///
+	/// The map covers the Web Mercator world, square, with a power of two as
+	/// its side, so that a pixel is a tile: in a map of 16384 pixels, a tile
+	/// at z=14. A tile covering several pixels takes the highest quality any
+	/// of them gives. Use the map given to `mosaic tile`, so that tiles
+	/// composited here get the quality their neighbours got there.
+	#[arg(long, value_name = "file")]
+	pub(super) quality_map: Option<String>,
 
 	/// Encode translucent tiles losslessly.
 	///
@@ -106,35 +120,6 @@ working set is large. If the set doesn't fit, the pipeline splits it into
 batches and re-opens the affected sources per batch."
 	)]
 	pub(super) max_buffer_size: String,
-}
-
-pub(super) fn parse_quality(quality: &str) -> Result<[Option<u8>; 32]> {
-	let mut result: [Option<u8>; 32] = [None; 32];
-	let mut zoom: i32 = -1;
-	for part in quality.split(',') {
-		let mut part = part.trim();
-		zoom += 1;
-		if part.is_empty() {
-			continue;
-		}
-		if let Some(idx) = part.find(':') {
-			zoom = part[0..idx].trim().parse()?;
-			ensure!(
-				(0..=31).contains(&zoom),
-				"zoom level must be between 0 and 31, but is {zoom}"
-			);
-			part = &part[(idx + 1)..];
-		}
-		let quality_val: u8 = part.trim().parse()?;
-		ensure!(
-			quality_val <= 100,
-			"quality must be between 0 and 100, but is {quality_val}"
-		);
-		for z in zoom..32 {
-			result[usize::try_from(z).expect("zoom is non-negative")] = Some(quality_val);
-		}
-	}
-	Ok(result)
 }
 
 pub(super) fn parse_buffer_size(s: &str) -> Result<u64> {
@@ -262,64 +247,6 @@ mod tests {
 		assert!(parse_buffer_size("abc").is_err());
 		assert!(parse_buffer_size("-1g").is_err());
 		assert!(parse_buffer_size("101%").is_err());
-	}
-
-	#[test]
-	fn test_parse_quality() {
-		let q = parse_quality("80").unwrap();
-		assert_eq!(q[0], Some(80));
-		assert_eq!(q[15], Some(80));
-
-		let q = parse_quality("80,70,14:50,15:20").unwrap();
-		assert_eq!(q[0], Some(80));
-		assert_eq!(q[1], Some(70));
-		assert_eq!(q[13], Some(70));
-		assert_eq!(q[14], Some(50));
-		assert_eq!(q[15], Some(20));
-	}
-
-	#[test]
-	fn test_parse_quality_single_value_fills_all_zooms() {
-		let q = parse_quality("60").unwrap();
-		for i in &q {
-			assert_eq!(*i, Some(60));
-		}
-	}
-
-	#[test]
-	fn test_parse_quality_zoom_override_cascades() {
-		// "90,5:40" → zooms 0=90, 1-4=90 (no override), 5-31=40
-		let q = parse_quality("90,5:40").unwrap();
-		assert_eq!(q[0], Some(90));
-		assert_eq!(q[4], Some(90));
-		assert_eq!(q[5], Some(40));
-		assert_eq!(q[31], Some(40));
-	}
-
-	#[test]
-	fn test_parse_quality_boundary_values() {
-		assert!(parse_quality("0").is_ok());
-		assert!(parse_quality("100").is_ok());
-		assert!(parse_quality("101").is_err());
-	}
-
-	#[test]
-	fn test_parse_quality_invalid_zoom() {
-		assert!(parse_quality("32:50").is_err());
-	}
-
-	#[test]
-	fn test_parse_quality_non_numeric() {
-		assert!(parse_quality("abc").is_err());
-	}
-
-	#[test]
-	fn test_parse_quality_empty_parts() {
-		// "80,,70" → zoom 0=80, zoom 1 skipped, zoom 2=70
-		let q = parse_quality("80,,70").unwrap();
-		assert_eq!(q[0], Some(80));
-		assert_eq!(q[2], Some(70));
-		assert_eq!(q[31], Some(70));
 	}
 
 	#[test]

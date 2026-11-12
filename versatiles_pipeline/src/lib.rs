@@ -40,6 +40,10 @@ pub use factory::{
 };
 #[cfg(feature = "codegen")]
 pub use factory::{OperationMeta, all_operation_metadata, compatible_transforms};
-pub use helpers::{CsvReader, PipelineReader, register_pipeline_readers};
+pub use helpers::{
+	CsvReader, PipelineReader,
+	quality::{QualityByZoom, QualityMap, TileQuality},
+	register_pipeline_readers,
+};
 pub use operations::named_ramps;
 pub use vpl::{VPLNode, VPLPipeline};

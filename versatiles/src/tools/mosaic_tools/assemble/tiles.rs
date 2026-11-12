@@ -89,7 +89,7 @@ pub(super) fn encode_tiles_parallel(
 						let quality = if cfg.lossless {
 							Some(100)
 						} else {
-							cfg.quality[coord.level as usize]
+							cfg.quality.at(&coord)
 						};
 						tile.change_format(TileFormat::WEBP, quality, None)?;
 						Ok((coord, tile.into_blob(&cfg.tile_compression)?))
@@ -159,12 +159,17 @@ pub(super) async fn fetch_source_tiles(
 mod tests {
 	use versatiles_core::TileCompression;
 	use versatiles_image::{DynamicImage, ImageBuffer};
+	use versatiles_pipeline::{QualityByZoom, TileQuality};
 
 	use super::*;
 
+	fn quality(text: &str) -> TileQuality {
+		TileQuality::new(QualityByZoom::try_from(text).unwrap(), None).unwrap()
+	}
+
 	fn test_config() -> AssembleConfig {
 		AssembleConfig {
-			quality: [Some(75); 32],
+			quality: quality("75"),
 			lossless: false,
 			tile_format: TileFormat::WEBP,
 			tile_compression: TileCompression::Uncompressed,
@@ -304,10 +309,8 @@ mod tests {
 
 	#[test]
 	fn encode_tiles_parallel_uses_zoom_quality() -> Result<()> {
-		let mut quality = [None; 32];
-		quality[5] = Some(50);
 		let config = AssembleConfig {
-			quality,
+			quality: quality("5:50"),
 			lossless: false,
 			tile_format: TileFormat::WEBP,
 			tile_compression: TileCompression::Uncompressed,
@@ -543,11 +546,8 @@ mod tests {
 	#[test]
 	fn encode_tiles_parallel_none_quality() -> Result<()> {
 		// Quality set to None for a zoom level — should still encode
-		let mut quality = [None; 32];
-		// level 3 has None quality explicitly
-		quality[3] = None;
 		let config = AssembleConfig {
-			quality,
+			quality: quality(""),
 			lossless: false,
 			tile_format: TileFormat::WEBP,
 			tile_compression: TileCompression::Uncompressed,
@@ -579,12 +579,8 @@ mod tests {
 	#[test]
 	fn encode_tiles_parallel_mixed_zoom_levels() -> Result<()> {
 		// Different zoom levels use different quality entries
-		let mut quality = [None; 32];
-		quality[0] = Some(50);
-		quality[5] = Some(90);
-		quality[10] = Some(30);
 		let config = AssembleConfig {
-			quality,
+			quality: quality("50,5:90,10:30"),
 			lossless: false,
 			tile_format: TileFormat::WEBP,
 			tile_compression: TileCompression::Uncompressed,
