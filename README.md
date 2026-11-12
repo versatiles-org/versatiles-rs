@@ -280,6 +280,7 @@ Commands:
   convert  Convert between different tile containers
   merge    Merge many tile containers into one
   probe    Show information about a tile container
+  export   Export tiles as ordinary files
   reduce   Reduce a tileset to what a style actually draws
   serve    Serve tiles via HTTP
   help     Show detailed help
@@ -439,6 +440,23 @@ versatiles convert \
 versatiles convert \
   '[,vpl](from_container filename="bad.versatiles" | vector_repair drop_offenders=true)' \
   fixed.versatiles
+```
+
+#### export - Take Tiles Out of a Container
+
+`convert` keeps data as tiles. `export` writes it as ordinary files, and the extension of an output file says what it holds.
+
+`export tile` writes one tile, decompressed unless `--raw` is given. Address it as `z/x/y`, or as the tile at a point with `--at lon,lat --zoom z`:
+
+```sh
+# One vector tile
+versatiles export tile tiles.versatiles 14/8801/5373 -o tile.pbf
+
+# The satellite tile at zoom 17 that contains a point
+versatiles export tile satellite.versatiles --at 13.40,52.52 --zoom 17 -o berlin.webp
+
+# The tile a pipeline produces, without writing a container
+versatiles export tile pipeline.vpl 16/35210/21490 -o tile.webp
 ```
 
 #### reduce - Strip a Tileset to What a Style Draws

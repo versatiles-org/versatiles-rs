@@ -21,6 +21,8 @@ mod convert;
 mod convert_integrity;
 #[path = "cli/credentials.rs"]
 mod credentials;
+#[path = "cli/export.rs"]
+mod export;
 #[path = "cli/help.rs"]
 mod help;
 #[path = "cli/reduce.rs"]

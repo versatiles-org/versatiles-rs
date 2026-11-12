@@ -113,6 +113,8 @@ enum Commands {
 	/// Show information about a tile container
 	Probe(tools::probe::Subcommand),
 
+	Export(tools::export::Subcommand),
+
 	/// Reduce a tileset to what a style actually draws
 	Reduce(tools::reduce::Subcommand),
 
@@ -215,6 +217,7 @@ fn run(cli: &Cli, runtime: &TilesRuntime) -> Result<()> {
 		Commands::Merge(arguments) => tools::merge::run(arguments, runtime),
 		Commands::Help(arguments) => tools::help::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments, runtime),
+		Commands::Export(arguments) => tools::export::run(arguments, runtime),
 		Commands::Reduce(arguments) => tools::reduce::run(arguments, runtime),
 		#[cfg(feature = "server")]
 		Commands::Serve(arguments) => tools::serve::run(arguments, runtime),
