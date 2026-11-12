@@ -138,7 +138,8 @@ fn next_rand_f64() -> f64 {
 				d.as_secs()
 					.wrapping_mul(1_000_000_000)
 					.wrapping_add(u64::from(d.subsec_nanos()))
-			}) | 1;
+			})
+			| 1;
 		AtomicU64::new(seed)
 	});
 

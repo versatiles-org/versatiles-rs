@@ -353,8 +353,7 @@ impl CstNode {
 			sources: self
 				.sources
 				.as_ref()
-				.map(|sources| sources.pipelines.iter().map(CstPipeline::lower).collect())
-				.unwrap_or_default(),
+				.map_or_default(|sources| sources.pipelines.iter().map(CstPipeline::lower).collect()),
 		}
 	}
 }

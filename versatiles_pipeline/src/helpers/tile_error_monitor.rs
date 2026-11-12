@@ -153,8 +153,7 @@ impl Drop for MonitorInner {
 				let first = s.first.get_mut().expect("poisoned tile-error monitor mutex");
 				let sample = first
 					.as_ref()
-					.map(|(c, m)| format!(" (first at {}/{}/{}: {m})", c.level, c.x, c.y))
-					.unwrap_or_default();
+					.map_or_default(|(c, m)| format!(" (first at {}/{}/{}: {m})", c.level, c.x, c.y));
 				Some(format!("{}={n}{sample}", s.stage.as_str()))
 			})
 			.collect();

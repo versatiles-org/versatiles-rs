@@ -451,7 +451,8 @@ impl PMTilesReader {
 				self.header.tile_data.offset,
 				self.internal_compression,
 			)
-			.await? && let Ok(size) = u32::try_from(range.length)
+			.await?
+				&& let Ok(size) = u32::try_from(range.length)
 			{
 				sizes.push((coord, size));
 			}

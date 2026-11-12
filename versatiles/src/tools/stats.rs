@@ -133,7 +133,7 @@ async fn sample(
 	per_report: u32,
 	mut stopped: oneshot::Receiver<()>,
 ) -> Result<Vec<String>> {
-	let stages = || runtime.as_ref().map(TilesRuntime::stage_stats).unwrap_or_default();
+	let stages = || runtime.as_ref().map_or_default(TilesRuntime::stage_stats);
 	let cores = available_cores();
 	let first = ResourceUsage::read();
 	let mut last = first;

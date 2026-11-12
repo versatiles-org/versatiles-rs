@@ -92,7 +92,7 @@ pub fn set_product(name: &str, version: &str, url: Option<&str>) -> Result<()> {
 		);
 	}
 
-	let comment = url.map(|url| format!(" (+{url})")).unwrap_or_default();
+	let comment = url.map_or_default(|url| format!(" (+{url})"));
 	let header = format!("{USER_AGENT} {name}/{version}{comment}");
 
 	if USER_AGENT_WITH_PRODUCT.set(header).is_err() {

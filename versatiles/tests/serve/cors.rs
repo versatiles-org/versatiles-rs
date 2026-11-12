@@ -38,7 +38,7 @@ impl CorsTestServer {
 			.collect::<Vec<_>>()
 			.join("\n");
 
-		let max_age_yaml = max_age.map(|s| format!("  max_age_seconds: {s}")).unwrap_or_default();
+		let max_age_yaml = max_age.map_or_default(|s| format!("  max_age_seconds: {s}"));
 
 		let config = format!(
 			r#"

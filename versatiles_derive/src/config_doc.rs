@@ -90,11 +90,13 @@ pub fn is_primitive_like(ty: &syn::Type) -> bool {
 	matches!(
 		s.as_str(),
 		"bool"
-			| "u8" | "u16"
+			| "u8"
+			| "u16"
 			| "u32"
 			| "u64"
 			| "u128"
-			| "i8" | "i16"
+			| "i8"
+			| "i16"
 			| "i32"
 			| "i64"
 			| "i128"
