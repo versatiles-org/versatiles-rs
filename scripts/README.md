@@ -44,11 +44,12 @@ Run any of them as `./scripts/<name>` from anywhere in the repository.
 
 ## Install
 
-| Script                                       | Purpose                                                                                        |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| [`install-gdal.sh`](#install-gdalsh)         | Install GDAL development libraries via the system package manager                              |
-| [`install-unix.sh`](#install-unixsh)         | Install the VersaTiles binary on Unix by downloading the correct precompiled release binary    |
-| [`install-windows.ps1`](#install-windowsps1) | Install the VersaTiles binary on Windows by downloading the correct precompiled release binary |
+| Script                                             | Purpose                                                                                                           |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| [`install-gdal.sh`](#install-gdalsh)               | Install GDAL development libraries via the system package manager                                                 |
+| [`install-unix.sh`](#install-unixsh)               | Install the VersaTiles binary on Unix by downloading the correct precompiled release binary                       |
+| [`install-from-source.sh`](#install-from-sourcesh) | Build the latest stable release from source with all features, GDAL included, and install it with `cargo install` |
+| [`install-windows.ps1`](#install-windowsps1)       | Install the VersaTiles binary on Windows by downloading the correct precompiled release binary                    |
 
 ## Release & Maintenance
 
@@ -151,6 +152,15 @@ curl -Ls "https://github.com/versatiles-org/versatiles-rs/releases/latest/downlo
 # A particular release instead of the latest stable one (or set VERSATILES_VERSION)
 curl -Ls "https://github.com/versatiles-org/versatiles-rs/releases/latest/download/install-unix.sh" | sudo sh -s v5.0.0-rc.3
 ```
+
+### `install-from-source.sh`
+
+```sh
+./scripts/install-from-source.sh           # the latest stable release
+./scripts/install-from-source.sh v5.12.0   # a particular release
+```
+
+Builds the release tag from GitHub rather than the crate from crates.io, because the `gdal` feature needs the GDAL bindings pinned in `versatiles_pipeline/Cargo.toml`. Installs into `~/.cargo/bin`, or `$CARGO_INSTALL_ROOT/bin`. Requires GDAL development libraries and libclang, so run `install-gdal.sh` first.
 
 ### `install-windows.ps1`
 
