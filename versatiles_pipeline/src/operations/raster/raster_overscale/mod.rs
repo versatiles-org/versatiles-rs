@@ -37,6 +37,7 @@
 
 mod fill;
 mod mask;
+mod region;
 mod scale;
 
 use anyhow::Result;

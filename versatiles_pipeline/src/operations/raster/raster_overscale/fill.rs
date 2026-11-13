@@ -5,7 +5,7 @@
 //! amounts:
 //!
 //! - *Where can a tile be created at all?* Answered once, when the operation is
-//!   built, as a pyramid ([`FillOverscale::fill`]).
+//!   built, as a [`FillRegion`] ([`FillOverscale::fill`]).
 //! - *Which tile would it be created from, and would it be empty?* Answered
 //!   from the source's index and from [`Mask`]s, without scaling anything
 //!   ([`FillOverscale::resolve`]).
@@ -23,12 +23,16 @@ use futures::{StreamExt, TryStreamExt, stream};
 use moka::{future::Cache, policy::EvictionPolicy};
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use versatiles_core::{
-	ConcurrencyLimits, GeoBBox, MAX_ZOOM_LEVEL, SharedWork, TileBBox, TileCoord, TileCover, TileFormat, TileJSON,
-	TilePyramid, TileSchema, TileStream,
+	ConcurrencyLimits, MAX_ZOOM_LEVEL, SharedWork, TileBBox, TileCoord, TileCover, TileFormat, TileJSON, TilePyramid,
+	TileSchema, TileStream,
 };
 use versatiles_image::DynamicImage;
 
-use super::{mask::Mask, scale::Scaling};
+use super::{
+	mask::Mask,
+	region::{FillRegion, union_of},
+	scale::Scaling,
+};
 
 /// A request for more tiles than this along one edge is answered box by box,
 /// so that what has to be remembered about a box stays small.
@@ -58,9 +62,9 @@ pub struct FillOverscale {
 	source: SharedTileSource,
 	/// The tiles the source has.
 	native: Arc<TilePyramid>,
-	/// Where a tile may be created, per level. Decided when the operation is
-	/// built; whether a tile there really has content is decided per tile.
-	fill: Arc<TilePyramid>,
+	/// Where a tile may be created. Decided when the operation is built;
+	/// whether a tile there really has content is decided per tile.
+	fill: Arc<FillRegion>,
 	/// The source's lowest level. Nothing is created at or below it.
 	level_min: u8,
 	/// The highest level tiles are created at.
@@ -137,7 +141,7 @@ impl FillOverscale {
 			tilejson,
 			source,
 			native,
-			fill: Arc::new(TilePyramid::new_empty()),
+			fill: Arc::new(FillRegion::empty()),
 			level_min,
 			level_max,
 			scaling,
@@ -180,11 +184,11 @@ impl FillOverscale {
 			);
 		}
 		let content = operation.content_of_lowest_levels().await?;
-		let fill = fill_region(&operation.native, &content, bounds.as_ref(), level_min, level_max)?;
+		let fill = FillRegion::new(&operation.native, &content, bounds.as_ref(), level_min, level_max)?;
 
 		let mut advertised = operation.native.as_ref().clone();
 		for level in level_min.saturating_add(1)..=level_max {
-			let cover = advertised.level_ref(level).union(fill.level_ref(level))?;
+			let cover = union_of(advertised.level_ref(level), fill.cover(level)?)?;
 			advertised.set_level(cover);
 		}
 		operation.fill = Arc::new(fill);
@@ -318,8 +322,7 @@ impl FillOverscale {
 
 	/// Whether any tile in `bbox` may have to be created.
 	fn creates_in(&self, bbox: &TileBBox) -> bool {
-		let level = bbox.level();
-		level > self.level_min && level <= self.level_max && self.fill.level_ref(level).intersects_bbox(bbox)
+		self.fill.intersects_bbox(bbox)
 	}
 
 	/// The decoded tile of the source at `coord`, or `None` if it has none.
@@ -422,7 +425,7 @@ impl FillOverscale {
 			return Ok(plan);
 		}
 		let level = bbox.level();
-		let fill = self.fill.level_ref(level);
+		let fill = &self.fill;
 
 		// What still needs a source, as boxes of tiles at `level`.
 		let mut open: Vec<TileBBox> = if natives.is_empty() {
@@ -623,56 +626,6 @@ impl FillOverscale {
 	}
 }
 
-/// Where a tile may be created, per level from `level_min + 1` to `level_max`.
-///
-/// A tile can be created wherever the source has a tile at a lower level:
-/// each level takes over the area of the levels below it. The levels in
-/// `content` contribute the area of their *content*, which can be less than
-/// their tiles; the others contribute their tiles. All of it is cut to the
-/// tiles that reach into `bounds`.
-///
-/// More than is created in the end, never less: whether a tile has content is
-/// decided by the nearest tile below it, and that one can be empty where a
-/// lower one is not.
-fn fill_region(
-	native: &TilePyramid,
-	content: &[(u8, TileCover)],
-	bounds: Option<&GeoBBox>,
-	level_min: u8,
-	level_max: u8,
-) -> Result<TilePyramid> {
-	let mut fill = TilePyramid::new_empty();
-	// The tiles of the levels below the current one that are not in `content`.
-	let lowest = native.level_ref(level_min);
-	let mut tiles_below: Option<TileCover> = (!lowest.is_empty()
-		&& !content.iter().any(|(content_level, _)| *content_level == level_min))
-	.then(|| lowest.clone());
-
-	for level in level_min.saturating_add(1)..=level_max {
-		let mut cover = TileCover::new_empty(level)?;
-		for (_, content) in content.iter().filter(|(content_level, _)| *content_level < level) {
-			cover = cover.union(&content.at_level(level))?;
-		}
-		if let Some(tiles_below) = &tiles_below {
-			cover = cover.union(&tiles_below.at_level(level))?;
-		}
-		if let Some(bounds) = bounds {
-			let reached = TileBBox::from_geo_bbox(level, bounds)?;
-			cover = cover.intersection(&TileCover::from(reached))?;
-		}
-		fill.set_level(cover);
-
-		let tiles = native.level_ref(level);
-		if !tiles.is_empty() && !content.iter().any(|(content_level, _)| *content_level == level) {
-			tiles_below = Some(match tiles_below {
-				Some(below) => below.at_level(level).union(tiles)?,
-				None => tiles.clone(),
-			});
-		}
-	}
-	Ok(fill)
-}
-
 #[async_trait]
 impl TileSource for FillOverscale {
 	fn metadata(&self) -> &TileSourceMetadata {
@@ -758,7 +711,7 @@ impl TileSource for FillOverscale {
 #[expect(clippy::cast_possible_truncation, reason = "test data is built from literal values")]
 mod tests {
 	use versatiles_container::Traversal;
-	use versatiles_core::TileCompression;
+	use versatiles_core::{GeoBBox, TileCompression};
 	use versatiles_image::DynamicImageTraitConvert;
 
 	use super::*;
@@ -1066,6 +1019,28 @@ mod tests {
 	}
 
 	// --- where nothing is created ---
+
+	/// #329: bounds that lie on no tile edge used to cost memory that doubled
+	/// with every level, and level 30 did not fit. Now the operation is built
+	/// at once, and still creates nothing outside them.
+	#[tokio::test]
+	async fn crooked_bounds_reach_level_30() -> Result<()> {
+		let bounds = GeoBBox::new(-180.0, -56.7, 180.0, 83.77)?;
+		let source = TestSource::new(
+			TileFormat::PNG,
+			vec![(coord(0, 0, 0), opaque(coord(0, 0, 0)))],
+			Some(bounds),
+		);
+		let op = fill(source, Some(30)).await;
+
+		let reach = TileBBox::from_geo_bbox(30, &bounds)?;
+		let pyramid = op.metadata().tile_pyramid().unwrap();
+		assert_eq!(pyramid.level_ref(30).count_tiles(), reach.count_tiles());
+		let (x, y) = (reach.x_min()?, reach.y_max()?);
+		assert!(op.tile(&coord(30, x, y)).await?.is_some());
+		assert!(op.tile(&coord(30, x, y + 1)).await?.is_none());
+		Ok(())
+	}
 
 	/// The pyramid of this source is one tile per level, and its lowest one is
 	/// the whole world. Its bounds are derived from the highest level, which
