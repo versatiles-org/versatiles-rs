@@ -2,7 +2,7 @@ use anyhow::Result;
 use versatiles_container::{Tile, TileSource};
 use versatiles_core::{TileCoord, bounded_number};
 use versatiles_derive::context;
-use versatiles_image::traits::DynamicImageTraitOperation;
+use versatiles_image::{DynamicImage, traits::DynamicImageTraitOperation};
 
 use crate::{PipelineFactory, operations::transform::TileTransform, vpl::VPLNode};
 
@@ -14,10 +14,24 @@ bounded_number! {
 	Contrast: f32, greater_than 0.0;
 	/// A gamma exponent. Zero divides by zero rather than being a mild edge.
 	Gamma: f32, greater_than 0.0;
+	/// A factor applied to each colour's distance from grey. A negative one
+	/// would turn colours into their opposites, which is not saturation.
+	Saturation: f32, at_least 0.0;
 }
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Adjusts the brightness, contrast and gamma of raster tiles.
+/// Adjusts the saturation, contrast, brightness and gamma of raster tiles.
+///
+/// They apply in that order, whichever of them are given, so a set of values
+/// always means the same.
+///
+/// ```vpl
+/// from_container filename="satellite.versatiles" | raster_levels saturation=0.65 brightness=65 gamma=1.1
+/// ```
+///
+/// Saturation moves each colour channel towards the pixel's grey value, its
+/// Rec. 709 luma `0.2126 r + 0.7152 g + 0.0722 b`, or away from it above `1`.
+/// Greyscale images have no colour to change. Alpha is never changed.
 struct Args {
 	/// Offset added to every channel. Defaults to `0.0`.
 	#[vpl(default = "0.0")]
@@ -28,6 +42,9 @@ struct Args {
 	/// Gamma exponent. Defaults to `1.0`.
 	#[vpl(default = "1.0", step = "0.1")]
 	gamma: Option<Gamma>,
+	/// Factor applied to each colour's distance from grey; `0` gives greyscale. Defaults to `1.0`.
+	#[vpl(default = "1.0", step = "0.1")]
+	saturation: Option<Saturation>,
 }
 
 #[derive(Debug)]
@@ -36,6 +53,7 @@ struct Operation {
 	brightness: f32,
 	contrast: f32,
 	gamma: f32,
+	saturation: f32,
 }
 
 impl Operation {
@@ -50,6 +68,7 @@ impl Operation {
 			brightness: args.brightness.map_or(0.0, Brightness::get) / 255.0,
 			contrast: args.contrast.map_or(1.0, Contrast::get) / 255.0,
 			gamma: args.gamma.map_or(1.0, Gamma::get),
+			saturation: args.saturation.map_or(1.0, Saturation::get),
 		};
 		Ok(operation)
 	}
@@ -60,17 +79,48 @@ impl TileTransform for Operation {
 
 	fn run(&self, _coord: &TileCoord, mut tile: Tile) -> Result<Option<Tile>> {
 		let (contrast, brightness, gamma) = (self.contrast, self.brightness, self.gamma);
+		let image = tile.as_image_mut()?;
+		// Exactly `1` changes nothing, so the pass is skipped rather than paid for.
+		#[expect(
+			clippy::float_cmp,
+			reason = "`1` is the default, given or left out, not a computed value"
+		)]
+		if self.saturation != 1.0 {
+			saturate(image, self.saturation);
+		}
 		#[expect(
 			clippy::cast_possible_truncation,
 			clippy::cast_sign_loss,
 			reason = "clamped to 0..=255 before the cast"
 		)]
-		tile.as_image_mut()?.map_color_values(|v| {
+		image.map_color_values(|v| {
 			(((f32::from(v) - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0)
 				.round()
 				.clamp(0.0, 255.0) as u8
 		});
 		Ok(Some(tile))
+	}
+}
+
+/// Scales each colour channel's distance from the pixel's Rec. 709 luma by
+/// `factor`. Greyscale images, which have no colour, and alpha are left alone.
+fn saturate(image: &mut DynamicImage, factor: f32) {
+	#[expect(
+		clippy::cast_possible_truncation,
+		clippy::cast_sign_loss,
+		reason = "clamped to 0..=255 before the cast"
+	)]
+	let apply = |rgb: &mut [u8]| {
+		let [r, g, b] = [rgb[0], rgb[1], rgb[2]].map(f32::from);
+		let luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+		for c in &mut rgb[..3] {
+			*c = (luma + (f32::from(*c) - luma) * factor).round().clamp(0.0, 255.0) as u8;
+		}
+	};
+	match image {
+		DynamicImage::ImageRgb8(img) => img.pixels_mut().for_each(|p| apply(&mut p.0)),
+		DynamicImage::ImageRgba8(img) => img.pixels_mut().for_each(|p| apply(&mut p.0)),
+		_ => {}
 	}
 }
 
@@ -118,6 +168,7 @@ mod tests {
 				brightness: brightness / 255.0,
 				contrast: contrast / 255.0,
 				gamma,
+				saturation: 1.0,
 			},
 			TilesRuntime::new_silent(),
 		);
@@ -155,6 +206,67 @@ mod tests {
 		let adj = op.tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
 		assert_eq!(adj.average_color(), expected_color);
 		Ok(())
+	}
+
+	/// The colour of a flat tile after `raster_levels` with these values.
+	async fn levels_of(color: &[u8], saturation: f32, brightness: f32) -> Result<Vec<u8>> {
+		let op = TransformOp::new(
+			Box::new(DummyImageSource::from_color(color, 4, TileFormat::PNG, None).unwrap()),
+			Operation {
+				brightness: brightness / 255.0,
+				contrast: 1.0 / 255.0,
+				gamma: 1.0,
+				saturation,
+			},
+			TilesRuntime::new_silent(),
+		);
+		let bbox = TileBBox::from_min_and_max(8, 56, 56, 56, 56)?;
+		let mut tiles = op.tile_stream(bbox).await?.to_vec().await;
+		Ok(tiles[0].1.as_image()?.average_color())
+	}
+
+	// Luma of [51, 119, 170] is 108.2.
+	#[rstest]
+	#[case::unchanged(1.0, [51, 119, 170])]
+	#[case::greyscale(0.0, [108, 108, 108])]
+	#[case::halfway_to_grey(0.5, [80, 114, 139])]
+	#[case::boosted_and_clamped(2.0, [0, 130, 232])]
+	#[tokio::test]
+	async fn saturation_scales_the_distance_from_grey(#[case] saturation: f32, #[case] expected: [u8; 3]) -> Result<()> {
+		assert_eq!(levels_of(&[51, 119, 170], saturation, 0.0).await?, expected);
+		Ok(())
+	}
+
+	#[test]
+	fn saturation_leaves_greyscale_and_alpha_alone() {
+		let mut grey = DynamicImage::ImageLumaA8(versatiles_image::ImageBuffer::from_pixel(2, 2, [90, 200].into()));
+		saturate(&mut grey, 0.0);
+		assert_eq!(grey.average_color(), [90, 200]);
+
+		let mut rgba = DynamicImage::ImageRgba8(versatiles_image::ImageBuffer::from_pixel(
+			2,
+			2,
+			[51, 119, 170, 77].into(),
+		));
+		saturate(&mut rgba, 0.0);
+		assert_eq!(rgba.average_color(), [108, 108, 108, 77]);
+	}
+
+	/// Saturation comes first: greyed at 108, then brightened to 208. The other
+	/// way round, the brightened colour [151, 219, 255] would grey to 207.
+	#[tokio::test]
+	async fn saturation_applies_before_brightness() -> Result<()> {
+		assert_eq!(levels_of(&[51, 119, 170], 0.0, 100.0).await?, [208, 208, 208]);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn a_negative_saturation_is_refused() {
+		let error = PipelineFactory::new_dummy()
+			.operation_from_vpl("from_debug format=png | raster_levels saturation=-0.5")
+			.await
+			.unwrap_err();
+		assert!(format!("{error:#}").contains("must be at least 0"), "{error:#}");
 	}
 
 	#[tokio::test]

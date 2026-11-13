@@ -693,6 +693,17 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
+		pattern: "Option<Saturation>",
+		display_name: "0 or more",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("Saturation"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: true,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
 		pattern: "Option<Exaggeration>",
 		display_name: "0..1",
 		method_name: "property_enum_option",

@@ -184,6 +184,7 @@ raster_levels [transform]
 raster_levels.brightness: Option<Brightness> | optional | default=0.0 | bounds=[-255,255] float
 raster_levels.contrast: Option<Contrast> | optional | default=1.0 | bounds=(0,inf) float | step=0.1
 raster_levels.gamma: Option<Gamma> | optional | default=1.0 | bounds=(0,inf) float | step=0.1
+raster_levels.saturation: Option<Saturation> | optional | default=1.0 | bounds=[0,inf) float | step=0.1
 
 raster_mask [transform]
 raster_mask.geojson: FileLocation | required | accepts=suggested[geojson,json]

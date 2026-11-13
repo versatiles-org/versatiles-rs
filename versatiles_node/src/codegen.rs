@@ -117,6 +117,7 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		| "Option<Brightness>"
 		| "Option<Contrast>"
 		| "Option<Gamma>"
+		| "Option<Saturation>"
 		| "Option<Exaggeration>"
 		| "H3Resolution"
 		| "EpsgCode"

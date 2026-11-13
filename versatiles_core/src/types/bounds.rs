@@ -125,9 +125,10 @@ impl NumberBounds for f64 {
 /// uses and the probe `check` runs — so a value `check` accepts and a value
 /// that builds are the same set by construction.
 ///
-/// Two spellings, because two of the parameters this exists for are documented
-/// "above `0`", which an inclusive pair cannot express. The range lands on the
-/// type as `MIN`, `MAX` and `MIN_INCLUSIVE`.
+/// Three spellings: an inclusive pair, `greater_than` for the parameters
+/// documented "above `0`", which an inclusive pair cannot express, and
+/// `at_least` for "`0` or more" with no upper end. The range lands on the type
+/// as `MIN`, `MAX` and `MIN_INCLUSIVE`.
 ///
 /// Works for any number `f64` can hold exactly — `u8` through `u32`, `i8`
 /// through `i32`, `f32` and `f64`.
@@ -140,6 +141,8 @@ impl NumberBounds for f64 {
 ///     Effort: u8, 0..=100;
 ///     /// Gamma exponent.
 ///     Gamma: f32, greater_than 0.0;
+///     /// Saturation factor.
+///     Saturation: f32, at_least 0.0;
 /// }
 ///
 /// assert_eq!(Effort::try_from("80").unwrap().get(), 80);
@@ -149,6 +152,10 @@ impl NumberBounds for f64 {
 /// assert!(Gamma::try_from("0").is_err(), "`0` is not above `0`");
 /// assert_eq!(Gamma::MAX, None, "no upper end");
 /// assert!(!Gamma::bounds().min_inclusive);
+///
+/// assert_eq!(Saturation::try_from("0").unwrap().get(), 0.0, "`0` is at least `0`");
+/// assert!(Saturation::try_from("-0.5").is_err());
+/// assert_eq!(Saturation::MAX, None, "no upper end");
 /// ```
 #[macro_export]
 macro_rules! bounded_number {
@@ -175,6 +182,18 @@ macro_rules! bounded_number {
 		$crate::bounded_number!(@define $(#[$meta])* $name : $inner,
 			min = $min, max = ::core::option::Option::None, min_inclusive = false,
 			reason = ::core::concat!("must be greater than ", ::core::stringify!($min)));
+		$crate::bounded_number!($($rest)*);
+	};
+
+	// An inclusive lower bound with no upper end: `at_least 0.0`.
+	(
+		$(#[$meta:meta])*
+		$name:ident : $inner:ty, at_least $min:literal ;
+		$($rest:tt)*
+	) => {
+		$crate::bounded_number!(@define $(#[$meta])* $name : $inner,
+			min = $min, max = ::core::option::Option::None, min_inclusive = true,
+			reason = ::core::concat!("must be at least ", ::core::stringify!($min)));
 		$crate::bounded_number!($($rest)*);
 	};
 

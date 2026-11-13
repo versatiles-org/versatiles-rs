@@ -636,13 +636,22 @@ With `lossless_if_smaller=true`, each tile that is encoded is encoded twice, los
 
 ## raster_levels
 
-Adjusts the brightness, contrast and gamma of raster tiles.
+Adjusts the saturation, contrast, brightness and gamma of raster tiles.
+
+They apply in that order, whichever of them are given, so a set of values always means the same.
+
+```vpl
+from_container filename="satellite.versatiles" | raster_levels saturation=0.65 brightness=65 gamma=1.1
+```
+
+Saturation moves each colour channel towards the pixel's grey value, its Rec. 709 luma `0.2126 r + 0.7152 g + 0.0722 b`, or away from it above `1`. Greyscale images have no colour to change. Alpha is never changed.
 
 ### Parameters
 
 - _`brightness`: -255..255 (optional)_ - Offset added to every channel. Defaults to `0.0`.
 - _`contrast`: above 0 (optional)_ - Factor applied around mid-grey. Defaults to `1.0`.
 - _`gamma`: above 0 (optional)_ - Gamma exponent. Defaults to `1.0`.
+- _`saturation`: 0 or more (optional)_ - Factor applied to each colour's distance from grey; `0` gives greyscale. Defaults to `1.0`.
 
 ---
 
