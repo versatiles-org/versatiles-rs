@@ -93,6 +93,68 @@ pub async fn open_sftp(handle: &SshHandle) -> Result<Sftp> {
 		.context("failed to start an SFTP session")
 }
 
+/// The longest read requested from a server that does not say how long a read
+/// may be. Every server takes this much: the SFTP drafts require servers to
+/// accept packets of at least 34000 bytes.
+const DEFAULT_READ_LEN: u32 = 32 * 1024;
+
+/// The longest read requested from any server. russh-sftp's client refuses
+/// packets over 256 KiB, and a reply carries 13 bytes besides the data.
+const MAX_READ_LEN: u32 = 256 * 1024 - 13;
+
+/// An SFTP channel used through its requests rather than through
+/// [`russh_sftp::client::fs::File`], which reads ahead: up to 16 requests of
+/// 256 KiB each, whatever the caller asked for, so a read of a few KB moved
+/// megabytes (#331).
+pub struct RawSftp {
+	/// The channel.
+	pub session: russh_sftp::client::RawSftpSession,
+	/// The longest read the server accepts, as far as is known: what it says
+	/// in `limits@openssh.com`, else 32 KiB, which every server accepts.
+	pub max_read_len: u32,
+}
+
+/// Opens an SFTP subsystem on `handle` for raw requests.
+///
+/// # Errors
+/// Returns an error if the channel cannot be opened, the server does not
+/// offer the `sftp` subsystem, or the session cannot be started.
+pub async fn open_raw_sftp(handle: &SshHandle) -> Result<RawSftp> {
+	use russh_sftp::{
+		client::{RawSftpSession, rawsession::Limits},
+		extensions,
+	};
+
+	let channel = handle
+		.channel_open_session()
+		.await
+		.context("failed to open an SSH channel")?;
+	channel
+		.request_subsystem(true, "sftp")
+		.await
+		.context("the server refused the SFTP subsystem")?;
+	let mut session = RawSftpSession::new(channel.into_stream());
+	let version = session.init().await.context("failed to start an SFTP session")?;
+
+	let mut max_read_len = DEFAULT_READ_LEN;
+	if version.extensions.get(extensions::LIMITS).is_some_and(|v| v == "1") {
+		let limits = Limits::from(
+			session
+				.limits()
+				.await
+				.context("failed to read the server's SFTP limits")?,
+		);
+		session.set_limits(limits);
+		if let Some(read_len) = limits.read_len {
+			max_read_len = u32::try_from(read_len).unwrap_or(u32::MAX);
+		}
+	}
+	Ok(RawSftp {
+		session,
+		max_read_len: max_read_len.clamp(1, MAX_READ_LEN),
+	})
+}
+
 /// Extract the remote file path from an SFTP URL.
 ///
 /// A `String`, not a `PathBuf`: SFTP paths are always `/`-separated, and now

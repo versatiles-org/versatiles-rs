@@ -52,7 +52,7 @@ use std::{
 	path::PathBuf,
 	sync::{
 		Arc,
-		atomic::{AtomicBool, Ordering},
+		atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
 	},
 	time::Duration,
 };
@@ -102,11 +102,22 @@ fn ok_status(id: u32) -> Status {
 // SFTP handler — error type is StatusCode (implements Into<StatusCode>)
 // ---------------------------------------------------------------------------
 
+/// What the reads of every session on a server have in common: how much they
+/// sent, and how much one may send.
+#[derive(Default)]
+struct Reads {
+	/// Bytes of file data sent in replies to reads.
+	bytes_sent: AtomicU64,
+	/// Replies to reads carry at most this many bytes. `0` is no limit.
+	max_len: AtomicU32,
+}
+
 struct SftpHandler {
 	fs: Fs,
 	handles: HashMap<String, PathBuf>,
 	next_id: u64,
 	drop_flag: Arc<AtomicBool>,
+	reads: Arc<Reads>,
 }
 
 // `async` with nothing to await in several methods: the trait declares them
@@ -201,7 +212,12 @@ impl russh_sftp::server::Handler for SftpHandler {
 		if start >= data.len() {
 			return Err(StatusCode::Eof);
 		}
+		let len = match self.reads.max_len.load(Ordering::SeqCst) {
+			0 => len,
+			max_len => len.min(max_len),
+		};
 		let end = (start + len as usize).min(data.len());
+		self.reads.bytes_sent.fetch_add((end - start) as u64, Ordering::SeqCst);
 		Ok(Data {
 			id,
 			data: data[start..end].to_vec(),
@@ -280,6 +296,7 @@ impl russh_sftp::server::Handler for SftpHandler {
 struct SshHandler {
 	fs: Fs,
 	drop_flag: Arc<AtomicBool>,
+	reads: Arc<Reads>,
 	channel: Option<Channel<Msg>>,
 }
 
@@ -328,6 +345,7 @@ impl server::Handler for SshHandler {
 					handles: HashMap::new(),
 					next_id: 0,
 					drop_flag: self.drop_flag.clone(),
+					reads: self.reads.clone(),
 				};
 				tokio::spawn(async move {
 					russh_sftp::server::run(channel.into_stream(), sftp_handler).await;
@@ -350,6 +368,7 @@ pub struct TestSftpServer {
 	addr: SocketAddr,
 	fs: Fs,
 	drop_flag: Arc<AtomicBool>,
+	reads: Arc<Reads>,
 	/// Signals the server thread to exit its accept loop and shut down.
 	shutdown: Arc<AtomicBool>,
 	/// SFTP operation timeout (ms) embedded in URLs returned by [`Self::url`].
@@ -399,6 +418,8 @@ impl TestSftpServer {
 
 		let fs_clone = fs.clone();
 		let drop_flag_clone = drop_flag.clone();
+		let reads = Arc::new(Reads::default());
+		let reads_clone = reads.clone();
 		let shutdown_clone = shutdown.clone();
 
 		let (ready_tx, ready_rx) = oneshot::channel::<()>();
@@ -422,6 +443,7 @@ impl TestSftpServer {
 							let handler = SshHandler {
 								fs: fs_clone.clone(),
 								drop_flag: drop_flag_clone.clone(),
+								reads: reads_clone.clone(),
 								channel: None,
 							};
 							let config = config.clone();
@@ -451,6 +473,7 @@ impl TestSftpServer {
 			addr,
 			fs,
 			drop_flag,
+			reads,
 			shutdown,
 			timeout_ms,
 		}
@@ -483,6 +506,19 @@ impl TestSftpServer {
 	pub async fn write_file(&self, path: &str, data: &[u8]) {
 		let mut fs = self.fs.lock().await;
 		fs.insert(PathBuf::from(path), FsEntry::File(data.to_vec()));
+	}
+
+	/// Bytes of file data the server has sent in replies to reads, over all
+	/// sessions.
+	#[must_use]
+	pub fn bytes_read(&self) -> u64 {
+		self.reads.bytes_sent.load(Ordering::SeqCst)
+	}
+
+	/// Answer every read with at most `len` bytes, as servers do that cap
+	/// their reads without saying so.
+	pub fn set_max_read_len(&self, len: u32) {
+		self.reads.max_len.store(len, Ordering::SeqCst);
 	}
 
 	/// Cause the next `read` or `write` SFTP operation to fail,

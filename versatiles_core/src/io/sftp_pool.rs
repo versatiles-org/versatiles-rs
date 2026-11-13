@@ -20,15 +20,27 @@ use std::{
 	time::Instant,
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail, ensure};
+use futures::{StreamExt, stream::FuturesOrdered};
 use reqwest::Url;
-use tokio::{
-	io::{AsyncReadExt, AsyncSeekExt},
-	sync::{Mutex, Notify, Semaphore},
-};
+use russh_sftp::{client::error::Error as SftpError, protocol::StatusCode};
+use tokio::sync::{Mutex, Notify, Semaphore};
 
-use super::sftp_utils::{self, Sftp, SshHandle};
+use super::sftp_utils::{self, RawSftp, SshHandle};
 use crate::{Blob, ByteRange};
+
+/// How many read requests one range keeps in flight at most. Only a range
+/// longer than one request has more than one, and none reaches past its end.
+const MAX_READS_IN_FLIGHT: usize = 16;
+
+/// A file opened on a connection.
+struct OpenFile {
+	/// The server's handle for it.
+	handle: String,
+	/// Its size when it was opened: a reply that ends short of it was cut by
+	/// the server, not by the end of the file.
+	size: u64,
+}
 
 /// Monotonic id for log correlation across pool / connection / read messages.
 fn next_connection_id() -> u64 {
@@ -104,17 +116,117 @@ struct LiveConnection {
 	// Kept alive for the lifetime of the SFTP channel: dropping the handle
 	// closes the transport underneath it.
 	_session: SshHandle,
-	sftp: Sftp,
-	/// Open file handles, by id. Rebuilt from [`ConnectionInner::registered`]
-	/// on every reconnect.
-	files: HashMap<u64, russh_sftp::client::fs::File>,
+	/// Shared with the tasks that close files, which run without the lock.
+	sftp: Arc<russh_sftp::client::RawSftpSession>,
+	/// The longest read the server answers in full. Starts at what the server
+	/// says, and shrinks to the length of a reply that it cut short.
+	read_len: u32,
+	/// Open files, by id. Rebuilt from [`ConnectionInner::registered`] on
+	/// every reconnect.
+	files: HashMap<u64, OpenFile>,
+}
+
+impl LiveConnection {
+	fn new(session: SshHandle, sftp: RawSftp, files: HashMap<u64, OpenFile>) -> Self {
+		LiveConnection {
+			_session: session,
+			sftp: Arc::new(sftp.session),
+			read_len: sftp.max_read_len,
+			files,
+		}
+	}
+}
+
+/// Opens `path` for reading, with its size.
+async fn open_file(sftp: &russh_sftp::client::RawSftpSession, path: &str) -> Result<OpenFile> {
+	use russh_sftp::protocol::{FileAttributes, OpenFlags};
+
+	let size = sftp
+		.stat(path.to_owned())
+		.await
+		.with_context(|| format!("failed to stat remote file {path:?}"))?
+		.attrs
+		.size
+		.unwrap_or(0);
+	let handle = sftp
+		.open(path.to_owned(), OpenFlags::READ, FileAttributes::default())
+		.await
+		.with_context(|| format!("failed to open remote file {path:?}"))?
+		.handle;
+	Ok(OpenFile { handle, size })
+}
+
+/// Reads `range` of `file`, asking for no byte outside it.
+///
+/// One request per `read_len` bytes, up to [`MAX_READS_IN_FLIGHT`] at a time.
+/// A server may answer a request with less than was asked for; the rest is
+/// then asked for again, and the requests behind it, which no longer start
+/// where the data ends, are dropped. Where such a reply ends inside the file,
+/// the server cut it, and `read_len` shrinks to its length, so that the next
+/// requests are ones the server answers in full.
+async fn read_exact(
+	sftp: &russh_sftp::client::RawSftpSession,
+	file: &OpenFile,
+	range: &ByteRange,
+	read_len: &mut u32,
+) -> Result<Vec<u8>> {
+	let end = range
+		.offset
+		.checked_add(range.length)
+		.with_context(|| format!("range {range} ends beyond 2^64"))?;
+	let mut buffer = Vec::with_capacity(usize::try_from(range.length)?);
+	let mut position = range.offset;
+	let mut next = range.offset;
+	let mut in_flight = FuturesOrdered::new();
+
+	while position < end {
+		while in_flight.len() < MAX_READS_IN_FLIGHT && next < end {
+			let (start, len) = (next, u32::try_from(end.saturating_sub(next).min(u64::from(*read_len)))?);
+			let handle = file.handle.as_str();
+			in_flight.push_back(async move { (start, len, sftp.read(handle, start, len).await) });
+			// At most `end`, since `len` is at most what is left of the range.
+			next = next.saturating_add(u64::from(len));
+		}
+		let (start, len, reply) = in_flight
+			.next()
+			.await
+			.context("no read request in flight before the end of the range")?;
+		ensure!(
+			start == position,
+			"the reply for {start} came while waiting for {position}"
+		);
+		let data = match reply {
+			Ok(data) => data.data,
+			Err(SftpError::Status(status)) if status.status_code == StatusCode::Eof => {
+				bail!("the file ends at byte {position}, before the end of {range}")
+			}
+			Err(error) => return Err(error.into()),
+		};
+		let received = u32::try_from(data.len()).unwrap_or(u32::MAX);
+		ensure!(
+			received > 0 && received <= len,
+			"the server answered a read of {len} bytes at {start} with {received}"
+		);
+		buffer.extend_from_slice(&data);
+		// At most `end`, since `received` is at most what was asked for.
+		position = position.saturating_add(u64::from(received));
+
+		if received < len {
+			if position < file.size {
+				*read_len = (*read_len).min(received);
+			}
+			in_flight = FuturesOrdered::new();
+			next = position;
+		}
+	}
+	Ok(buffer)
 }
 
 /// The mutable state behind a connection's lock.
 ///
-/// One SFTP channel serves every file on the connection, and a read is a
-/// seek followed by a read — two requests that must not interleave with
-/// another reader's — so every operation happens while this is locked.
+/// One SFTP channel serves every file on the connection. Reads, opens and
+/// reconnects all happen while this is locked, so that a reconnect never
+/// swaps the session out from under a read.
 struct ConnectionInner {
 	/// The live SSH session, or `None` while a reconnect is in progress or
 	/// after one failed (the next read then triggers a fresh reconnect).
@@ -153,7 +265,7 @@ impl Connection {
 		log::debug!("[sftp conn {id}] opening SSH+SFTP session to '{display}'");
 		let started = Instant::now();
 		let session = sftp_utils::open_session(url, identity_file).await?;
-		let sftp = sftp_utils::open_sftp(&session).await?;
+		let sftp = sftp_utils::open_raw_sftp(&session).await?;
 		log::debug!(
 			"[sftp conn {id}] session ready in {:.2}s",
 			started.elapsed().as_secs_f32()
@@ -161,11 +273,7 @@ impl Connection {
 		Ok(Arc::new(Connection {
 			id,
 			inner: Mutex::new(ConnectionInner {
-				live: Some(LiveConnection {
-					_session: session,
-					sftp,
-					files: HashMap::new(),
-				}),
+				live: Some(LiveConnection::new(session, sftp, HashMap::new())),
 				registered: HashMap::new(),
 				generation: 0,
 				next_file_id: 0,
@@ -190,18 +298,8 @@ impl Connection {
 			.live
 			.as_mut()
 			.ok_or_else(|| anyhow!("SFTP connection is not established"))?;
-		let size = live
-			.sftp
-			.metadata(path.to_owned())
-			.await
-			.with_context(|| format!("failed to stat remote file {path:?}"))?
-			.size
-			.unwrap_or(0);
-		let file = live
-			.sftp
-			.open(path.to_owned())
-			.await
-			.with_context(|| format!("failed to open remote file {path:?}"))?;
+		let file = open_file(&live.sftp, path).await?;
+		let size = file.size;
 		live.files.insert(id, file);
 		inner.registered.insert(id, path.to_owned());
 		// Saturating would hand out the last id twice; 2^64 opens never happen,
@@ -212,10 +310,20 @@ impl Connection {
 
 	/// Drop a file handle once its source is gone. Best-effort.
 	pub async fn unregister(&self, id: u64) {
-		let mut inner = self.inner.lock().await;
-		inner.registered.remove(&id);
-		if let Some(live) = inner.live.as_mut() {
-			live.files.remove(&id);
+		let closing = {
+			let mut inner = self.inner.lock().await;
+			inner.registered.remove(&id);
+			inner
+				.live
+				.as_mut()
+				.and_then(|live| Some((Arc::clone(&live.sftp), live.files.remove(&id)?)))
+		};
+		// Outside the lock: on a dead connection the reply never comes, and
+		// the reads of other files must not wait for it to time out.
+		if let Some((sftp, file)) = closing
+			&& let Err(error) = sftp.close(file.handle).await
+		{
+			log::debug!("[sftp conn {}] closing file {id} failed: {error}", self.id);
 		}
 	}
 
@@ -235,16 +343,15 @@ impl Connection {
 		let idle = inner.last_used.elapsed();
 
 		let read_result: Result<Blob> = async {
-			let file = inner
+			let live = inner
 				.live
 				.as_mut()
-				.ok_or_else(|| anyhow!("SFTP connection is not established"))?
+				.ok_or_else(|| anyhow!("SFTP connection is not established"))?;
+			let file = live
 				.files
-				.get_mut(&id)
+				.get(&id)
 				.ok_or_else(|| anyhow!("SFTP file id {id} is not registered"))?;
-			file.seek(std::io::SeekFrom::Start(range.offset)).await?;
-			let mut buffer = vec![0u8; usize::try_from(range.length)?];
-			file.read_exact(&mut buffer).await?;
+			let buffer = read_exact(&live.sftp, file, range, &mut live.read_len).await?;
 			Ok(Blob::from(buffer))
 		}
 		.await;
@@ -296,20 +403,15 @@ impl Connection {
 		inner.live = None;
 
 		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref()).await?;
-		let sftp = sftp_utils::open_sftp(&session).await?;
+		let sftp = sftp_utils::open_raw_sftp(&session).await?;
 		let mut files = HashMap::with_capacity(inner.registered.len());
 		for (id, path) in &inner.registered {
-			let file = sftp
-				.open(path.clone())
+			let file = open_file(&sftp.session, path)
 				.await
 				.with_context(|| format!("failed to reopen remote file {path:?}"))?;
 			files.insert(*id, file);
 		}
-		inner.live = Some(LiveConnection {
-			_session: session,
-			sftp,
-			files,
-		});
+		inner.live = Some(LiveConnection::new(session, sftp, files));
 		// Only ever compared for equality, so wrapping keeps it working.
 		inner.generation = inner.generation.wrapping_add(1);
 		inner.last_used = Instant::now();
@@ -562,6 +664,102 @@ mod tests {
 			);
 			connection.unregister(id_a).await;
 			assert!(connection.read_range(id_a, &ByteRange::new(0, 4)).await.is_err());
+		}
+
+		/// Bytes that differ from one offset to the next, so that a misplaced
+		/// chunk shows.
+		fn pattern(len: usize) -> Vec<u8> {
+			(0..len)
+				.map(|i| u8::try_from((i * 7 + i / 251) % 256).unwrap())
+				.collect()
+		}
+
+		async fn read(connection: &Connection, id: u64, offset: u64, length: u64) -> Result<Vec<u8>> {
+			Ok(connection
+				.read_range(id, &ByteRange::new(offset, length))
+				.await?
+				.as_slice()
+				.to_vec())
+		}
+
+		/// #331: russh-sftp's `File` asked for up to 16 chunks of 256 KiB on
+		/// every read, and a read of a few KB moved megabytes.
+		#[tokio::test(flavor = "multi_thread")]
+		#[serial_test::serial]
+		async fn a_small_read_transfers_only_its_bytes() {
+			let server = TestSftpServer::start().await;
+			let data = pattern(4 << 20);
+			server.write_file("/big.bin", &data).await;
+			let connection = acquire(&server.url("/big.bin"), None).await.unwrap();
+			let (id, _) = connection.register("/big.bin").await.unwrap();
+
+			assert_eq!(
+				read(&connection, id, 1_000_000, 3000).await.unwrap(),
+				data[1_000_000..1_003_000]
+			);
+			assert_eq!(
+				read(&connection, id, 2_000_000, 3000).await.unwrap(),
+				data[2_000_000..2_003_000]
+			);
+			assert_eq!(server.bytes_read(), 6000);
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		#[serial_test::serial]
+		async fn a_range_longer_than_one_request_is_read_to_its_end_and_no_further() {
+			let server = TestSftpServer::start().await;
+			let data = pattern(2 << 20);
+			server.write_file("/big.bin", &data).await;
+			let connection = acquire(&server.url("/big.bin"), None).await.unwrap();
+			let (id, _) = connection.register("/big.bin").await.unwrap();
+
+			let range = 12_345..1_012_345;
+			assert_eq!(
+				read(&connection, id, range.start as u64, range.len() as u64)
+					.await
+					.unwrap(),
+				data[range.clone()]
+			);
+			assert_eq!(server.bytes_read(), range.len() as u64);
+		}
+
+		/// A server that answers every read with less than was asked for,
+		/// without saying so beforehand.
+		#[tokio::test(flavor = "multi_thread")]
+		#[serial_test::serial]
+		async fn reads_shrink_to_what_the_server_answers() {
+			let server = TestSftpServer::start().await;
+			let data = pattern(1 << 20);
+			server.write_file("/big.bin", &data).await;
+			server.set_max_read_len(1000);
+			let connection = acquire(&server.url("/big.bin"), None).await.unwrap();
+			let (id, _) = connection.register("/big.bin").await.unwrap();
+
+			assert_eq!(read(&connection, id, 5, 100_000).await.unwrap(), data[5..100_005]);
+			// The first requests, sent before the first reply came back, are
+			// answered in part, and all but the first of those are dropped.
+			let first = server.bytes_read();
+			assert!(first < 100_000 + 16 * 1000, "{first} bytes for a read of 100000");
+
+			// From then on, the requests are as long as the replies.
+			assert_eq!(
+				read(&connection, id, 500_000, 50_000).await.unwrap(),
+				data[500_000..550_000]
+			);
+			assert_eq!(server.bytes_read() - first, 50_000);
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		#[serial_test::serial]
+		async fn a_range_beyond_the_end_of_the_file_is_an_error() {
+			let server = TestSftpServer::start().await;
+			server.write_file("/a.bin", b"hello").await;
+			let connection = acquire(&server.url("/a.bin"), None).await.unwrap();
+			let (id, _) = connection.register("/a.bin").await.unwrap();
+
+			let error = read(&connection, id, 3, 10).await.unwrap_err();
+			assert!(error.to_string().contains("ends at byte 5"), "{error}");
+			assert_eq!(read(&connection, id, 5, 0).await.unwrap(), b"");
 		}
 
 		#[tokio::test(flavor = "multi_thread")]
