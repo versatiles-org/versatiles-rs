@@ -650,6 +650,14 @@ Adjusts the brightness, contrast and gamma of raster tiles.
 
 Makes raster pixels outside a GeoJSON polygon transparent.
 
+With `invert=true` the pixels inside it become transparent instead, which cuts a hole into the map:
+
+```vpl
+from_container filename="satellite.versatiles" | raster_mask geojson="city.geojson" invert=true
+```
+
+The buffer always grows what stays visible, so inverted, a positive buffer shrinks the hole and a negative one widens it. The blur band stays where it is, its ramp reversed.
+
 The mask is not reprojected: coordinates outside the WGS84 range are refused, as is a `crs` member naming another projection. A mask written lat,lon is in range and cannot be detected — it masks the wrong part of the world.
 
 Overlapping polygons in the GeoJSON are merged first, so an area covered twice stays inside.
@@ -660,6 +668,7 @@ Overlapping polygons in the GeoJSON are merged first, so an area covered twice s
 - _`buffer`: f32 (optional)_ - Distance in meters by which to grow the mask, or shrink it when negative. Defaults to `0`.
 - _`blur`: f32 (optional)_ - Width in meters of the soft transition at the mask edge. Defaults to `0`.
 - _`blur_function`: BlurFunction (optional)_ - Values: `linear`, `cosine`. Falloff curve across the `blur` band. Defaults to `linear`.
+- _`invert`: bool (optional)_ - Whether to keep what lies outside the polygon instead of what lies inside. Defaults to `false`.
 
 ---
 
@@ -950,7 +959,13 @@ from_container filename="osm.versatiles"
     ]
 ```
 
-Tiles entirely inside the polygon pass through without being decoded, and tiles entirely outside are dropped without being decoded, so only tiles on the edge are. Geometry in a tile's buffer is cut where it really lies, up to one tile beyond the tile's edge.
+With `invert=true` it keeps what lies outside the polygon instead, exactly what is dropped without it: a point or line on the edge is dropped, and so are the tiles the polygon covers. This leaves a hole for an overlay:
+
+```vpl
+from_container filename="osm.versatiles" | vector_mask geojson="city.geojson" invert=true
+```
+
+Tiles entirely on the kept side pass through without being decoded, and tiles entirely on the other side are dropped without being decoded, so only tiles on the edge are. Geometry in a tile's buffer is cut where it really lies, up to one tile beyond the tile's edge.
 
 Cut geometry is rounded back to the tile grid, and a sliver that rounding collapses is dropped.
 
@@ -959,6 +974,7 @@ The mask is not reprojected: coordinates outside the WGS84 range are refused, as
 ### Parameters
 
 - **`geojson`: path or URL (required)** - Path or URL of a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326 lon/lat degrees.
+- _`invert`: bool (optional)_ - Whether to keep what lies outside the polygon instead of what lies inside. Defaults to `false`.
 
 ---
 

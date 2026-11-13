@@ -44,9 +44,17 @@ use crate::{
 ///     ]
 /// ```
 ///
-/// Tiles entirely inside the polygon pass through without being decoded, and
-/// tiles entirely outside are dropped without being decoded, so only tiles on
-/// the edge are. Geometry in a tile's buffer is cut where
+/// With `invert=true` it keeps what lies outside the polygon instead, exactly
+/// what is dropped without it: a point or line on the edge is dropped, and so
+/// are the tiles the polygon covers. This leaves a hole for an overlay:
+///
+/// ```vpl
+/// from_container filename="osm.versatiles" | vector_mask geojson="city.geojson" invert=true
+/// ```
+///
+/// Tiles entirely on the kept side pass through without being decoded, and
+/// tiles entirely on the other side are dropped without being decoded, so only
+/// tiles on the edge are. Geometry in a tile's buffer is cut where
 /// it really lies, up to one tile beyond the tile's edge.
 ///
 /// Cut geometry is rounded back to the tile grid, and a sliver that rounding
@@ -60,6 +68,9 @@ struct Args {
 	/// EPSG:4326 lon/lat degrees.
 	#[vpl(accepts = "geojson, json")]
 	geojson: FileLocation,
+	/// Whether to keep what lies outside the polygon instead of what lies inside. Defaults to `false`.
+	#[vpl(default = "false")]
+	invert: Option<bool>,
 }
 
 /// How far beyond its own edge a tile's geometry is cut where it really lies.
@@ -78,17 +89,19 @@ struct Operation {
 	/// The mask's polygons in Web Mercator metres, as merged by
 	/// [`read_mask_polygons`].
 	polygons: MultiPolygon<f64>,
-	/// The source pyramid, clipped to the mask.
+	/// The source pyramid, clipped to the mask unless inverted.
 	tile_pyramid: TilePyramid,
+	/// Whether what lies outside the polygon is kept instead.
+	invert: bool,
 }
 
 /// What became of one feature.
 enum Cut {
-	/// Entirely inside: the feature is kept as it was, byte for byte.
+	/// Entirely kept: the feature stays as it was, byte for byte.
 	Unchanged(VectorTileFeature),
-	/// Partly inside: the feature is kept with its cut geometry.
+	/// Partly kept: the feature stays with its cut geometry.
 	Changed(VectorTileFeature),
-	/// Entirely outside.
+	/// Entirely dropped.
 	Dropped,
 }
 
@@ -153,30 +166,45 @@ impl Operation {
 			read_mask_polygons(geojson.as_slice()).with_context(|| format!("reading the mask {}", args.geojson))?;
 
 		let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();
-		let operation = Self::new(polygons, &mut tile_pyramid)?;
+		let operation = Self::new(polygons, &mut tile_pyramid, args.invert.unwrap_or(false))?;
 		Ok(operation)
 	}
 
 	/// Builds the operation from mask polygons in Web Mercator metres, clipping
-	/// `tile_pyramid` to the mask.
+	/// `tile_pyramid` to the mask unless inverted.
 	///
 	/// The polygons must not overlap, since the clipping counts crossings:
 	/// [`read_mask_polygons`] merges them.
-	fn new(polygons: MultiPolygon<f64>, tile_pyramid: &mut TilePyramid) -> Result<Self> {
+	fn new(polygons: MultiPolygon<f64>, tile_pyramid: &mut TilePyramid, invert: bool) -> Result<Self> {
+		// Not inverted itself: inverting here swaps what is kept, and keeps the
+		// edge with the inside, so that the two modes split every feature.
 		let mask = MaskGeometry::from_mercator(polygons.clone(), 0.0, 0.0, BlurFunction::default())?;
-		tile_pyramid.intersect_geo_bbox(&mask.geo_bbox())?;
+		if !invert && let Some(geo_bbox) = mask.geo_bbox() {
+			tile_pyramid.intersect_geo_bbox(&geo_bbox)?;
+		}
 
 		Ok(Self {
 			mask: Arc::new(mask),
 			polygons,
 			tile_pyramid: tile_pyramid.clone(),
+			invert,
 		})
+	}
+
+	/// Whether everything in `bbox`, in Mercator metres, is kept, dropped, or
+	/// has to be looked at: [`TileClassification::FullyInside`] means kept.
+	fn classify(&self, bbox: [f64; 4]) -> TileClassification {
+		match (self.mask.classify_tile(bbox), self.invert) {
+			(TileClassification::FullyInside, true) => TileClassification::FullyOutside,
+			(TileClassification::FullyOutside, true) => TileClassification::FullyInside,
+			(class, _) => class,
+		}
 	}
 
 	/// Cuts a decoded tile, or returns `Ok(None)` when nothing is left of it.
 	fn cut_tile(&self, coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		let tile_bbox = coord.to_mercator_bbox();
-		if self.mask.classify_tile(grow_bbox(tile_bbox, CLASSIFY_MARGIN_TILES)) == TileClassification::FullyOutside {
+		if self.classify(grow_bbox(tile_bbox, CLASSIFY_MARGIN_TILES)) == TileClassification::FullyOutside {
 			return Ok(None);
 		}
 
@@ -236,27 +264,27 @@ impl Operation {
 			return Ok(Cut::Unchanged(feature));
 		};
 
-		match self.mask.classify_tile(space.rect_to_mercator(rect)) {
+		match self.classify(space.rect_to_mercator(rect)) {
 			TileClassification::FullyInside => return Ok(Cut::Unchanged(feature)),
 			TileClassification::FullyOutside => return Ok(Cut::Dropped),
 			TileClassification::Partial => {}
 		}
 
-		let inside = |c: Coord<f64>| {
+		let kept = |c: Coord<f64>| {
 			let m = space.to_mercator(c);
-			self.mask.signed_distance([m.x, m.y]) >= 0.0
+			(self.mask.signed_distance([m.x, m.y]) >= 0.0) != self.invert
 		};
 
 		let cut: Geometry<f64> = match geometry {
 			Geometry::Point(p) => {
-				if !inside(p.0) {
+				if !kept(p.0) {
 					return Ok(Cut::Dropped);
 				}
 				return Ok(Cut::Unchanged(feature));
 			}
 			Geometry::MultiPoint(mp) => {
 				let before = mp.0.len();
-				let points: Vec<_> = mp.0.into_iter().filter(|p| inside(p.0)).collect();
+				let points: Vec<_> = mp.0.into_iter().filter(|p| kept(p.0)).collect();
 				if points.len() == before {
 					return Ok(Cut::Unchanged(feature));
 				}
@@ -264,19 +292,19 @@ impl Operation {
 			}
 			Geometry::LineString(ls) => {
 				let local = local_mask.get_or_insert_with(|| self.local_mask(space, tile_bbox));
-				Geometry::MultiLineString(local.clip(&MultiLineString(vec![ls]), false))
+				Geometry::MultiLineString(local.clip(&MultiLineString(vec![ls]), self.invert))
 			}
 			Geometry::MultiLineString(mls) => {
 				let local = local_mask.get_or_insert_with(|| self.local_mask(space, tile_bbox));
-				Geometry::MultiLineString(local.clip(&mls, false))
+				Geometry::MultiLineString(local.clip(&mls, self.invert))
 			}
 			Geometry::Polygon(p) => {
 				let local = local_mask.get_or_insert_with(|| self.local_mask(space, tile_bbox));
-				Geometry::MultiPolygon(p.intersection(local))
+				Geometry::MultiPolygon(self.cut_polygons(&MultiPolygon(vec![p]), local))
 			}
 			Geometry::MultiPolygon(mp) => {
 				let local = local_mask.get_or_insert_with(|| self.local_mask(space, tile_bbox));
-				Geometry::MultiPolygon(mp.intersection(local))
+				Geometry::MultiPolygon(self.cut_polygons(&mp, local))
 			}
 			// The decoder produces none of the others; keep what cannot be placed.
 			_ => return Ok(Cut::Unchanged(feature)),
@@ -292,6 +320,16 @@ impl Operation {
 		Ok(Cut::Changed(cut))
 	}
 
+	/// What is kept of `polygons`: the part inside `local`, or outside it when
+	/// inverted.
+	fn cut_polygons(&self, polygons: &MultiPolygon<f64>, local: &MultiPolygon<f64>) -> MultiPolygon<f64> {
+		if self.invert {
+			polygons.difference(local)
+		} else {
+			polygons.intersection(local)
+		}
+	}
+
 	/// The mask cut to the classified area around a tile, in that tile's coordinates.
 	///
 	/// Cutting the whole mask against every feature would make each feature pay
@@ -305,7 +343,7 @@ impl Operation {
 }
 
 /// Implemented directly rather than through `AsTileTransform`, so a tile entirely
-/// inside the polygon is handed on as the bytes it arrived as, without a decode.
+/// on the kept side is handed on as the bytes it arrived as, without a decode.
 impl TileTransform for Operation {
 	const TAG: &'static str = "vector_mask";
 
@@ -315,10 +353,7 @@ impl TileTransform for Operation {
 
 	#[context("Failed to run vector_mask")]
 	fn run(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
-		match self
-			.mask
-			.classify_tile(grow_bbox(coord.to_mercator_bbox(), CLASSIFY_MARGIN_TILES))
-		{
+		match self.classify(grow_bbox(coord.to_mercator_bbox(), CLASSIFY_MARGIN_TILES)) {
 			TileClassification::FullyInside => return Ok(Some(tile)),
 			TileClassification::FullyOutside => return Ok(None),
 			_ => {}
@@ -361,8 +396,12 @@ mod tests {
 	}
 
 	fn operation() -> Operation {
+		operation_inverted(false)
+	}
+
+	fn operation_inverted(invert: bool) -> Operation {
 		let mut pyramid = TilePyramid::new_full_up_to(8);
-		Operation::new(mask_polygons(), &mut pyramid).unwrap()
+		Operation::new(mask_polygons(), &mut pyramid, invert).unwrap()
 	}
 
 	/// A z2 tile covering 0°–90° E and 0°–66.5° N, so the mask sits in its
@@ -630,6 +669,108 @@ mod tests {
 	#[test]
 	fn the_pyramid_is_clipped_to_the_mask() {
 		assert!(operation().tile_pyramid.count_tiles() < TilePyramid::new_full_up_to(8).count_tiles());
+	}
+
+	/// Cuts one feature on the edge tile with the inverted mask.
+	fn cut_one_inverted(geometry: Geometry<f64>) -> Option<Geometry<f64>> {
+		let c = edge_coord();
+		let input = tile(vec![("l", vec![feature(geometry, "f")])]);
+		let out = operation_inverted(true).cut_tile(&c, input).unwrap()?;
+		Some(out.layers[0].features[0].to_geometry().unwrap())
+	}
+
+	#[test]
+	fn inverted_points_are_kept_outside_and_in_the_hole() {
+		let c = edge_coord();
+		let input = tile(vec![(
+			"places",
+			vec![
+				point(&c, 2.0, 2.0, "inside"),
+				point(&c, 20.0, 20.0, "outside"),
+				point(&c, 5.0, 5.0, "in the hole"),
+				point(&c, 10.0, 3.0, "on the edge"),
+			],
+		)]);
+		let out = operation_inverted(true).cut_tile(&c, input).unwrap().unwrap();
+		assert_eq!(
+			names(&out),
+			[(
+				"places".to_string(),
+				vec!["outside".to_string(), "in the hole".to_string()]
+			)]
+		);
+	}
+
+	#[test]
+	fn an_inverted_line_keeps_the_part_outside() {
+		let c = edge_coord();
+		let line = in_tile(&c, &LineString::from(vec![(2.0, 2.0), (20.0, 2.0)]));
+		let Some(Geometry::MultiLineString(mls)) = cut_one_inverted(Geometry::LineString(line)) else {
+			panic!("expected lines");
+		};
+		let rect = mls.bounding_rect().unwrap();
+		assert!((rect.min().x - to_tile(&c, 10.0, 2.0).x).abs() <= 1.0, "{rect:?}");
+		assert!((rect.max().x - to_tile(&c, 20.0, 2.0).x).abs() <= 1.0, "{rect:?}");
+	}
+
+	#[test]
+	fn an_inverted_line_along_the_edge_is_dropped() {
+		// As a point on the edge is: it is kept without inverting.
+		let c = edge_coord();
+		let line = in_tile(&c, &LineString::from(vec![(10.0, 2.0), (10.0, 8.0)]));
+		assert!(cut_one_inverted(Geometry::LineString(line)).is_none());
+	}
+
+	/// Inverting splits a polygon with the plain mask: the two parts share no
+	/// area and add up to the whole.
+	#[test]
+	fn an_inverted_polygon_is_the_rest_of_it() {
+		use geo::Area;
+		let c = edge_coord();
+		// A square from 3° to 20°: it covers the hole and reaches beyond the mask.
+		let square = in_tile(
+			&c,
+			&polygon![(x: 3.0, y: 3.0), (x: 20.0, y: 3.0), (x: 20.0, y: 20.0), (x: 3.0, y: 20.0)],
+		);
+		let Some(Geometry::MultiPolygon(inside)) = cut_one(Geometry::Polygon(square.clone())) else {
+			panic!("expected a polygon");
+		};
+		let Some(Geometry::MultiPolygon(outside)) = cut_one_inverted(Geometry::Polygon(square.clone())) else {
+			panic!("expected a polygon");
+		};
+		assert_eq!(outside.0.len(), 2, "the hole, and the L around the mask's corner");
+		assert!(inside.intersection(&outside).unsigned_area() < 1000.0, "they overlap");
+		let whole = square.unsigned_area();
+		let sum = inside.unsigned_area() + outside.unsigned_area();
+		// Both are rounded back to the tile grid along their edges.
+		assert!((sum - whole).abs() / whole < 0.005, "{sum} != {whole}");
+	}
+
+	#[test]
+	fn the_inverted_pyramid_is_not_clipped() {
+		assert_eq!(
+			operation_inverted(true).tile_pyramid.count_tiles(),
+			TilePyramid::new_full_up_to(8).count_tiles()
+		);
+	}
+
+	#[test]
+	fn inverted_tiles_inside_and_outside_are_classified_without_decoding() {
+		let op = operation_inverted(true);
+		let blob = || {
+			Tile::from_blob(
+				versatiles_core::Blob::from("not a tile"),
+				versatiles_core::TileCompression::Uncompressed,
+				versatiles_core::TileFormat::MVT,
+			)
+		};
+		let inside = TileCoord::from_geo(2.0, 8.0, 9).unwrap();
+		assert!(op.run(&inside, blob()).unwrap().is_none(), "dropped without decoding");
+		let outside = TileCoord::from_geo(50.0, 50.0, 8).unwrap();
+		assert!(
+			op.run(&outside, blob()).unwrap().is_some(),
+			"passed through without decoding"
+		);
 	}
 
 	#[test]

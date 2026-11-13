@@ -190,6 +190,7 @@ raster_mask.geojson: FileLocation | required | accepts=suggested[geojson,json]
 raster_mask.buffer: Option<f32> | optional | default=0 | bounds=(-inf,inf) float
 raster_mask.blur: Option<f32> | optional | default=0 | bounds=(-inf,inf) float
 raster_mask.blur_function: Option<BlurFunction> | optional | default=linear | values=[linear,cosine]
+raster_mask.invert: Option<bool> | optional | default=false
 
 raster_overscale [transform]
 raster_overscale.level_max: Option<ZoomLevel> | optional | bounds=[0,30] int
@@ -222,6 +223,7 @@ vector_filter_properties.invert: Option<bool> | optional | default=false
 
 vector_mask [transform]
 vector_mask.geojson: FileLocation | required | accepts=suggested[geojson,json]
+vector_mask.invert: Option<bool> | optional | default=false
 
 vector_overzoom [transform]
 vector_overzoom.level_max: Option<ZoomLevel> | optional | bounds=[0,30] int

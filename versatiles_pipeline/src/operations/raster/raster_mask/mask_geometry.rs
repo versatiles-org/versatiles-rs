@@ -151,8 +151,13 @@ pub struct MaskGeometry {
 	/// Blur interpolation function
 	blur_function: BlurFunction,
 
-	/// Effective outer threshold: buffer + blur (for tile classification)
+	/// How far beyond the polygon's bounds the ramp still reaches: `blur` plus
+	/// the buffer, which grows the kept area outward when not inverted and
+	/// inward when inverted (for tile classification).
 	outer_threshold: f64,
+
+	/// Whether the area outside the polygon is kept instead of the inside.
+	invert: bool,
 }
 
 impl std::fmt::Debug for MaskGeometry {
@@ -163,6 +168,7 @@ impl std::fmt::Debug for MaskGeometry {
 			.field("blur_meters", &self.blur_meters)
 			.field("blur_function", &self.blur_function)
 			.field("outer_threshold", &self.outer_threshold)
+			.field("invert", &self.invert)
 			.field("edge_count", &self.edge_rtree.size())
 			.finish()
 	}
@@ -221,7 +227,30 @@ impl MaskGeometry {
 			blur_meters,
 			blur_function,
 			outer_threshold,
+			invert: false,
 		})
+	}
+
+	/// The same mask keeping what lies outside the polygon instead, when
+	/// `invert` is set.
+	///
+	/// The inside and outside swap before the buffer applies, so the buffer
+	/// always grows the area that is kept: inverted, a positive buffer shrinks
+	/// the polygon's transparent hole. The blur band stays where it is, its ramp
+	/// reversed.
+	#[must_use]
+	pub fn inverted(mut self, invert: bool) -> Self {
+		self.invert = invert;
+		// Outside the bounds a point is outside the polygon, at least as far from
+		// its edge as from the bounds. Inverted, that is the kept side, and the
+		// buffer moves the ramp's end towards the polygon instead of away from it.
+		let buffer = if invert {
+			-self.buffer_meters
+		} else {
+			self.buffer_meters
+		};
+		self.outer_threshold = self.blur_meters + buffer;
+		self
 	}
 }
 
@@ -298,13 +327,18 @@ impl MaskGeometry {
 		let [tx_min, ty_min, tx_max, ty_max] = tile_bbox_mercator;
 		let [mx_min, my_min, mx_max, my_max] = self.bounds_mercator;
 
-		// Quick rejection: if tile is far outside the mask bounds (accounting for buffer+blur)
+		// Quick answer: the tile is far outside the polygon's bounds (accounting for
+		// buffer and blur), which is dropped, or kept when inverted.
 		if tx_max < mx_min - self.outer_threshold
 			|| tx_min > mx_max + self.outer_threshold
 			|| ty_max < my_min - self.outer_threshold
 			|| ty_min > my_max + self.outer_threshold
 		{
-			return TileClassification::FullyOutside;
+			return if self.invert {
+				TileClassification::FullyInside
+			} else {
+				TileClassification::FullyOutside
+			};
 		}
 
 		// The blur ramp is centred on the boundary and reaches `blur` metres to *both*
@@ -371,15 +405,16 @@ impl MaskGeometry {
 	///
 	/// # Returns
 	/// Signed distance in meters:
-	/// - Positive: inside the polygon (adjusted by buffer)
-	/// - Negative: outside the polygon (adjusted by buffer)
+	/// - Positive: in the kept area, inside the polygon or outside it when
+	///   inverted (adjusted by buffer)
+	/// - Negative: in the dropped area (adjusted by buffer)
 	#[must_use]
 	pub fn signed_distance(&self, point: [f64; 2]) -> f64 {
 		// Find distance to nearest edge using R-tree
 		let unsigned_dist = self.distance_to_nearest_edge(point);
 
-		// Determine if point is inside polygon using R-tree accelerated ray casting
-		let is_inside = self.contains_point_rtree(point[0], point[1]);
+		// Determine if point is kept using R-tree accelerated ray casting
+		let is_inside = self.contains_point_rtree(point[0], point[1]) != self.invert;
 
 		// Apply buffer offset and return signed distance
 		// Positive buffer = expand mask = shift threshold outward
@@ -447,8 +482,14 @@ impl MaskGeometry {
 	/// line, which is exactly the artefact the ramp exists to avoid.
 	///
 	/// Converts the resulting Mercator bounds back to longitude/latitude degrees.
+	///
+	/// `None` when inverted: then the whole world outside the polygon is kept,
+	/// so there is nothing to clip to.
 	#[must_use]
-	pub fn geo_bbox(&self) -> GeoBBox {
+	pub fn geo_bbox(&self) -> Option<GeoBBox> {
+		if self.invert {
+			return None;
+		}
 		// A negative buffer larger than the blur pulls the tinted area inside the
 		// polygon's bounds, but shrinking the box risks clipping a coastline that the
 		// bounds only just contain, so only growth is applied.
@@ -469,7 +510,7 @@ impl MaskGeometry {
 		// Growing by the reach can push the box past the antimeridian or the poles;
 		// clamping keeps it a valid geographic box instead of failing the check and
 		// silently skipping the clip.
-		GeoBBox::new_normalized(lon_min, lat_min, lon_max, lat_max)
+		Some(GeoBBox::new_normalized(lon_min, lat_min, lon_max, lat_max))
 	}
 
 	/// Check if a point is inside the polygon using R-tree accelerated ray casting.
@@ -633,7 +674,7 @@ impl MaskGeometry {
 				// Parity at the right border, flipped once per crossing passed
 				// while walking left to this pixel.
 				let to_the_right = row.len() - row.partition_point(|&c| c <= center_x(px));
-				let inside = seeded_inside ^ (to_the_right % 2 == 1);
+				let inside = seeded_inside ^ (to_the_right % 2 == 1) ^ self.invert;
 
 				let d = dist_sq[i];
 				if d.is_infinite() {
@@ -889,13 +930,16 @@ mod tests {
 	/// `FullyInside` passes the tile through untouched and `FullyOutside` deletes it, so
 	/// each is a claim about every pixel of the grid. This sweeps the tiles around the
 	/// shape's edge at the zoom and blur where the two shortcuts are tightest, and holds
-	/// them to that claim.
-	#[test]
-	fn classification_agrees_with_the_alpha_grid() {
+	/// them to that claim, inverted too, where they swap.
+	#[rstest::rstest]
+	fn classification_agrees_with_the_alpha_grid(
+		#[values(false, true)] invert: bool,
+		#[values(-100_000.0, 0.0, 100_000.0)] buffer: f64,
+	) {
 		for blur in [0.0, 50_000.0, 200_000.0] {
-			let mask = oracle_mask(0.0, blur);
-			for x in 130..146 {
-				for y in 108..124 {
+			let mask = oracle_mask(buffer, blur).inverted(invert);
+			for x in 126..150 {
+				for y in 104..132 {
 					let coord = TileCoord::new(8, x, y).unwrap();
 					let bbox = coord.to_mercator_bbox();
 					let class = mask.classify_tile(bbox);
@@ -905,10 +949,16 @@ mod tests {
 					let alpha = mask.compute_alpha_grid(bbox, 32, 32);
 					match class {
 						TileClassification::FullyInside => {
-							assert!(alpha.iter().all(|&a| a == 255), "{coord:?} blur={blur} is not opaque");
+							assert!(
+								alpha.iter().all(|&a| a == 255),
+								"{coord:?} blur={blur} buffer={buffer} invert={invert} is not opaque"
+							);
 						}
 						TileClassification::FullyOutside => {
-							assert!(alpha.iter().all(|&a| a == 0), "{coord:?} blur={blur} is not empty");
+							assert!(
+								alpha.iter().all(|&a| a == 0),
+								"{coord:?} blur={blur} buffer={buffer} invert={invert} is not empty"
+							);
 						}
 						TileClassification::Partial => unreachable!(),
 					}
@@ -986,9 +1036,9 @@ mod tests {
 	/// the gradient wherever the shape approaches its own bounding box.
 	#[test]
 	fn the_geo_bbox_covers_the_blur_and_buffer_reach() {
-		let plain = oracle_mask(0.0, 0.0).geo_bbox();
-		let blurred = oracle_mask(0.0, 200_000.0).geo_bbox();
-		let buffered = oracle_mask(200_000.0, 0.0).geo_bbox();
+		let plain = oracle_mask(0.0, 0.0).geo_bbox().unwrap();
+		let blurred = oracle_mask(0.0, 200_000.0).geo_bbox().unwrap();
+		let buffered = oracle_mask(200_000.0, 0.0).geo_bbox().unwrap();
 
 		// 200 km is a bit under 2° of longitude at this latitude.
 		for grown in [blurred, buffered] {
@@ -1030,6 +1080,7 @@ mod tests {
 			blur_meters: 0.0,
 			blur_function: blur_func,
 			outer_threshold: 0.0,
+			invert: false,
 		};
 
 		assert_eq!(mask.distance_to_alpha(1.0), 255);
@@ -1047,6 +1098,7 @@ mod tests {
 			blur_meters: 100.0,
 			blur_function: BlurFunction::Linear,
 			outer_threshold: 100.0,
+			invert: false,
 		};
 
 		// At blur distance, should be fully opaque
@@ -1101,6 +1153,7 @@ mod tests {
 			blur_meters: 0.0,
 			blur_function: BlurFunction::Linear,
 			outer_threshold: 0.0,
+			invert: false,
 		};
 
 		// Point inside
@@ -1139,6 +1192,7 @@ mod tests {
 			blur_meters: 0.0,
 			blur_function: BlurFunction::Linear,
 			outer_threshold: 0.0,
+			invert: false,
 		};
 
 		// Tile fully inside the polygon
@@ -1172,6 +1226,7 @@ mod tests {
 			blur_meters: 0.0,
 			blur_function: BlurFunction::Linear,
 			outer_threshold: 0.0,
+			invert: false,
 		};
 
 		// Tile fully outside the polygon

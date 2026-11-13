@@ -32,6 +32,17 @@ use crate::{PipelineFactory, helpers::location::FileLocation, operations::transf
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Makes raster pixels outside a GeoJSON polygon transparent.
 ///
+/// With `invert=true` the pixels inside it become transparent instead, which
+/// cuts a hole into the map:
+///
+/// ```vpl
+/// from_container filename="satellite.versatiles" | raster_mask geojson="city.geojson" invert=true
+/// ```
+///
+/// The buffer always grows what stays visible, so inverted, a positive buffer
+/// shrinks the hole and a negative one widens it. The blur band stays where it
+/// is, its ramp reversed.
+///
 /// The mask is not reprojected: coordinates outside the WGS84 range are refused,
 /// as is a `crs` member naming another projection. A mask written lat,lon is in
 /// range and cannot be detected — it masks the wrong part of the world.
@@ -52,6 +63,9 @@ struct Args {
 	/// Falloff curve across the `blur` band. Defaults to `linear`.
 	#[vpl(default = "linear")]
 	blur_function: Option<BlurFunction>,
+	/// Whether to keep what lies outside the polygon instead of what lies inside. Defaults to `false`.
+	#[vpl(default = "false")]
+	invert: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -98,13 +112,17 @@ impl Operation {
 			f64::from(args.blur.unwrap_or(0.0)),
 			blur_function,
 		)
-		.with_context(|| format!("reading the mask {}", args.geojson))?;
+		.with_context(|| format!("reading the mask {}", args.geojson))?
+		.inverted(args.invert.unwrap_or(false));
 
 		// Clip tile_pyramid to the ground the mask can still tint — the polygon plus the
 		// reach of its buffer and blur — so that tiles it cannot touch are never
-		// requested from the source.
+		// requested from the source. Inverted, it reaches everywhere but the
+		// polygon, and the tiles it covers are dropped as they come.
 		let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();
-		tile_pyramid.intersect_geo_bbox(&mask.geo_bbox())?;
+		if let Some(geo_bbox) = mask.geo_bbox() {
+			tile_pyramid.intersect_geo_bbox(&geo_bbox)?;
+		}
 
 		let operation = Operation {
 			mask: Arc::new(mask),
@@ -368,6 +386,64 @@ mod tests {
 		assert!(grown_clear < plain_clear, "{grown_clear} should be under {plain_clear}");
 	}
 
+	/// Inverting swaps opaque and transparent, the blur band included.
+	#[test]
+	fn inverting_gives_the_complement() {
+		let coord = TileCoord::new(4, 8, 7).unwrap();
+		for blur in [0.0, 60_000.0] {
+			let plain = reference_mask(0.0, blur).compute_alpha_grid(coord.to_mercator_bbox(), 256, 256);
+			let inverted = reference_mask(0.0, blur)
+				.inverted(true)
+				.compute_alpha_grid(coord.to_mercator_bbox(), 256, 256);
+			let (clear, solid, partial) = tally(&plain);
+			assert_eq!(tally(&inverted), (solid, clear, partial), "blur={blur}");
+			for (i, (a, b)) in plain.iter().zip(&inverted).enumerate() {
+				assert!(
+					(i32::from(*a) + i32::from(*b) - 255).abs() <= 1,
+					"pixel {i}: {a} + {b}, blur={blur}"
+				);
+			}
+		}
+	}
+
+	/// The buffer grows what is kept, inverted too, so there it shrinks the hole.
+	#[test]
+	fn a_positive_buffer_shrinks_the_inverted_hole() {
+		let coord = TileCoord::new(4, 8, 7).unwrap();
+		let alpha = |buffer: f64| {
+			let mask = reference_mask(buffer, 0.0).inverted(true);
+			tally(&mask.compute_alpha_grid(coord.to_mercator_bbox(), 256, 256))
+		};
+		let (plain_clear, plain_solid, _) = alpha(0.0);
+		let (grown_clear, grown_solid, _) = alpha(80_000.0);
+		let (shrunk_clear, shrunk_solid, _) = alpha(-80_000.0);
+		assert!(
+			grown_solid > plain_solid && grown_clear < plain_clear,
+			"{grown_solid} {grown_clear}"
+		);
+		assert!(
+			shrunk_solid < plain_solid && shrunk_clear > plain_clear,
+			"{shrunk_solid} {shrunk_clear}"
+		);
+	}
+
+	#[test]
+	fn an_inverted_mask_keeps_the_world_and_drops_the_inside() {
+		let mask = reference_mask(0.0, 0.0).inverted(true);
+		let classify = |lon: f64, lat: f64, z: u8| {
+			let coord = TileCoord::from_geo(lon, lat, z).unwrap();
+			mask.classify_tile(coord.to_mercator_bbox())
+		};
+		assert_eq!(classify(-120.0, 40.0, 6), TileClassification::FullyInside, "far away");
+		assert_eq!(
+			classify(7.0, 6.0, 9),
+			TileClassification::FullyInside,
+			"in the interior ring"
+		);
+		assert_eq!(classify(15.0, 15.0, 8), TileClassification::FullyOutside, "well inside");
+		assert!(mask.geo_bbox().is_none(), "nothing to clip the pyramid to");
+	}
+
 	/// A mask from the polygons given as GeoJSON `coordinates`, one feature each.
 	fn mask_of(polygons: &[&str], blur: f64) -> MaskGeometry {
 		let features = polygons
@@ -600,6 +676,44 @@ mod tests {
 		for (coord, tile) in cut {
 			assert_eq!(tile.format_quality(), expected_quality, "{coord:?}");
 		}
+		Ok(())
+	}
+
+	/// End to end: inverted, the pyramid is the source's, the tiles inside the
+	/// polygon are gone and the ones far away come through untouched.
+	#[tokio::test]
+	async fn an_inverted_mask_cuts_a_hole() -> Result<()> {
+		let geojson_file = create_test_geojson(); // a square spanning lon/lat 0..10
+		let geojson_path = geojson_file.path().display();
+		let op = PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!(
+				"from_debug format=png | raster_mask geojson='{geojson_path}' invert=true"
+			))
+			.await?;
+		assert_eq!(op.tile_pyramid().await?.level_bbox(6).count_tiles(), 4096);
+
+		let inside = TileCoord::from_geo(5.0, 5.0, 7)?;
+		let tiles = op.tile_stream(inside.to_tile_bbox()).await?.to_vec().await;
+		assert_eq!(tiles.len(), 0, "a tile inside the polygon is dropped");
+
+		let far = TileCoord::from_geo(-100.0, 40.0, 6)?;
+		let pixels = |tiles: Vec<(TileCoord, Tile)>| -> Result<Vec<u8>> {
+			assert_eq!(tiles.len(), 1);
+			Ok(tiles
+				.into_iter()
+				.next()
+				.unwrap()
+				.1
+				.into_image()?
+				.into_rgba8()
+				.into_raw())
+		};
+		let masked = pixels(op.tile_stream(far.to_tile_bbox()).await?.to_vec().await)?;
+		let source = PipelineFactory::new_dummy()
+			.operation_from_vpl("from_debug format=png")
+			.await?;
+		let original = pixels(source.tile_stream(far.to_tile_bbox()).await?.to_vec().await)?;
+		assert!(masked == original, "a tile far away comes through untouched");
 		Ok(())
 	}
 
