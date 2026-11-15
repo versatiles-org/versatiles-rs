@@ -19,10 +19,9 @@ Two workflows for image-based tile pipelines:
   tile container, generating all overview levels with smart WebP compression.
   Requires GDAL.
 
-* `assemble` — merge many pre-tiled containers into one mosaic. Containers
-  listed earlier overlay those listed later (paint algorithm). Translucent
-  tiles are composited in a two-pass pipeline; opaque tiles pass through
-  unchanged to avoid recompression.
+* `assemble` — combine the containers of adjacent, non-overlapping scenes
+  into one mosaic, fast. Opaque tiles are copied unchanged; the translucent
+  tiles where scenes meet are composited.
 
 Typical pipeline: produce per-scene containers with `mosaic tile`, then
 combine them into a seamless output with `mosaic assemble`."

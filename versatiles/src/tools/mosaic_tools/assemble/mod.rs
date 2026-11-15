@@ -1,13 +1,22 @@
 //! Two-pass tile assembly: scan → write opaque → batch-composite translucent.
 //!
+//! Built for speed on adjacent scenes that do not overlap, where tiles at the
+//! same coordinate are the translucent halves of a seam. An opaque tile is
+//! taken as the whole answer for its coordinate: it is copied without decoding
+//! and every other tile there is dropped, whatever the order of the sources.
+//! An overlap is not an error, but it is resolved per tile, not per pixel.
+//!
 //! # How it works
 //!
 //! **First pass** — streams every source once:
 //! - **Opaque** tiles are written directly to the sink and recorded in `done`.
+//!   Of several, the first source's is written; later tiles at a coordinate in
+//!   `done` are skipped.
 //! - **Empty** tiles are skipped.
 //! - **Translucent** tiles are recorded as `(TileCoord, Vec<source_index>)`.
 //!
-//! **Between passes** — coords already in `done` are removed; the remaining tiles
+//! **Between passes** — coords already in `done` are removed, so translucent
+//! tiles of earlier sources there are dropped; the remaining tiles
 //! are packed greedily into batches. Each batch is seeded with the tile needing the
 //! most sources, then filled with tiles that maximise source overlap, admission
 //! gated by the batch's peak in-memory footprint (`max_tiles_in_memory`) so it stays

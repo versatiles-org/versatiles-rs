@@ -8,22 +8,34 @@ use anyhow::{Context, Result, ensure};
 	long_about = "\
 Combine many tile containers into a single mosaic.
 
-Overlays input containers in listed order (earlier wins) and writes one
-unified container. Opaque tiles pass through unchanged; tiles with any
-transparency are composited in a two-pass pipeline: the first pass streams
-every source once and classifies each tile as opaque, empty, or translucent;
-the second pass only re-opens the sources needed to composite each
-translucent tile.
+Built to be fast for raster containers of adjacent scenes that do not
+overlap, such as scenes tiled one by one with `mosaic tile`. Where two
+scenes meet, each has a translucent tile at the same coordinate, and the
+two are composited into one.
 
-For vector tiles, or to merge containers in a single pass without memory
-limits, see `versatiles merge`.
+Each output tile is made from the tiles the inputs have at its coordinate:
+
+  * An opaque tile is copied as it is, without decoding or re-encoding.
+    Every other tile at that coordinate is dropped, whatever the order of
+    the inputs. Of several opaque tiles, the one listed first is used.
+  * Otherwise the translucent tiles are composited, the one listed first
+    on top, and encoded as WebP (see --quality and --lossless).
+  * Empty tiles are skipped.
+
+Overlapping inputs are not an error, but an overlap is resolved per tile as
+above, not per pixel. To blend overlapping containers pixel by pixel, use
+`versatiles merge --strategy=blend`; for vector tiles, `versatiles merge`.
+
+The first pass reads every input once, copies the opaque tiles and notes
+the translucent ones. The second pass reads the translucent tiles again,
+only from the inputs that have them, in batches that fit --max-buffer-size.
 
 EXAMPLES
 
   # Two literal inputs + an output (last path is always the output).
   versatiles mosaic assemble a.versatiles b.versatiles mosaic.versatiles
 
-  # Glob expansion + a list file. Containers listed earlier win.
+  # Glob expansion + a list file.
   versatiles mosaic assemble 'scenes/*.versatiles' extra.txt mosaic.versatiles
 
   # Cap memory at half of system RAM and drop zooms above 14.
@@ -34,9 +46,9 @@ pub struct Assemble {
 	#[arg(
 		required = true,
 		num_args = 2..,
-		help = "Input containers followed by the output path (last one wins)",
+		help = "Input containers followed by the output path (the last one)",
 		long_help = "\
-Input containers followed by the output path (last one wins).
+Input containers followed by the output path (the last one).
 
 Minimum two paths: at least one input and exactly one output. Each
 non-output path may be one of:
@@ -46,18 +58,20 @@ non-output path may be one of:
   * a `.txt` file — read as a list (one path per line, `#` comments)
   * an `@file` argument — same as `.txt`, regardless of extension
 
-Ordering matters: the first container to supply a given tile wins, so list
-higher-priority (e.g. more recent) scenes earlier. The final positional
-argument is always treated as the output path."
+The order matters only where several inputs have a tile at the same
+coordinate: of translucent tiles, the one listed first is on top, and of
+opaque tiles, the one listed first is used. The final positional argument
+is always treated as the output path."
 	)]
 	pub(super) paths: Vec<String>,
 
-	/// Lossy WebP quality (0-100) for opaque tiles.
+	/// Lossy WebP quality (0-100) for the tiles made from translucent ones.
 	///
+	/// Opaque tiles are copied as they are and keep the quality they have.
 	/// Single value (e.g. "75") applies to every zoom. Comma-separated list
 	/// ramps from z=0 upwards ("90,80,70" → z=0 → 90, z=1 → 80, z≥2 → 70).
 	/// Use "Z:Q" to jump to zoom Z ("70,14:50,15:20" → z<14 → 70, z=14 → 50,
-	/// z≥15 → 20). Translucent tiles ignore this (see --lossless).
+	/// z≥15 → 20). See --lossless for tiles that stay translucent.
 	///
 	/// In place of a number, a zoom can take a range for --quality-map to
 	/// choose from: "70,16:30-50" means 30 where the map is black and 50
@@ -75,12 +89,13 @@ argument is always treated as the output path."
 	#[arg(long, value_name = "file")]
 	pub(super) quality_map: Option<String>,
 
-	/// Encode translucent tiles losslessly.
+	/// Encode tiles that stay translucent without loss.
 	///
-	/// By default translucent tiles use the same lossy --quality setting as
-	/// opaque tiles. This flag forces lossless WebP for translucent tiles
-	/// only — useful when soft edges or semi-transparent overlays must stay
-	/// sharp. Opaque tiles remain lossy.
+	/// By default every tile made from translucent ones is encoded at
+	/// --quality. With this flag, a tile that is still translucent after
+	/// compositing, such as one at the outer edge of the mosaic, is encoded
+	/// losslessly, so that soft edges stay sharp. A tile that the compositing
+	/// made opaque, such as two halves along a seam, still uses --quality.
 	#[arg(long)]
 	pub(super) lossless: bool,
 
