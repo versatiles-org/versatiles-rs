@@ -16,11 +16,10 @@
 //! - **Translucent** tiles are recorded as `(TileCoord, Vec<source_index>)`.
 //!
 //! **Between passes** — coords already in `done` are removed, so translucent
-//! tiles of earlier sources there are dropped; the remaining tiles
-//! are packed greedily into batches. Each batch is seeded with the tile needing the
-//! most sources, then filled with tiles that maximise source overlap, admission
-//! gated by the batch's peak in-memory footprint (`max_tiles_in_memory`) so it stays
-//! within `--max-buffer-size`.
+//! tiles of earlier sources there are dropped. The remaining tiles are sorted by
+//! their first and last source and cut into batches in one sweep, each as large
+//! as its peak in-memory footprint (`max_tiles_in_memory`) allows within
+//! `--max-buffer-size`.
 //!
 //! **Second pass** — for each batch, only the needed sources are opened. Tiles are
 //! composited onto a `TranslucentBuffer` and flushed to the sink as soon as their

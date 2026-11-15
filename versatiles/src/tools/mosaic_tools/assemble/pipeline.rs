@@ -1,7 +1,8 @@
 //! Two-pass pipeline: scan sources → write opaque → batch-composite translucent.
 
 use std::{
-	collections::{BTreeSet, HashMap, HashSet},
+	cmp::Reverse,
+	collections::{BTreeSet, BinaryHeap, HashMap, HashSet},
 	sync::{Arc, Mutex},
 };
 
@@ -20,11 +21,9 @@ use super::{
 /// The sources contributing to one tile, sorted ascending and deduped.
 ///
 /// The order is load-bearing, not cosmetic. The second pass composites sources
-/// in ascending index order, so three things depend on this list being sorted:
-/// [`last_source`](Self::last_source) is the source after which the tile can be
-/// flushed, [`position_of`](Self::position_of) locates a source in that
-/// schedule, and the packer treats the list as a canonical signature when
-/// scoring overlap between tiles.
+/// in ascending index order, so [`first_source`](Self::first_source) and
+/// [`last_source`](Self::last_source) are the steps at which the tile enters
+/// and leaves the buffer, which the packer sorts by.
 ///
 /// [`SourceIndices::new`] is the only way to build one, so the invariant cannot
 /// be skipped at a call site.
@@ -39,21 +38,19 @@ impl SourceIndices {
 		Self(sources)
 	}
 
-	fn len(&self) -> usize {
-		self.0.len()
-	}
-
 	fn iter(&self) -> impl Iterator<Item = usize> + '_ {
 		self.0.iter().copied()
-	}
-
-	pub(super) fn contains(&self, source: usize) -> bool {
-		self.0.binary_search(&source).is_ok()
 	}
 
 	#[cfg(test)]
 	fn as_slice(&self) -> &[usize] {
 		&self.0
+	}
+
+	/// The first source to contribute to this tile, and so the step at which
+	/// it enters the compositing buffer.
+	fn first_source(&self) -> usize {
+		*self.0.first().expect("a translucent tile has at least one source")
 	}
 
 	/// The last source to contribute to this tile, and so the one after whose
@@ -66,6 +63,7 @@ impl SourceIndices {
 	///
 	/// `all` must be the batch's own source list, which contains every source of
 	/// every tile in it.
+	#[cfg(test)]
 	fn position_of(all: &[usize], source: usize) -> usize {
 		all.binary_search(&source).expect("source present in batch")
 	}
@@ -114,6 +112,10 @@ impl TileBatch {
 	/// Peak number of tiles simultaneously held in the compositing buffer when
 	/// sources are processed in ascending index order and each tile is flushed
 	/// as soon as its last contributing source has been composited.
+	///
+	/// The packer keeps this within its limit as it builds a batch; the tests
+	/// check the batches against it.
+	#[cfg(test)]
 	pub(super) fn max_tiles_in_memory(&self) -> usize {
 		match self.tiles.len() {
 			0 => return 0,
@@ -380,11 +382,18 @@ async fn classify_and_stream_tiles(
 
 /// Prune already-done coords and pack the remaining translucent tiles into batches.
 ///
-/// The packer is memory-aware: it seeds each batch with the tile requiring the most
-/// sources, then greedily adds more tiles that maximise source overlap — using the
-/// batch's `max_tiles_in_memory` as its admission criterion. Because tiles flush as
-/// soon as their last source has been composited, many batches can hold significantly
-/// more tiles than the naive `max_buffer_size / tile_bytes` bound.
+/// Sources are composited in ascending order, so a tile sits in the buffer from
+/// the step of its first source to the step of its last: a closed interval.
+/// The tiles are sorted by that interval and swept once. A batch takes the next
+/// tile as long as the tiles in the buffer at that tile's first step, itself
+/// included, stay within `max_buffer_size / tile_bytes`.
+///
+/// That bound is the batch's peak, `max_tiles_in_memory`: the most intervals
+/// that cover one point are those covering some interval's start, and taking
+/// tiles in the order of their start changes the count only at the new start.
+/// So the peak is checked exactly, in O(n log n) for n tiles, and tiles that
+/// leave the buffer early make room for more, as tiles flush as soon as their
+/// last source has been composited.
 pub(super) fn prepare_batches(
 	mut translucent_map: HashMap<TileCoord, Vec<usize>>,
 	done: HashSet<TileCoord>,
@@ -404,6 +413,17 @@ pub(super) fn prepare_batches(
 		.into_iter()
 		.map(|(c, s)| (c, SourceIndices::new(s)))
 		.collect();
+	// By interval, then by place, which keeps the output stable across runs and
+	// the reads of one source in a batch close together.
+	pool.sort_unstable_by_key(|(coord, sources)| {
+		(
+			sources.first_source(),
+			sources.last_source(),
+			coord.level,
+			coord.y,
+			coord.x,
+		)
+	});
 
 	let batch_size: usize = if max_buffer_size > 0 {
 		usize::try_from((max_buffer_size / (tile_dim * tile_dim * 4)).max(1)).unwrap_or(usize::MAX)
@@ -412,75 +432,24 @@ pub(super) fn prepare_batches(
 	};
 
 	let mut batches: Vec<TileBatch> = Vec::new();
+	let mut batch = TileBatch::new();
+	// The last sources of the tiles in the buffer, the earliest on top.
+	let mut leaving: BinaryHeap<Reverse<usize>> = BinaryHeap::new();
 
-	while !pool.is_empty() {
-		let mut batch = TileBatch::new();
-
-		// Step 1: seed with the tile needing the most sources. Deterministic tiebreak
-		// on (level, x, y) so equal-length pools yield stable output across runs.
-		let seed_idx = pool
-			.iter()
-			.enumerate()
-			.max_by(|(_, (ca, sa)), (_, (cb, sb))| {
-				sa.len()
-					.cmp(&sb.len())
-					.then_with(|| cb.level.cmp(&ca.level))
-					.then_with(|| cb.x.cmp(&ca.x))
-					.then_with(|| cb.y.cmp(&ca.y))
-			})
-			.map(|(i, _)| i)
-			.expect("pool not empty");
-		let (seed_coord, seed_sources) = pool.swap_remove(seed_idx);
-		batch.push(seed_coord, seed_sources);
-
-		loop {
-			// Step 2 + 3: peak occupancy → remaining room.
-			let peak = batch.max_tiles_in_memory();
-			let room = batch_size.saturating_sub(peak);
-
-			// Step 4: batch is full.
-			if room == 0 || pool.is_empty() {
-				break;
-			}
-
-			// Step 5: score each remaining tile — reward overlap, penalise new sources.
-			// The ranking key is `(overlap desc, new_sources asc)` which matches
-			// "favour overlap, penalise new sources" without any signed arithmetic.
-			let batch_sources: BTreeSet<usize> = batch.tiles().iter().flat_map(|(_, s)| s.iter()).collect();
-
-			let mut scored: Vec<(usize, usize, usize)> = pool
-				.iter()
-				.enumerate()
-				.map(|(i, (_, srcs))| {
-					let overlap = srcs.iter().filter(|s| batch_sources.contains(s)).count();
-					let new_sources = srcs.len() - overlap;
-					(overlap, new_sources, i)
-				})
-				.collect();
-
-			// Sort descending by overlap, ascending by new_sources. Stable sort keeps
-			// pool order as the final deterministic tiebreak.
-			scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
-
-			// Step 6: if no picks fit, finish the batch.
-			if scored.is_empty() {
-				break;
-			}
-
-			// Step 5 (cont.): take up to `room` best candidates.
-			let mut picks: Vec<usize> = scored.into_iter().take(room).map(|(_, _, i)| i).collect();
-
-			// Swap-remove in descending index order to keep earlier indices valid.
-			picks.sort_unstable_by(|a, b| b.cmp(a));
-			for i in picks {
-				let (c, s) = pool.swap_remove(i);
-				batch.push(c, s);
-			}
-			// Step 7: loop — recompute peak under the new membership.
+	for (coord, sources) in pool {
+		let first = sources.first_source();
+		// Tiles whose last source comes before this tile's first have been flushed.
+		while leaving.peek().is_some_and(|Reverse(last)| *last < first) {
+			leaving.pop();
 		}
-
-		batches.push(batch);
+		if leaving.len() >= batch_size {
+			batches.push(std::mem::replace(&mut batch, TileBatch::new()));
+			leaving.clear();
+		}
+		leaving.push(Reverse(sources.last_source()));
+		batch.push(coord, sources);
 	}
+	batches.push(batch);
 
 	let total_source_opens: usize = batches.iter().map(|b| b.sources().len()).sum();
 	log::debug!(
@@ -536,32 +505,36 @@ async fn composite_one_batch(
 	// For each source, the Hilbert keys of tiles whose *last* contributing source is
 	// that source — those tiles are safe to flush right after the source step ends.
 	let mut flush_keys: HashMap<usize, Vec<u64>> = HashMap::new();
+	// For each source, the coords it is read at. Gathered once: filtering the
+	// whole batch for each of its sources is quadratic in a large batch.
+	let mut coords_of: HashMap<usize, Vec<TileCoord>> = HashMap::new();
 	for (coord, srcs) in tiles {
 		let last = srcs.last_source();
 		flush_keys.entry(last).or_default().push(coord.get_hilbert_index()?);
+		for source in srcs.iter() {
+			coords_of.entry(source).or_default().push(*coord);
+		}
 	}
 
 	let buffer = Arc::new(TranslucentBuffer::new());
 	let mut prefetched: Option<Vec<(TileCoord, Tile)>> = None;
-
-	let batch_arc = Arc::new(tiles.to_vec());
-	let paths_arc = Arc::new(paths.to_vec());
 
 	for (pos, &source_idx) in sources_needed.iter().enumerate() {
 		// Use pre-fetched tiles if available, otherwise fetch now
 		let fetched_tiles = if let Some(tiles) = prefetched.take() {
 			tiles
 		} else {
-			fetch_source_tiles(source_idx, tiles, paths, runtime).await?
+			let coords = coords_of.remove(&source_idx).unwrap_or_default();
+			fetch_source_tiles(&paths[source_idx], coords, runtime).await?
 		};
 
 		// Kick off pre-fetch for the NEXT source in the background
 		let prefetch_handle = if let Some(&next_idx) = sources_needed.get(pos + 1) {
-			let batch_clone = Arc::clone(&batch_arc);
-			let paths_clone = Arc::clone(&paths_arc);
+			let path = paths[next_idx].clone();
+			let coords = coords_of.remove(&next_idx).unwrap_or_default();
 			let runtime = runtime.clone();
 			Some(tokio::spawn(async move {
-				fetch_source_tiles(next_idx, &batch_clone, &paths_clone, &runtime).await
+				fetch_source_tiles(&path, coords, &runtime).await
 			}))
 		} else {
 			None
@@ -1122,12 +1095,45 @@ mod tests {
 	#[test]
 	fn prepare_batches_respects_buffer_size() {
 		// tile_dim=256, so each tile = 256*256*4 = 262144 bytes
-		// max_buffer_size=300000 → batch_size=1
-		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[1]), (tc(1, 1, 0), &[2])]);
+		// max_buffer_size=300000 → batch_size=1. Three tiles of one source are in
+		// the buffer together, so each needs a batch of its own.
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[0]), (tc(1, 1, 0), &[0])]);
 		let batches = prepare_batches(map, HashSet::new(), 256, 300_000);
 		assert_eq!(batches.len(), 3);
 		for batch in &batches {
 			assert_eq!(batch.len(), 1);
+		}
+	}
+
+	/// Tiles of different sources follow each other through the buffer, so a
+	/// buffer of one tile takes them all in one batch.
+	#[test]
+	fn prepare_batches_fits_tiles_that_follow_each_other_into_one_tile() {
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[1]), (tc(1, 1, 0), &[2])]);
+		let batches = prepare_batches(map, HashSet::new(), 256, 300_000);
+		assert_eq!(batches.len(), 1);
+		assert_eq!(batches[0].max_tiles_in_memory(), 1);
+	}
+
+	/// A batch ends at the tile that would overfill the buffer, and only there.
+	#[test]
+	fn prepare_batches_cuts_where_the_buffer_would_overflow() {
+		let map = make_translucent_map(&[
+			(tc(1, 0, 0), &[0, 2]),
+			(tc(1, 1, 0), &[1, 3]),
+			(tc(1, 0, 1), &[2, 4]),
+			(tc(1, 1, 1), &[5]),
+		]);
+		// Room for two tiles: the third starts at source 2, where the first two
+		// are still in the buffer. The fourth starts after the third has left.
+		let batches = prepare_batches(map, HashSet::new(), 256, 256 * 256 * 4 * 2);
+		let coords: Vec<Vec<TileCoord>> = batches
+			.iter()
+			.map(|batch| batch.tiles().iter().map(|(coord, _)| *coord).collect())
+			.collect();
+		assert_eq!(coords, [vec![tc(1, 0, 0), tc(1, 1, 0)], vec![tc(1, 0, 1), tc(1, 1, 1)]]);
+		for batch in &batches {
+			assert!(batch.max_tiles_in_memory() <= 2);
 		}
 	}
 
@@ -1183,7 +1189,7 @@ mod tests {
 	fn prepare_batches_large_tile_dim() {
 		// tile_dim=512, each tile = 512*512*4 = 1048576 bytes
 		// max_buffer_size=2000000 → batch_size=1
-		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[1])]);
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[0])]);
 		let batches = prepare_batches(map, HashSet::new(), 512, 2_000_000);
 		assert_eq!(batches.len(), 2);
 	}
@@ -1276,9 +1282,9 @@ mod tests {
 	#[test]
 	fn prepare_batches_max_buffer_one_byte() {
 		// Absurdly small buffer → batch_size=1 (clamped to at least 1)
-		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[1])]);
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[0])]);
 		let batches = prepare_batches(map, HashSet::new(), 256, 1);
-		// Each tile gets its own batch
+		// Both tiles are in the buffer together, so each gets its own batch
 		assert_eq!(batches.len(), 2);
 	}
 }

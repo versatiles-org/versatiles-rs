@@ -20,7 +20,7 @@ use versatiles_container::{Tile, TilesRuntime};
 use versatiles_core::{Blob, ConcurrencyLimits, TileCoord, TileFormat};
 use versatiles_image::traits::DynamicImageTraitOperation;
 
-use super::{AssembleConfig, pipeline::SourceIndices};
+use super::AssembleConfig;
 
 pub(super) fn validate_source_format(
 	path: &str,
@@ -109,27 +109,19 @@ pub(super) fn encode_tiles_parallel(
 	results
 }
 
-/// Read all tiles for a given source that are relevant to the batch.
+/// Read the tiles at `coords` from the container at `path`.
 ///
 /// Returns `(coord, tile)` pairs with empty tiles already filtered out.
 /// Used both for direct fetching and for pre-fetching the next source.
 pub(super) async fn fetch_source_tiles(
-	source_idx: usize,
-	batch: &[(TileCoord, SourceIndices)],
-	paths: &[String],
+	path: &str,
+	coords: Vec<TileCoord>,
 	runtime: &TilesRuntime,
 ) -> Result<Vec<(TileCoord, Tile)>> {
-	let path = &paths[source_idx];
 	let reader = runtime
 		.reader_from_str(path)
 		.await
 		.with_context(|| format!("Failed to open container: {path}"))?;
-
-	let coords: Vec<TileCoord> = batch
-		.iter()
-		.filter(|(_, srcs)| srcs.contains(source_idx))
-		.map(|(coord, _)| *coord)
-		.collect();
 
 	let concurrency = ConcurrencyLimits::default().io_bound;
 	let tiles: Vec<Result<Option<(TileCoord, Tile)>>> = futures::stream::iter(coords)
