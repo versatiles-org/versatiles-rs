@@ -13,7 +13,7 @@
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
-	sync::{Arc, LazyLock},
+	sync::{Arc, LazyLock, Mutex},
 	time::Instant,
 	vec,
 };
@@ -23,7 +23,7 @@ use async_trait::async_trait;
 use futures::future::BoxFuture;
 use itertools::Itertools;
 use regex::Regex;
-use versatiles_container::{DataLocation, MeasuredSource, TileSource, TilesRuntime};
+use versatiles_container::{BuildTrace, DataLocation, MeasuredSource, TileSource, TilesRuntime};
 use versatiles_core::{Stage, TileFormat, TileType, io::url_for_display};
 use versatiles_derive::context;
 
@@ -240,6 +240,25 @@ const _: fn() = || {
 	fn assert_send_sync<T: Send + Sync>() {}
 	assert_send_sync::<PipelineFactory>();
 };
+
+tokio::task_local! {
+	/// While a read node is built: the traces of the bracketed sources it
+	/// builds, with their index. They are the node's inputs in its
+	/// [`BuildTrace`]. A task-local, because sources are built concurrently
+	/// through the one shared factory, so nothing else tells them apart.
+	static SOURCE_TRACES: Arc<Mutex<Vec<(usize, Arc<BuildTrace>)>>>;
+}
+
+/// The node as VPL text, without its bracketed sources: those have traces of
+/// their own.
+fn trace_label(node: &VPLNode) -> String {
+	VPLNode {
+		name: node.name.clone(),
+		properties: node.properties.clone(),
+		sources: Vec::new(),
+	}
+	.to_string()
+}
 
 impl PipelineFactory {
 	/// Creates an empty factory with no registered operations.
@@ -460,20 +479,26 @@ impl PipelineFactory {
 	/// naming it, which [`anyhow::Error::downcast_ref`] gets back.
 	#[context("Failed to build pipeline from VPL")]
 	pub async fn build_pipeline(&self, pipeline: VPLPipeline) -> Result<Box<dyn TileSource>> {
-		self.build_nodes(pipeline).await.map_err(build_error::complete)
+		let (operation, trace) = self.build_nodes(pipeline).await.map_err(build_error::complete)?;
+		self.runtime.set_build_trace(trace);
+		Ok(operation)
 	}
 
 	/// Builds the bracketed source at `index` of a node, such as one layer of
 	/// `from_stacked_raster`. A failure in it names its node by a path through
 	/// the enclosing node, which the enclosing pipeline then completes.
 	pub(crate) async fn build_source(&self, pipeline: VPLPipeline, index: usize) -> Result<Box<dyn TileSource>> {
-		self
+		let (operation, trace) = self
 			.build_nodes(pipeline)
 			.await
-			.map_err(|err| build_error::in_source(err, index))
+			.map_err(|err| build_error::in_source(err, index))?;
+		// Outside the build of a read node there is nobody to hand the trace to.
+		let _ = SOURCE_TRACES.try_with(|traces| traces.lock().expect("poisoned mutex").push((index, trace)));
+		Ok(operation)
 	}
 
-	async fn build_nodes(&self, pipeline: VPLPipeline) -> Result<Box<dyn TileSource>> {
+	/// Builds the nodes of `pipeline`, and traces how they are put together.
+	async fn build_nodes(&self, pipeline: VPLPipeline) -> Result<(Box<dyn TileSource>, Arc<BuildTrace>)> {
 		let pipeline_started = Instant::now();
 		let (head, tail) = pipeline.split()?;
 		log::trace!(
@@ -484,11 +509,21 @@ impl PipelineFactory {
 		);
 
 		let head_name = head.name.clone();
+		let head_label = trace_label(&head);
 		let node_started = Instant::now();
-		let mut vpl_operation = self
-			.read_operation_from_node(head)
+		// The bracketed sources the read node builds hand their traces in here.
+		let sources = Arc::new(Mutex::new(Vec::new()));
+		let mut vpl_operation = SOURCE_TRACES
+			.scope(Arc::clone(&sources), self.read_operation_from_node(head))
 			.await
 			.map_err(|err| build_error::at_node(err, 0, &head_name))?;
+		let mut sources = std::mem::take(&mut *sources.lock().expect("poisoned mutex"));
+		sources.sort_by_key(|(index, _)| *index);
+		let mut trace = BuildTrace::new(
+			&head_label,
+			vpl_operation.metadata(),
+			sources.into_iter().map(|(_, trace)| trace).collect(),
+		);
 		let mut stage = None;
 		vpl_operation = self.measured(vpl_operation, &head_name, &mut stage);
 		log::trace!(
@@ -498,11 +533,13 @@ impl PipelineFactory {
 
 		for (index, node) in (1..).zip(tail) {
 			let node_name = node.name.clone();
+			let node_label = trace_label(&node);
 			let node_started = Instant::now();
 			vpl_operation = self
 				.tran_operation_from_node(node, vpl_operation)
 				.await
 				.map_err(|err| build_error::at_node(err, index, &node_name))?;
+			trace = BuildTrace::new(&node_label, vpl_operation.metadata(), vec![trace]);
 			vpl_operation = self.measured(vpl_operation, &node_name, &mut stage);
 			log::trace!(
 				"pipeline: transform node '{node_name}' built in {:.2}s",
@@ -514,7 +551,7 @@ impl PipelineFactory {
 			"pipeline: built in {:.2}s total",
 			pipeline_started.elapsed().as_secs_f32()
 		);
-		Ok(vpl_operation)
+		Ok((vpl_operation, trace))
 	}
 
 	/// `operation`, counted as a stage of its own that reads from `stage`,

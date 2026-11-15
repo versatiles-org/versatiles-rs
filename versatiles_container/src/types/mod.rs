@@ -1,3 +1,4 @@
+mod build_trace;
 mod container_registry;
 mod converter;
 mod data_location;
@@ -16,6 +17,7 @@ mod tile_stream_ext;
 mod url_reader;
 mod writer;
 
+pub use build_trace::BuildTrace;
 pub use container_registry::ContainerRegistry;
 #[cfg(test)]
 pub use container_registry::make_test_file;

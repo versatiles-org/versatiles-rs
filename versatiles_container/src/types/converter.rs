@@ -50,7 +50,8 @@ use versatiles_core::{
 use versatiles_derive::context;
 
 use crate::{
-	MeasuredSource, RemappedTileSource, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime,
+	BuildTrace, MeasuredSource, RemappedTileSource, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata,
+	TilesRuntime,
 };
 
 /// Parameters that control how tiles are transformed during reading/conversion.
@@ -166,9 +167,10 @@ pub fn resolve_tile_count_limit() -> u64 {
 ///
 /// Counting is pure bounds arithmetic on the pyramid, so this costs nothing,
 /// and it runs before the output is opened — nothing is created on disk when it
-/// fires.
+/// fires. With the `trace` of a pipeline, the refusal names the operations that
+/// make it reach so deep (issue #330).
 #[context("Checking the size of the conversion")]
-fn check_tile_count(pyramid: &TilePyramid, limit: u64) -> Result<()> {
+fn check_tile_count(pyramid: &TilePyramid, limit: u64, trace: Option<&BuildTrace>) -> Result<()> {
 	let count = pyramid.count_tiles();
 	if count <= limit {
 		return Ok(());
@@ -188,8 +190,13 @@ fn check_tile_count(pyramid: &TilePyramid, limit: u64) -> Result<()> {
 		""
 	};
 
+	let origin = trace
+		.zip(pyramid.level_max())
+		.and_then(|(trace, level)| trace.explain_level(level))
+		.map_or_else(String::new, |origin| format!(" {origin}"));
+
 	bail!(
-		"refusing to convert {} tiles ({levels}): more than the limit of {}.{hint} \
+		"refusing to convert {} tiles ({levels}): more than the limit of {}.{hint}{origin} \
 		 Restrict the job with --max-zoom and/or --bbox, or raise the ceiling with \
 		 {TILE_COUNT_LIMIT_ENV} (0 disables the check).",
 		group_digits(count),
@@ -226,9 +233,10 @@ pub async fn convert_tiles_container(
 ) -> Result<()> {
 	runtime.events().step("Starting conversion".to_string());
 
+	let trace = runtime.build_trace_of(reader.metadata());
 	let converter = TilesConvertReader::new_from_reader(reader, cp).await?;
 	let pyramid = converter.tile_pyramid().await?;
-	check_tile_count(&pyramid, resolve_tile_count_limit())?;
+	check_tile_count(&pyramid, resolve_tile_count_limit(), trace.as_deref())?;
 	runtime.write_to_path(converter.into_shared(), path).await?;
 
 	// No `had_errors` check here: `ContainerRegistry::write_to_path` decides
@@ -261,9 +269,10 @@ pub async fn convert_tiles_container_to_str(
 	} else {
 		reader
 	};
+	let trace = runtime.build_trace_of(reader.metadata());
 	let converter = TilesConvertReader::new_from_reader(reader, cp).await?;
 	let pyramid = converter.tile_pyramid().await?;
-	check_tile_count(&pyramid, resolve_tile_count_limit())?;
+	check_tile_count(&pyramid, resolve_tile_count_limit(), trace.as_deref())?;
 	// The writer turns each tile into bytes, so the encoding a pipeline asked
 	// for, such as `raster_format`'s, is done and counted here.
 	let write = runtime.write_to_str(converter.into_shared(), destination);
@@ -1012,7 +1021,7 @@ mod tests {
 	fn tile_count_guard_refuses_an_impossible_pyramid() {
 		let pyramid = TilePyramid::new_full();
 
-		let err = check_tile_count(&pyramid, DEFAULT_TILE_COUNT_LIMIT).unwrap_err();
+		let err = check_tile_count(&pyramid, DEFAULT_TILE_COUNT_LIMIT, None).unwrap_err();
 		let msg = format!("{err:#}");
 
 		assert!(msg.contains("refusing to convert"), "unexpected message: {msg}");
@@ -1033,7 +1042,7 @@ mod tests {
 		pyramid.set_level_max(level_max);
 
 		assert!(
-			check_tile_count(&pyramid, DEFAULT_TILE_COUNT_LIMIT).is_ok(),
+			check_tile_count(&pyramid, DEFAULT_TILE_COUNT_LIMIT, None).is_ok(),
 			"a planet through zoom {level_max} ({} tiles) must not be refused",
 			pyramid.count_tiles()
 		);
@@ -1046,9 +1055,12 @@ mod tests {
 		pyramid.set_level_max(2);
 		let count = pyramid.count_tiles();
 
-		assert!(check_tile_count(&pyramid, count).is_ok(), "count == limit must pass");
 		assert!(
-			check_tile_count(&pyramid, count - 1).is_err(),
+			check_tile_count(&pyramid, count, None).is_ok(),
+			"count == limit must pass"
+		);
+		assert!(
+			check_tile_count(&pyramid, count - 1, None).is_err(),
 			"count > limit must fail"
 		);
 	}
@@ -1104,7 +1116,7 @@ mod tests {
 		let mut pyramid = TilePyramid::new_full();
 		pyramid.set_level_max(2);
 
-		let msg = format!("{:#}", check_tile_count(&pyramid, 5).unwrap_err());
+		let msg = format!("{:#}", check_tile_count(&pyramid, 5, None).unwrap_err());
 		assert!(!msg.contains("rarely intended"), "unexpected message: {msg}");
 		assert!(msg.contains("VERSATILES_MAX_TILES"), "unexpected message: {msg}");
 	}
@@ -1113,7 +1125,7 @@ mod tests {
 	/// even the deepest pyramid through.
 	#[test]
 	fn tile_count_guard_can_be_disabled() {
-		assert!(check_tile_count(&TilePyramid::new_full(), u64::MAX).is_ok());
+		assert!(check_tile_count(&TilePyramid::new_full(), u64::MAX, None).is_ok());
 	}
 
 	#[test]

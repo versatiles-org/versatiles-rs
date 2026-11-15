@@ -190,6 +190,7 @@ impl RuntimeBuilder {
 				error_count: AtomicUsize::new(0),
 				writer_options: Mutex::new(self.writer_options),
 				stages: Mutex::new(None),
+				build_trace: Mutex::new(None),
 			}),
 		}
 	}

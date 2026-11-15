@@ -243,6 +243,34 @@ mod tests {
 		Ok(())
 	}
 
+	/// A conversion refused for its size names the operation that makes it so
+	/// deep, through stacks inside stacks (issue #330).
+	#[tokio::test]
+	async fn a_refused_conversion_names_the_operation_that_goes_deepest() -> Result<()> {
+		const VPL: &str = "from_stacked_raster [
+			from_stacked_raster [ from_color color=ff0000 | filter level_max=12, from_color color=0000ff ],
+			from_color color=00ff00 | filter level_max=9
+		]";
+		let runtime = TilesRuntime::new_silent();
+		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), runtime.clone()).await?;
+		let dir = tempfile::tempdir()?;
+		let error = versatiles_container::convert_tiles_container(
+			reader.into_shared(),
+			versatiles_container::TilesConverterParameters::default(),
+			&dir.path().join("out.versatiles"),
+			runtime,
+		)
+		.await
+		.expect_err("levels 0-30 of the whole world are too many tiles");
+
+		let message = format!("{error:#}");
+		assert!(
+			message.contains("Only `from_color color=0000ff` goes beyond level 12, where the rest of the pipeline ends"),
+			"{message}"
+		);
+		Ok(())
+	}
+
 	/// `from_parts` must produce what [`PipelineReader::from_pipeline`] produces for the same
 	/// pipeline — that is the whole point of it: an editor swaps the cheap path in without the
 	/// result changing. See issue #262.

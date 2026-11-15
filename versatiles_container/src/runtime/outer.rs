@@ -8,7 +8,7 @@ use anyhow::{Result, bail};
 use versatiles_core::{Stage, StageStats};
 
 use super::{EventBus, RuntimeBuilder, RuntimeInner};
-use crate::{CacheType, DataLocation, DataSource, ProgressHandle, SharedTileSource};
+use crate::{BuildTrace, CacheType, DataLocation, DataSource, ProgressHandle, SharedTileSource, TileSourceMetadata};
 
 /// Immutable runtime configuration and services for tile processing operations
 ///
@@ -149,6 +149,21 @@ impl TilesRuntime {
 	pub fn measure_stages(&self) {
 		let mut stages = self.inner.stages.lock().expect("poisoned mutex");
 		stages.get_or_insert_with(Vec::new);
+	}
+
+	/// Keeps how a pipeline was built, replacing the one kept before. A
+	/// pipeline calls this when it is built, and a conversion of it that is
+	/// refused for its size reads the trace back.
+	pub fn set_build_trace(&self, trace: Arc<BuildTrace>) {
+		*self.inner.build_trace.lock().expect("poisoned mutex") = Some(trace);
+	}
+
+	/// How the source that produces `metadata` was built, if it is the
+	/// pipeline built last under this runtime.
+	#[must_use]
+	pub fn build_trace_of(&self, metadata: &TileSourceMetadata) -> Option<Arc<BuildTrace>> {
+		let trace = self.inner.build_trace.lock().expect("poisoned mutex");
+		trace.as_ref().filter(|trace| trace.describes(metadata)).cloned()
 	}
 
 	/// A new stage to count the work of `name`, which reads from `input`, or

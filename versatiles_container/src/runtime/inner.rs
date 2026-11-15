@@ -10,7 +10,7 @@ use std::{
 use versatiles_core::Stage;
 
 use super::EventBus;
-use crate::{CacheType, ContainerRegistry, ProgressFactory};
+use crate::{BuildTrace, CacheType, ContainerRegistry, ProgressFactory};
 
 /// The state a [`TilesRuntime`](crate::TilesRuntime) shares between every
 /// operation running under it.
@@ -60,6 +60,10 @@ pub struct RuntimeInner {
 	/// created, or `None` while stages are not measured. Set by the CLI's
 	/// `--stats`; see `TilesRuntime::stage`.
 	pub stages: Mutex<Option<Vec<std::sync::Arc<Stage>>>>,
+	/// How the pipeline built last under this runtime is put together, so that
+	/// a conversion refused for its size can name the operation that makes it
+	/// so deep. See `TilesRuntime::set_build_trace`.
+	pub build_trace: Mutex<Option<std::sync::Arc<BuildTrace>>>,
 }
 
 #[cfg(test)]
@@ -84,6 +88,7 @@ mod tests {
 			error_count: AtomicUsize::new(0),
 			writer_options: Mutex::new(BTreeMap::new()),
 			stages: Mutex::new(None),
+			build_trace: Mutex::new(None),
 		};
 
 		assert_eq!(inner.cache_type, CacheType::InMemory);
@@ -108,6 +113,7 @@ mod tests {
 			error_count: AtomicUsize::new(0),
 			writer_options: Mutex::new(BTreeMap::new()),
 			stages: Mutex::new(None),
+			build_trace: Mutex::new(None),
 		};
 
 		assert_eq!(inner.cache_type, CacheType::Disk(path_buf));
@@ -131,6 +137,7 @@ mod tests {
 			error_count: AtomicUsize::new(0),
 			writer_options: Mutex::new(BTreeMap::new()),
 			stages: Mutex::new(None),
+			build_trace: Mutex::new(None),
 		};
 
 		// Verify we can lock and access the progress factory
@@ -157,6 +164,7 @@ mod tests {
 			error_count: AtomicUsize::new(0),
 			writer_options: Mutex::new(BTreeMap::new()),
 			stages: Mutex::new(None),
+			build_trace: Mutex::new(None),
 		};
 
 		// Verify event bus works

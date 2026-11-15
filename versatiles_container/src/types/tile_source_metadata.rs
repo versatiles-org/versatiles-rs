@@ -192,6 +192,13 @@ impl TileSourceMetadata {
 		self.tile_pyramid.read().expect("poisoned RwLock").clone()
 	}
 
+	/// The slot the pyramid is kept in, shared, so that a
+	/// [`BuildTrace`](crate::BuildTrace) sees a pyramid computed after it was
+	/// recorded. Read only: nothing writes through it.
+	pub(crate) fn pyramid_cell(&self) -> Arc<RwLock<Option<Arc<TilePyramid>>>> {
+		Arc::clone(&self.tile_pyramid)
+	}
+
 	/// Overwrites the tile pyramid. Requires `&mut self` so that mutations cannot
 	/// accidentally propagate through a shared clone — see the `Clone` impl above
 	/// for the rationale.
