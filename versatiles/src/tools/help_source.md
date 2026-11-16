@@ -74,7 +74,10 @@ versatiles probe --netrc https://user@webdav.example.org/tiles.versatiles
 
 `NETRC` names another file. An entry counts only when its `machine` is the
 URL's host and its `login` the URL's user, so a URL with no user never signs in,
-and a `default` entry is never used. Reading `~/.netrc` is off unless asked
+and a `default` entry is never used. Its password is sent only over `https`, or
+over `http` to this machine (`localhost`, `127.0.0.1`, `::1`): an entry cannot
+say which scheme it is for, and over plain `http` anyone on the network could
+read it. Reading `~/.netrc` is off unless asked
 for, so that opening a pipeline someone else wrote, naming
 `https://you@your-server/…`, cannot sign in to your server without your
 deciding to.

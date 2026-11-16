@@ -287,9 +287,10 @@ impl DataReaderHttp {
 	///
 	/// The one written into the URL, or else the one registered with
 	/// [`set_http_password`](super::set_http_password) for this server and
-	/// user, or else the one in `.netrc` if reading it is enabled. Looked up for
-	/// every request, so a password registered or forgotten after the reader
-	/// was made counts from the next request on. A URL with no user has none.
+	/// user, or else the one in `.netrc` if reading it is enabled and the URL
+	/// may carry it. Looked up for every request, so a password registered or
+	/// forgotten after the reader was made counts from the next request on. A
+	/// URL with no user has none.
 	fn password(&self) -> Option<String> {
 		if let Some(password) = &self.password {
 			return Some(password.clone());
@@ -298,7 +299,17 @@ impl DataReaderHttp {
 		if let Some(password) = http_credentials::stored_password(&self.url, user) {
 			return Some(password);
 		}
+		if !http_credentials::may_carry_a_netrc_password(&self.url) {
+			return None;
+		}
+		self.netrc_entry()
+	}
+
+	/// What `.netrc` has for the URL's user on its host, read once, whether or
+	/// not the URL may carry it.
+	fn netrc_entry(&self) -> Option<String> {
 		let file = self.netrc_file.as_deref()?;
+		let user = self.username.as_deref()?;
 		self
 			.netrc_password
 			.get_or_init(|| http_credentials::netrc_password(file, self.url.host_str().unwrap_or_default(), user))
@@ -314,6 +325,11 @@ impl DataReaderHttp {
 		let user = self.username.as_deref()?;
 		let host = self.url.host_str().unwrap_or_default();
 		Some(match &self.netrc_file {
+			Some(file) if self.netrc_entry().is_some() => format!(
+				"the URL names the user '{user}' but gives no password. {} has one for it, but a password \
+				 from .netrc is sent only over https, or over http to this machine: use https://{user}@{host}/…",
+				file.display()
+			),
 			None => format!(
 				"the URL names the user '{user}' but gives no password, and none is known for it. \
 				 To take it from ~/.netrc, set VERSATILES_HTTP_NETRC=on, or pass --netrc on the command line"
@@ -1126,6 +1142,29 @@ mod credential_tests {
 			message.contains("'machine 127.0.0.1 login hintnetrc-alice'"),
 			"got: {message}"
 		);
+	}
+
+	/// Over plain http the password would cross the network for anyone to read,
+	/// and a shared pipeline can name `http://` for a host `.netrc` has.
+	#[test]
+	fn netrc_is_not_sent_over_plain_http_to_another_machine() {
+		let (_dir, file) = netrc("machine plain-http.invalid login plainhttp-alice password secret\n");
+
+		let url = Url::parse("http://plainhttp-alice@plain-http.invalid/x.pmtiles").unwrap();
+		let mut reader = DataReaderHttp::try_from(&url).unwrap();
+		reader.netrc_file = Some(file.clone());
+		assert_eq!(reader.password(), None);
+		let hint = reader.missing_password_hint(StatusCode::UNAUTHORIZED).unwrap();
+		assert!(
+			hint.contains("sent only over https") && hint.contains("https://plainhttp-alice@plain-http.invalid/"),
+			"got: {hint}"
+		);
+		assert!(!hint.contains("secret"), "password leaked: {hint}");
+
+		let url = Url::parse("https://plainhttp-alice@plain-http.invalid/x.pmtiles").unwrap();
+		let mut reader = DataReaderHttp::try_from(&url).unwrap();
+		reader.netrc_file = Some(file);
+		assert_eq!(reader.password().as_deref(), Some("secret"));
 	}
 
 	#[tokio::test]

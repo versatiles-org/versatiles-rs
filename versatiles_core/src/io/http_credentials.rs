@@ -11,7 +11,8 @@
 //! 2. the store an embedding application fills in with [`set_http_password`],
 //!    for instance from the system keychain;
 //! 3. `~/.netrc`, but only when enabled with `VERSATILES_HTTP_NETRC=on` or
-//!    [`enable_http_netrc`] (the CLI's `--netrc`).
+//!    [`enable_http_netrc`] (the CLI's `--netrc`), and only for an `https` URL
+//!    or an `http` one to this machine.
 //!
 //! If none has one, the request is sent with the user and no password.
 //!
@@ -19,7 +20,9 @@
 //! so it cannot reach another server, and a URL with no user never picks one
 //! up. In the store, the server is the origin, so `http://host` does not get the
 //! password registered for `https://host`. A `.netrc` entry names only a host,
-//! as curl, git and wget read it.
+//! as curl, git and wget read it, so its password is kept off plain `http`
+//! instead: a pipeline naming `http://you@your-server/…` would otherwise send it
+//! across the network unencrypted.
 
 use std::{
 	ffi::OsString,
@@ -104,7 +107,9 @@ pub fn forget_http_password(origin: &Url, user: &str) -> Result<()> {
 /// Windows `%USERPROFILE%\_netrc` if there is no `.netrc`). An entry counts
 /// only when its `machine` is the URL's host and its `login` is the URL's user;
 /// a `default` entry is never used, since it would hand the password to any
-/// server a URL names.
+/// server a URL names. And it is sent only over `https`, or over `http` to this
+/// machine (`localhost` or a loopback address), since `.netrc` cannot say which
+/// scheme an entry is for and plain `http` shows the password to the network.
 pub fn enable_http_netrc() {
 	NETRC_ENABLED.store(true, Ordering::Relaxed);
 }
@@ -133,6 +138,19 @@ pub(crate) fn stored_password(url: &Url, user: &str) -> Option<String> {
 	STORE
 		.get(&(origin, user.to_string()))
 		.map(|entry| entry.value().clone())
+}
+
+/// Whether a password from `.netrc` may be sent to `url`: over `https`, or
+/// over `http` to this machine, where it crosses no network.
+pub(crate) fn may_carry_a_netrc_password(url: &Url) -> bool {
+	match url.scheme() {
+		"https" => true,
+		"http" => url.host_str().is_some_and(|host| {
+			let host = host.trim_start_matches('[').trim_end_matches(']');
+			host.eq_ignore_ascii_case("localhost") || host.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback())
+		}),
+		_ => false,
+	}
 }
 
 /// The `.netrc` file to read, or `None` if reading it is not enabled.
@@ -366,6 +384,29 @@ mod tests {
 		assert!(netrc_enabled_by(Some(" on ")));
 		for value in [None, Some(""), Some("off"), Some("1"), Some("yes"), Some("ON")] {
 			assert!(!netrc_enabled_by(value), "{value:?}");
+		}
+	}
+
+	#[test]
+	fn a_netrc_password_goes_over_https_or_to_this_machine() {
+		for allowed in [
+			"https://dav.example.org/x",
+			"https://dav.example.org:8443/x",
+			"http://localhost:8080/x",
+			"http://LOCALHOST/x",
+			"http://127.0.0.1/x",
+			"http://127.1.2.3:9000/x",
+			"http://[::1]:8080/x",
+		] {
+			assert!(may_carry_a_netrc_password(&url(allowed)), "{allowed}");
+		}
+		for refused in [
+			"http://dav.example.org/x",
+			"http://192.168.1.10/x",
+			"http://[2001:db8::1]/x",
+			"http://localhost.example.org/x",
+		] {
+			assert!(!may_carry_a_netrc_password(&url(refused)), "{refused}");
 		}
 	}
 
