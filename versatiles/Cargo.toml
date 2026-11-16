@@ -72,7 +72,7 @@ tower-http = { version = "0.7.1", optional = true, features = [
 	"cors",
 	"set-header",
 ] }
-xxhash-rust = { version = "0.8.19", default-features = false, features = [
+xxhash-rust = { version = "0.8.21", default-features = false, features = [
 	"xxh3",
 ], optional = true }
 
