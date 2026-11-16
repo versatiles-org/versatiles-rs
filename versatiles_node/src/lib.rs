@@ -50,6 +50,7 @@
 
 mod codegen;
 mod convert;
+mod credentials;
 mod layer_stats;
 mod macros;
 mod progress;
@@ -60,6 +61,7 @@ mod types;
 mod vpl;
 
 pub use convert::convert;
+pub use credentials::{enable_http_netrc, forget_http_password, set_http_password};
 pub use layer_stats::{LayerStats, layer_stats_of};
 pub use progress::ProgressData;
 pub use server::TileServer;

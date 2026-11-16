@@ -24,6 +24,8 @@ env_logger.workspace = true
 log.workspace = true
 napi = { version = "3.16.2", features = ["async", "napi5"] }
 napi-derive = "3.7.1"
+# Only for `Url`, to parse the origin given to `setHttpPassword`.
+reqwest.workspace = true
 tokio.workspace = true
 versatiles = { workspace = true, default-features = false, features = [
 	"codegen",

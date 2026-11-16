@@ -6186,6 +6186,7 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "pretty_assertions",
+ "reqwest",
  "rstest",
  "serde",
  "serde_json",

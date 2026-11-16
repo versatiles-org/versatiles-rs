@@ -204,6 +204,37 @@ await convert('local.mbtiles', 'sftp://host/tiles/berlin.pmtiles', {
 Uploading needs a format that can be written as a stream, which today means `.versatiles` and
 `.pmtiles`. `.mbtiles` is a local SQLite file, and is refused with a message saying so.
 
+#### HTTP authentication
+
+An `http://` or `https://` source behind a password can name only its user, as
+`https://alice@dav.example.org/tiles.pmtiles`, so that the password is not written into a pipeline
+or a list of recent sources. The password is looked up in this order, first match wins:
+
+1. A password written into the URL (`https://alice:secret@…`)
+2. One registered with `setHttpPassword(origin, user, password)`
+3. `~/.netrc` (or the file `NETRC` names), if `enableHttpNetrc()` was called or
+   `VERSATILES_HTTP_NETRC=on` is set
+4. None: the request is sent with the user and no password
+
+```javascript
+import { setHttpPassword, TileSource } from '@versatiles/versatiles-rs';
+
+// For instance from the system keychain, once at start-up
+setHttpPassword('https://dav.example.org', 'alice', password);
+
+const source = await TileSource.fromPath('https://alice@dav.example.org/tiles.pmtiles');
+```
+
+A registered password belongs to the scheme, host and port of `origin` and to `user`: it is sent to
+no other server, `http://` for an `https://` origin included, and never for a URL without a user.
+`forgetHttpPassword(origin, user)` removes it. Both hold for the whole process, so for every
+`TileSource`, `convert` and `TileServer` from then on.
+
+A `.netrc` entry counts only when its `machine` is the URL's host and its `login` the URL's user; a
+`default` entry is never used, and the password is sent only over `https`, or over `http` to this
+machine. Reading `.netrc` is off by default, so that a pipeline someone else wrote cannot sign in with
+your password, and once enabled it stays on.
+
 #### Disk cache
 
 A conversion caches tiles when the source's tile order differs from the one the output needs. For a
