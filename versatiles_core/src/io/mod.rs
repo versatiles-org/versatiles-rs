@@ -159,6 +159,18 @@ pub fn location_for_display(text: &str) -> String {
 	USERINFO.replace_all(text, "$1@").into_owned()
 }
 
+/// The user's home directory: `HOME`, or `USERPROFILE` on Windows.
+pub(crate) fn home_dir() -> Option<std::path::PathBuf> {
+	#[cfg(unix)]
+	{
+		std::env::var_os("HOME").map(std::path::PathBuf::from)
+	}
+	#[cfg(not(unix))]
+	{
+		std::env::var_os("USERPROFILE").map(std::path::PathBuf::from)
+	}
+}
+
 /// Whether `text` is a non-empty RFC 9110 token, the only thing a product
 /// name or version may be.
 fn is_token(text: &str) -> bool {
@@ -179,6 +191,7 @@ mod data_writer_blob;
 mod data_writer_file;
 #[cfg(feature = "sftp")]
 mod data_writer_sftp;
+mod http_credentials;
 mod network_reader;
 #[cfg(feature = "sftp")]
 mod network_writer;
@@ -222,6 +235,7 @@ pub use data_writer_blob::*;
 pub use data_writer_file::*;
 #[cfg(feature = "sftp")]
 pub use data_writer_sftp::*;
+pub use http_credentials::{enable_http_netrc, forget_http_password, set_http_password};
 pub use value_reader::*;
 pub use value_reader_blob::*;
 pub use value_reader_file::*;

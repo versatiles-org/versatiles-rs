@@ -745,19 +745,7 @@ fn fingerprint(key: &ssh_key::PublicKey) -> String {
 }
 
 fn dirs_home() -> Result<PathBuf> {
-	home_dir().context("could not determine home directory")
-}
-
-/// Cross-platform home directory lookup.
-fn home_dir() -> Option<PathBuf> {
-	#[cfg(unix)]
-	{
-		std::env::var_os("HOME").map(PathBuf::from)
-	}
-	#[cfg(not(unix))]
-	{
-		std::env::var_os("USERPROFILE").map(PathBuf::from)
-	}
+	super::home_dir().context("could not determine home directory")
 }
 
 #[cfg(test)]
@@ -828,7 +816,7 @@ mod tests {
 	#[test]
 	fn test_home_dir_returns_some() {
 		// HOME (unix) or USERPROFILE (windows) should be set in CI and dev
-		assert!(home_dir().is_some());
+		assert!(super::super::home_dir().is_some());
 	}
 
 	#[test]

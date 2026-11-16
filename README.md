@@ -961,12 +961,13 @@ versatiles help config
 
 These accept the same values on every subcommand:
 
-| Option           | Description                                            | Environment variable      |
-| ---------------- | ------------------------------------------------------ | ------------------------- |
-| `-v, --verbose`  | More logging: `-v` debug, `-vv` trace (default: info)  | -                         |
-| `-q, --quiet`    | Less logging: `-q` warnings, `-qq` errors, `-qqq` none | -                         |
-| `--cache-dir`    | Directory for temporary cache files                    | `VERSATILES_CACHE_DIR`    |
-| `--ssh-identity` | SSH identity file for SFTP authentication              | `VERSATILES_SSH_IDENTITY` |
+| Option           | Description                                                 | Environment variable       |
+| ---------------- | ----------------------------------------------------------- | -------------------------- |
+| `-v, --verbose`  | More logging: `-v` debug, `-vv` trace (default: info)       | -                          |
+| `-q, --quiet`    | Less logging: `-q` warnings, `-qq` errors, `-qqq` none      | -                          |
+| `--cache-dir`    | Directory for temporary cache files                         | `VERSATILES_CACHE_DIR`     |
+| `--ssh-identity` | SSH identity file for SFTP authentication                   | `VERSATILES_SSH_IDENTITY`  |
+| `--netrc`        | Passwords for HTTP URLs naming only a user, from `~/.netrc` | `VERSATILES_HTTP_NETRC=on` |
 
 The flag wins where both are set.
 
@@ -976,6 +977,7 @@ VersaTiles supports the following environment variables:
 
 - `VERSATILES_CACHE_DIR` - Enable disk-based tile caching. This is useful if you want to convert large tile sets with the `from_gdal_raster` VPL operation but have limited memory. Example: `VERSATILES_CACHE_DIR=/tmp/versatiles_cache`
 - `VERSATILES_SSH_IDENTITY` - SSH identity (private key) file used for SFTP authentication.
+- `VERSATILES_HTTP_NETRC` - Set to `on` to let an HTTP(S) URL that names a user but no password, such as `https://alice@dav.example.org/tiles.pmtiles`, take the password from `~/.netrc` (or the file `NETRC` names), from the entry whose `machine` is the host and whose `login` is the user. Off by default, so that a pipeline someone else wrote cannot sign in with your password. See `versatiles help source`.
 - `VERSATILES_MAX_TILES` - Refuse a conversion whose pyramid holds more than this many tiles (default `10000000000`). Guards against a source advertising a pyramid too deep to ever finish. Set to `0` to disable.
 - `VERSATILES_MEMORY_LOG_SECS` - Interval in seconds for logging the process's resident memory during long commands (default `60`); set to `0` to disable. Reads `/proc/self/status`, so it is Linux-only and a no-op elsewhere. Useful when a conversion is being killed by the OOM killer, which the process cannot report itself.
 

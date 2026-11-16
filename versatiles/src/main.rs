@@ -98,6 +98,19 @@ struct Cli {
 		help = "SSH identity file for SFTP authentication (overrides VERSATILES_SSH_IDENTITY)"
 	)]
 	ssh_identity: Option<PathBuf>,
+
+	#[arg(
+		long,
+		global = true,
+		display_order = 99,
+		help = "Take the password for an HTTP URL that names only a user from ~/.netrc (as VERSATILES_HTTP_NETRC=on)",
+		long_help = "Take the password for an HTTP URL that names only a user from ~/.netrc, as VERSATILES_HTTP_NETRC=on does.\n\
+			A URL such as `https://alice@dav.example.org/tiles.pmtiles` then signs in with the password of the entry \
+			`machine dav.example.org login alice password …`, so the password need not be written into the URL or a pipeline. \
+			`NETRC` names another file. Off by default, so that a pipeline someone else wrote cannot sign in with your password \
+			without your asking."
+	)]
+	netrc: bool,
 }
 
 /// Define subcommands for the command-line interface
@@ -201,6 +214,10 @@ fn main() {
 	// `serve` holds them only while it starts — opening a tar archive draws a
 	// bar — and takes the signals for its graceful shutdown once it is up.
 	versatiles_container::install_terminal_reset_hooks();
+
+	if cli.netrc {
+		versatiles_core::io::enable_http_netrc();
+	}
 
 	let runtime = build_runtime(&cli);
 
@@ -819,6 +836,22 @@ mod tests {
 		assert_eq!(
 			cli.ssh_identity.as_deref(),
 			Some(std::path::Path::new("/tmp/id_ed25519"))
+		);
+	}
+
+	/// `--netrc` is a global flag accepted before or after any subcommand.
+	#[test]
+	fn netrc_flag_is_global() {
+		assert!(!Cli::try_parse_from(vec!["versatiles", "help", "source"]).unwrap().netrc);
+		assert!(
+			Cli::try_parse_from(vec!["versatiles", "--netrc", "help", "source"])
+				.unwrap()
+				.netrc
+		);
+		assert!(
+			Cli::try_parse_from(vec!["versatiles", "help", "source", "--netrc"])
+				.unwrap()
+				.netrc
 		);
 	}
 

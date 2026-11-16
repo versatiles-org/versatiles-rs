@@ -30,8 +30,10 @@
 //! ```
 
 use std::{
-	fmt, str,
-	sync::{Arc, LazyLock, atomic::AtomicU64},
+	fmt,
+	path::PathBuf,
+	str,
+	sync::{Arc, LazyLock, OnceLock, atomic::AtomicU64},
 	time::Duration,
 };
 
@@ -44,7 +46,7 @@ use reqwest::{Client, RequestBuilder, StatusCode, Url};
 use tokio::{sync::Semaphore, time::sleep};
 
 use super::{
-	DataReaderTrait,
+	DataReaderTrait, http_credentials,
 	network_reader::{NetworkReader, SmallerRangeWontHelp},
 	retry::env_u64,
 };
@@ -192,7 +194,13 @@ pub struct DataReaderHttp {
 	given_url: Url,
 	url: Url,
 	username: Option<String>,
+	/// The password written into the URL. Without one, [`Self::password`]
+	/// looks one up for `username`.
 	password: Option<String>,
+	/// The `.netrc` file to look in, if reading it is enabled.
+	netrc_file: Option<PathBuf>,
+	/// What `netrc_file` has for `username`, read at the first request.
+	netrc_password: OnceLock<Option<String>>,
 	max_request_bytes: AtomicU64,
 	in_flight: Arc<Semaphore>,
 }
@@ -252,8 +260,14 @@ impl TryFrom<&Url> for DataReaderHttp {
 			name: url.to_string(),
 			given_url,
 			url,
+			netrc_file: if username.is_some() && password.is_none() {
+				http_credentials::netrc_file()
+			} else {
+				None
+			},
 			username,
 			password,
+			netrc_password: OnceLock::new(),
 			max_request_bytes: AtomicU64::new(u64::MAX),
 			in_flight,
 		})
@@ -263,10 +277,53 @@ impl TryFrom<&Url> for DataReaderHttp {
 impl DataReaderHttp {
 	fn apply_auth(&self, builder: RequestBuilder) -> RequestBuilder {
 		if let Some(username) = &self.username {
-			builder.basic_auth(username, self.password.as_deref())
+			builder.basic_auth(username, self.password())
 		} else {
 			builder
 		}
+	}
+
+	/// The password sent with the URL's user.
+	///
+	/// The one written into the URL, or else the one registered with
+	/// [`set_http_password`](super::set_http_password) for this server and
+	/// user, or else the one in `.netrc` if reading it is enabled. Looked up for
+	/// every request, so a password registered or forgotten after the reader
+	/// was made counts from the next request on. A URL with no user has none.
+	fn password(&self) -> Option<String> {
+		if let Some(password) = &self.password {
+			return Some(password.clone());
+		}
+		let user = self.username.as_deref()?;
+		if let Some(password) = http_credentials::stored_password(&self.url, user) {
+			return Some(password);
+		}
+		let file = self.netrc_file.as_deref()?;
+		self
+			.netrc_password
+			.get_or_init(|| http_credentials::netrc_password(file, self.url.host_str().unwrap_or_default(), user))
+			.clone()
+	}
+
+	/// What to try when a server answers `401` to a URL that names a user but
+	/// no password could be found for.
+	fn missing_password_hint(&self, status: StatusCode) -> Option<String> {
+		if status != StatusCode::UNAUTHORIZED || self.password().is_some() {
+			return None;
+		}
+		let user = self.username.as_deref()?;
+		let host = self.url.host_str().unwrap_or_default();
+		Some(match &self.netrc_file {
+			None => format!(
+				"the URL names the user '{user}' but gives no password, and none is known for it. \
+				 To take it from ~/.netrc, set VERSATILES_HTTP_NETRC=on, or pass --netrc on the command line"
+			),
+			Some(file) => format!(
+				"the URL names the user '{user}' but gives no password, and {} has no entry \
+				 'machine {host} login {user}'",
+				file.display()
+			),
+		})
 	}
 
 	/// Override the maximum number of HTTP requests allowed in flight.
@@ -293,14 +350,22 @@ fn is_retryable_error(err: &reqwest::Error) -> bool {
 /// Everything else here — a `200` from a server that ignores `Range`, a `404`,
 /// a `416` for a range past the end of the file — is an answer about the
 /// request rather than its size, and halving it just asks twice.
-fn unexpected_status(range: &ByteRange, len: u64, url: &Url, status: StatusCode, total_attempts: u32) -> anyhow::Error {
+fn unexpected_status(
+	range: &ByteRange,
+	len: u64,
+	url: &Url,
+	status: StatusCode,
+	total_attempts: u32,
+	hint: Option<String>,
+) -> anyhow::Error {
 	if status.is_server_error() {
 		return anyhow!(
 			"could not read {range} ({len} bytes) from '{url}': server returned {status} — gave up after {total_attempts} attempts"
 		);
 	}
 
-	let error = anyhow!("could not read {range} ({len} bytes) from '{url}': expected HTTP 206, got {status}");
+	let hint = hint.map_or_default(|hint| format!(": {hint}"));
+	let error = anyhow!("could not read {range} ({len} bytes) from '{url}': expected HTTP 206, got {status}{hint}");
 	if status == StatusCode::PAYLOAD_TOO_LARGE {
 		error
 	} else {
@@ -388,7 +453,14 @@ impl DataReaderHttp {
 			}
 
 			if status != StatusCode::PARTIAL_CONTENT {
-				return Err(unexpected_status(range, len, url, status, total_attempts));
+				return Err(unexpected_status(
+					range,
+					len,
+					url,
+					status,
+					total_attempts,
+					self.missing_password_hint(status),
+				));
 			}
 
 			verify_content_range(&response, range)?;
@@ -521,7 +593,10 @@ impl DataReaderTrait for DataReaderHttp {
 				if status.is_server_error() {
 					bail!("could not read from '{url}': server returned {status} — gave up after {total_attempts} attempts");
 				}
-				bail!("could not read from '{url}': server returned {status}");
+				let hint = self
+					.missing_password_hint(status)
+					.map_or_default(|hint| format!(": {hint}"));
+				bail!("could not read from '{url}': server returned {status}{hint}");
 			}
 
 			let limit = env_u64("VERSATILES_MAX_HTTP_BODY_BYTES", DEFAULT_MAX_BODY_BYTES);
@@ -860,5 +935,209 @@ mod body_limit_tests {
 
 		let blob = reader.read_range(&ByteRange::new(0, 10)).await.unwrap();
 		assert_eq!(blob.as_slice(), b"0123456789");
+	}
+}
+
+#[cfg(test)]
+mod credential_tests {
+	use tokio::{
+		io::{AsyncReadExt, AsyncWriteExt},
+		sync::oneshot,
+	};
+
+	use super::*;
+	use crate::io::set_http_password;
+
+	/// Answers one request with `response`, and tells what its `Authorization`
+	/// header was, if it had one.
+	async fn serve_once(response: &'static str) -> (Url, oneshot::Receiver<Option<String>>) {
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		let (sender, receiver) = oneshot::channel();
+
+		tokio::spawn(async move {
+			if let Ok((mut socket, _)) = listener.accept().await {
+				let mut request = vec![0u8; 4096];
+				let n = socket.read(&mut request).await.unwrap_or(0);
+				let request = String::from_utf8_lossy(&request[..n]).into_owned();
+				let authorization = request.lines().find_map(|line| {
+					let (name, value) = line.split_once(':')?;
+					name
+						.eq_ignore_ascii_case("authorization")
+						.then(|| value.trim().to_string())
+				});
+				let _ = sender.send(authorization);
+				let _ = socket.write_all(response.as_bytes()).await;
+				let _ = socket.flush().await;
+			}
+		});
+
+		(Url::parse(&format!("http://{addr}/x")).unwrap(), receiver)
+	}
+
+	const OK: &str = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok";
+	const UNAUTHORIZED: &str = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n";
+
+	/// `user:password` as Basic auth sends it.
+	fn basic(credentials: &str) -> Option<String> {
+		let (user, password) = credentials.split_once(':').unwrap();
+		let request = Client::new()
+			.get("http://127.0.0.1/")
+			.basic_auth(user, (!password.is_empty()).then_some(password))
+			.build()
+			.unwrap();
+		Some(request.headers()["authorization"].to_str().unwrap().to_string())
+	}
+
+	fn with_user(url: &Url, userinfo: &str) -> Url {
+		Url::parse(&url.as_str().replacen("http://", &format!("http://{userinfo}@"), 1)).unwrap()
+	}
+
+	/// The `Authorization` header a reader for `url` sends.
+	async fn sent_authorization(reader: &DataReaderHttp, receiver: oneshot::Receiver<Option<String>>) -> Option<String> {
+		reader.read_all().await.unwrap();
+		receiver.await.unwrap()
+	}
+
+	fn netrc(text: &str) -> (tempfile::TempDir, PathBuf) {
+		let dir = tempfile::tempdir().unwrap();
+		let file = dir.path().join("netrc");
+		std::fs::write(&file, text).unwrap();
+		(dir, file)
+	}
+
+	/// The store belongs to the process and every server here is on 127.0.0.1,
+	/// where a port can come round again, so each test has user names of its own.
+	#[tokio::test]
+	async fn a_registered_password_is_sent_to_its_server() {
+		let (url, receiver) = serve_once(OK).await;
+		set_http_password(&url, "reg-alice", "from-the-store").unwrap();
+
+		let reader = DataReaderHttp::try_from(&with_user(&url, "reg-alice")).unwrap();
+		assert_eq!(
+			sent_authorization(&reader, receiver).await,
+			basic("reg-alice:from-the-store")
+		);
+		assert!(!reader.name().contains("from-the-store"));
+		assert!(!format!("{reader:?}").contains("from-the-store"));
+	}
+
+	#[tokio::test]
+	async fn a_registered_password_is_not_sent_to_another_port_or_user() {
+		let (registered, _) = serve_once(OK).await;
+		set_http_password(&registered, "other-alice", "not-yours").unwrap();
+		set_http_password(&registered, "other-bob", "not-yours").unwrap();
+
+		let (url, receiver) = serve_once(OK).await;
+		let reader = DataReaderHttp::try_from(&with_user(&url, "other-alice")).unwrap();
+		assert_eq!(sent_authorization(&reader, receiver).await, basic("other-alice:"));
+
+		let (url, receiver) = serve_once(OK).await;
+		set_http_password(&url, "other-bob", "bobs").unwrap();
+		let reader = DataReaderHttp::try_from(&with_user(&url, "other-alice")).unwrap();
+		assert_eq!(sent_authorization(&reader, receiver).await, basic("other-alice:"));
+	}
+
+	#[tokio::test]
+	async fn a_password_in_the_url_wins() {
+		let (url, receiver) = serve_once(OK).await;
+		set_http_password(&url, "wins-alice", "from-the-store").unwrap();
+		let (_dir, file) = netrc("machine 127.0.0.1 login wins-alice password from-netrc\n");
+
+		let mut reader = DataReaderHttp::try_from(&with_user(&url, "wins-alice:from-the-url")).unwrap();
+		reader.netrc_file = Some(file);
+		assert_eq!(
+			sent_authorization(&reader, receiver).await,
+			basic("wins-alice:from-the-url")
+		);
+	}
+
+	#[tokio::test]
+	async fn netrc_is_not_read_unless_enabled() {
+		let (url, _) = serve_once(OK).await;
+		let reader = DataReaderHttp::try_from(&with_user(&url, "plain-alice")).unwrap();
+		// The tests never enable it, and `VERSATILES_HTTP_NETRC` is not set for them.
+		assert_eq!(reader.netrc_file, None);
+		assert_eq!(reader.password(), None);
+	}
+
+	#[tokio::test]
+	async fn netrc_gives_the_password_of_the_urls_user() {
+		let (_dir, file) = netrc(
+			"machine 127.0.0.1 login netrc-bob password bobs\nmachine 127.0.0.1 login netrc-alice password alices\n",
+		);
+
+		let (url, receiver) = serve_once(OK).await;
+		let mut reader = DataReaderHttp::try_from(&with_user(&url, "netrc-alice")).unwrap();
+		reader.netrc_file = Some(file.clone());
+		assert_eq!(sent_authorization(&reader, receiver).await, basic("netrc-alice:alices"));
+
+		let (url, receiver) = serve_once(OK).await;
+		let mut reader = DataReaderHttp::try_from(&with_user(&url, "netrc-carol")).unwrap();
+		reader.netrc_file = Some(file.clone());
+		assert_eq!(sent_authorization(&reader, receiver).await, basic("netrc-carol:"));
+
+		// A URL with no user sends no credentials at all.
+		let (url, receiver) = serve_once(OK).await;
+		let mut reader = DataReaderHttp::try_from(&url).unwrap();
+		reader.netrc_file = Some(file);
+		assert_eq!(sent_authorization(&reader, receiver).await, None);
+	}
+
+	#[tokio::test]
+	async fn the_store_comes_before_netrc() {
+		let (_dir, file) = netrc("machine 127.0.0.1 login order-alice password from-netrc\n");
+		let (url, receiver) = serve_once(OK).await;
+		set_http_password(&url, "order-alice", "from-the-store").unwrap();
+
+		let mut reader = DataReaderHttp::try_from(&with_user(&url, "order-alice")).unwrap();
+		reader.netrc_file = Some(file);
+		assert_eq!(
+			sent_authorization(&reader, receiver).await,
+			basic("order-alice:from-the-store")
+		);
+	}
+
+	#[tokio::test]
+	async fn a_401_without_a_password_names_the_setting() {
+		let (url, _) = serve_once(UNAUTHORIZED).await;
+		let reader = DataReaderHttp::try_from(&with_user(&url, "hint-alice")).unwrap();
+		let message = format!("{:#}", reader.read_all().await.unwrap_err());
+		assert!(
+			message.contains("401") && message.contains("VERSATILES_HTTP_NETRC=on") && message.contains("--netrc"),
+			"got: {message}"
+		);
+
+		// A range read says the same.
+		let (url, _) = serve_once(UNAUTHORIZED).await;
+		let reader = DataReaderHttp::try_from(&with_user(&url, "hint-alice")).unwrap();
+		let message = format!("{:#}", reader.read_range(&ByteRange::new(0, 10)).await.unwrap_err());
+		assert!(message.contains("VERSATILES_HTTP_NETRC=on"), "got: {message}");
+	}
+
+	#[tokio::test]
+	async fn a_401_with_netrc_enabled_names_the_entry_it_lacked() {
+		let (_dir, file) = netrc("machine 127.0.0.1 login hintnetrc-bob password bobs\n");
+		let (url, _) = serve_once(UNAUTHORIZED).await;
+		let mut reader = DataReaderHttp::try_from(&with_user(&url, "hintnetrc-alice")).unwrap();
+		reader.netrc_file = Some(file);
+		let message = format!("{:#}", reader.read_all().await.unwrap_err());
+		assert!(
+			message.contains("'machine 127.0.0.1 login hintnetrc-alice'"),
+			"got: {message}"
+		);
+	}
+
+	#[tokio::test]
+	async fn a_401_with_a_password_or_without_a_user_has_no_hint() {
+		for userinfo in [Some("nohint-alice:wrong"), None] {
+			let (url, _) = serve_once(UNAUTHORIZED).await;
+			let url = userinfo.map_or(url.clone(), |userinfo| with_user(&url, userinfo));
+			let reader = DataReaderHttp::try_from(&url).unwrap();
+			let message = format!("{:#}", reader.read_all().await.unwrap_err());
+			assert!(message.contains("401"), "got: {message}");
+			assert!(!message.contains("NETRC"), "got: {message}");
+			assert!(!message.contains("wrong"), "password leaked: {message}");
+		}
 	}
 }

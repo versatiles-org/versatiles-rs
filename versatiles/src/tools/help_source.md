@@ -55,10 +55,33 @@ Special characters in the username or password must be percent-encoded
 https://user%40company:p%40ssw0rd@example.org/tiles.versatiles
 ```
 
-The URL is the only place an HTTP password can go, so it shares the exposure
-described under [SFTP](#sftp): a command line is visible to every local user
-while it runs and is kept in the shell history. With `versatiles serve`, put the
-URL in a configuration file (`-c`) readable only by you instead.
+A password in the URL shares the exposure described under [SFTP](#sftp): a
+command line is visible to every local user while it runs and is kept in the
+shell history, and a pipeline that names the URL carries the password to
+everyone it is shared with.
+
+So the URL may name only the user, and the password come from `~/.netrc`, the
+file curl, git and wget read. Pass `--netrc` or set `VERSATILES_HTTP_NETRC=on`:
+
+```text
+# ~/.netrc
+machine webdav.example.org login user password s3cret
+```
+
+```sh
+versatiles probe --netrc https://user@webdav.example.org/tiles.versatiles
+```
+
+`NETRC` names another file. An entry counts only when its `machine` is the
+URL's host and its `login` the URL's user, so a URL with no user never signs in,
+and a `default` entry is never used. Reading `~/.netrc` is off unless asked
+for, so that opening a pipeline someone else wrote, naming
+`https://you@your-server/…`, cannot sign in to your server without your
+deciding to.
+
+An application embedding VersaTiles can hand over passwords itself, for
+instance from the system keychain, with `versatiles_core::io::set_http_password`.
+They come after a password in the URL and before `~/.netrc`.
 
 ### WebDAV
 
@@ -67,6 +90,7 @@ Use a plain `https://` URL with basic auth if the server requires it:
 
 ```text
 https://webdav.example.org/tiles/world.versatiles
+https://user@webdav.example.org/tiles/world.versatiles      # with --netrc
 https://user:password@webdav.example.org/tiles/world.versatiles
 ```
 
@@ -205,6 +229,9 @@ versatiles probe tiles.db[,mbtiles]
 
 # HTTPS with basic auth (e.g., WebDAV)
 versatiles probe https://user:password@webdav.example.org/tiles.versatiles
+
+# The same, with the password in ~/.netrc
+versatiles probe --netrc https://user@webdav.example.org/tiles.versatiles
 
 # SFTP read, authenticated by SSH agent or key
 versatiles probe sftp://user@fileserver.example.org/data/tiles.versatiles
