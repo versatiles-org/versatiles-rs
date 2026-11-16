@@ -91,6 +91,7 @@ UPDATE_METADATA_SNAPSHOT=1 cargo test -p versatiles_pipeline --features codegen,
 - VPL metadata is consumed by `versatiles-studio`, so a change to `rust_type` or a rename can break its forms without a compile error. `metadata_surface.snap` shows such changes, so review its diff.
 - Lint suppressions use `#[expect(..., reason = "...")]`. `Cargo.toml` lists the three cases that must stay `#[allow(..., reason = "...")]`.
 - Every public item needs a doc comment. Follow `DOCSTYLE.md`, and `versatiles_pipeline/DOCSTYLE.md` for VPL text, which `tests/docs_style.rs` partly enforces.
+- `versatiles_node` keeps up with the Rust side. A new CLI flag or option, or a new public function a Node app could use (such as `set_http_password`), gets its Node counterpart in the same change, with a Vitest test and a line in `versatiles_node/README.md`, whenever that is easy. Don't wait for someone to ask. Leave one out only for a reason, and give it in the release notes. VPL changes reach Node through codegen and need nothing extra.
 
 ## Pitfalls
 
