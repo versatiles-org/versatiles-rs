@@ -235,7 +235,7 @@ pub use data_writer_blob::*;
 pub use data_writer_file::*;
 #[cfg(feature = "sftp")]
 pub use data_writer_sftp::*;
-pub use http_credentials::{enable_http_netrc, forget_http_password, set_http_password};
+pub use http_credentials::{MissingHttpPassword, enable_http_netrc, forget_http_password, set_http_password};
 pub use value_reader::*;
 pub use value_reader_blob::*;
 pub use value_reader_file::*;

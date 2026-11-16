@@ -83,8 +83,15 @@ describe('enableHttpNetrc', () => {
 		fs.writeFileSync(file, 'machine 127.0.0.1 login netrc-alice password from-netrc\n');
 		process.env.NETRC = file;
 		try {
-			// Before it is enabled, the file is not read, and the error says how.
-			await expect(TileSource.fromPath(withUser('netrc-alice'))).rejects.toThrow(/VERSATILES_HTTP_NETRC=on/);
+			// Before it is enabled, the file is not read, and the error says how, in
+			// this package's terms rather than the command line's.
+			const error = await TileSource.fromPath(withUser('netrc-alice')).then(
+				() => new Error('opened without a password'),
+				(e: Error) => e,
+			);
+			expect(error.message).toMatch(/names the user 'netrc-alice' but gives no password/);
+			expect(error.message).toMatch(/call enableHttpNetrc\(\) or set VERSATILES_HTTP_NETRC=on/);
+			expect(error.message).not.toMatch(/--netrc/);
 
 			enableHttpNetrc();
 			expect(await sentAuthorization(withUser('netrc-alice'))).toBe(basic('netrc-alice:from-netrc'));

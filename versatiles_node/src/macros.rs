@@ -18,7 +18,18 @@ use napi::Error as NapiError;
 /// Formats with `{:#}` so the full context chain is included in the JS error
 /// message (e.g. `"Outer context: Middle context: Root cause"`).
 pub fn anyhow_to_napi(err: &anyhow::Error) -> NapiError {
-	NapiError::from_reason(format!("{err:#}"))
+	NapiError::from_reason(format!("{err:#}{}", hint(err)))
+}
+
+/// What to add for an error the library leaves to the program to explain, in
+/// the terms of this package.
+fn hint(err: &anyhow::Error) -> &'static str {
+	match err.downcast_ref::<versatiles_core::io::MissingHttpPassword>() {
+		Some(missing) if !missing.netrc_was_read() => {
+			" (to take the password from ~/.netrc, call enableHttpNetrc() or set VERSATILES_HTTP_NETRC=on)"
+		}
+		_ => "",
+	}
 }
 
 /// Convert any error implementing `Into<anyhow::Error>` to `napi::Error`.

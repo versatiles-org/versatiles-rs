@@ -46,7 +46,7 @@ use reqwest::{Client, RequestBuilder, StatusCode, Url};
 use tokio::{sync::Semaphore, time::sleep};
 
 use super::{
-	DataReaderTrait, http_credentials,
+	DataReaderTrait, MissingHttpPassword, http_credentials,
 	network_reader::{NetworkReader, SmallerRangeWontHelp},
 	retry::env_u64,
 };
@@ -316,29 +316,18 @@ impl DataReaderHttp {
 			.clone()
 	}
 
-	/// What to try when a server answers `401` to a URL that names a user but
-	/// no password could be found for.
-	fn missing_password_hint(&self, status: StatusCode) -> Option<String> {
+	/// Why a server answered `401`, if the URL names a user and no password
+	/// could be found for it.
+	fn missing_password(&self, status: StatusCode) -> Option<MissingHttpPassword> {
 		if status != StatusCode::UNAUTHORIZED || self.password().is_some() {
 			return None;
 		}
 		let user = self.username.as_deref()?;
 		let host = self.url.host_str().unwrap_or_default();
 		Some(match &self.netrc_file {
-			Some(file) if self.netrc_entry().is_some() => format!(
-				"the URL names the user '{user}' but gives no password. {} has one for it, but a password \
-				 from .netrc is sent only over https, or over http to this machine: use https://{user}@{host}/…",
-				file.display()
-			),
-			None => format!(
-				"the URL names the user '{user}' but gives no password, and none is known for it. \
-				 To take it from ~/.netrc, set VERSATILES_HTTP_NETRC=on, or pass --netrc on the command line"
-			),
-			Some(file) => format!(
-				"the URL names the user '{user}' but gives no password, and {} has no entry \
-				 'machine {host} login {user}'",
-				file.display()
-			),
+			None => MissingHttpPassword::netrc_not_read(user),
+			Some(file) if self.netrc_entry().is_some() => MissingHttpPassword::netrc_not_over_plain_http(user, file, host),
+			Some(file) => MissingHttpPassword::no_netrc_entry(user, file, host),
 		})
 	}
 
@@ -372,7 +361,7 @@ fn unexpected_status(
 	url: &Url,
 	status: StatusCode,
 	total_attempts: u32,
-	hint: Option<String>,
+	missing_password: Option<MissingHttpPassword>,
 ) -> anyhow::Error {
 	if status.is_server_error() {
 		return anyhow!(
@@ -380,8 +369,11 @@ fn unexpected_status(
 		);
 	}
 
-	let hint = hint.map_or_default(|hint| format!(": {hint}"));
-	let error = anyhow!("could not read {range} ({len} bytes) from '{url}': expected HTTP 206, got {status}{hint}");
+	let message = format!("could not read {range} ({len} bytes) from '{url}': expected HTTP 206, got {status}");
+	let error = match missing_password {
+		Some(cause) => anyhow::Error::new(cause).context(message),
+		None => anyhow!(message),
+	};
 	if status == StatusCode::PAYLOAD_TOO_LARGE {
 		error
 	} else {
@@ -475,7 +467,7 @@ impl DataReaderHttp {
 					url,
 					status,
 					total_attempts,
-					self.missing_password_hint(status),
+					self.missing_password(status),
 				));
 			}
 
@@ -609,10 +601,11 @@ impl DataReaderTrait for DataReaderHttp {
 				if status.is_server_error() {
 					bail!("could not read from '{url}': server returned {status} — gave up after {total_attempts} attempts");
 				}
-				let hint = self
-					.missing_password_hint(status)
-					.map_or_default(|hint| format!(": {hint}"));
-				bail!("could not read from '{url}': server returned {status}{hint}");
+				let message = format!("could not read from '{url}': server returned {status}");
+				return Err(match self.missing_password(status) {
+					Some(cause) => anyhow::Error::new(cause).context(message),
+					None => anyhow!(message),
+				});
 			}
 
 			let limit = env_u64("VERSATILES_MAX_HTTP_BODY_BYTES", DEFAULT_MAX_BODY_BYTES);
@@ -1114,21 +1107,32 @@ mod credential_tests {
 		);
 	}
 
+	/// The message says what happened and nothing about a command line, since
+	/// an application shows it too. The cause is there for a program to
+	/// recognise and add what helps in its own terms.
 	#[tokio::test]
-	async fn a_401_without_a_password_names_the_setting() {
+	async fn a_401_without_a_password_says_so_and_can_be_recognised() {
 		let (url, _) = serve_once(UNAUTHORIZED).await;
 		let reader = DataReaderHttp::try_from(&with_user(&url, "hint-alice")).unwrap();
-		let message = format!("{:#}", reader.read_all().await.unwrap_err());
+		let error = reader.read_all().await.unwrap_err();
+		let message = format!("{error:#}");
 		assert!(
-			message.contains("401") && message.contains("VERSATILES_HTTP_NETRC=on") && message.contains("--netrc"),
+			message.contains("401") && message.contains("names the user 'hint-alice' but gives no password"),
 			"got: {message}"
 		);
+		assert!(
+			!message.contains("--netrc") && !message.contains("NETRC"),
+			"got: {message}"
+		);
+		let cause = error.downcast_ref::<MissingHttpPassword>().expect("the cause");
+		assert!(!cause.netrc_was_read());
 
-		// A range read says the same.
+		// A range read says the same, and is still not split.
 		let (url, _) = serve_once(UNAUTHORIZED).await;
 		let reader = DataReaderHttp::try_from(&with_user(&url, "hint-alice")).unwrap();
-		let message = format!("{:#}", reader.read_range(&ByteRange::new(0, 10)).await.unwrap_err());
-		assert!(message.contains("VERSATILES_HTTP_NETRC=on"), "got: {message}");
+		let error = reader.read_range(&ByteRange::new(0, 10)).await.unwrap_err();
+		assert!(error.downcast_ref::<MissingHttpPassword>().is_some(), "got: {error:#}");
+		assert!(error.downcast_ref::<SmallerRangeWontHelp>().is_some(), "got: {error:#}");
 	}
 
 	#[tokio::test]
@@ -1137,11 +1141,13 @@ mod credential_tests {
 		let (url, _) = serve_once(UNAUTHORIZED).await;
 		let mut reader = DataReaderHttp::try_from(&with_user(&url, "hintnetrc-alice")).unwrap();
 		reader.netrc_file = Some(file);
-		let message = format!("{:#}", reader.read_all().await.unwrap_err());
+		let error = reader.read_all().await.unwrap_err();
+		let message = format!("{error:#}");
 		assert!(
 			message.contains("'machine 127.0.0.1 login hintnetrc-alice'"),
 			"got: {message}"
 		);
+		assert!(error.downcast_ref::<MissingHttpPassword>().unwrap().netrc_was_read());
 	}
 
 	/// Over plain http the password would cross the network for anyone to read,
@@ -1154,7 +1160,7 @@ mod credential_tests {
 		let mut reader = DataReaderHttp::try_from(&url).unwrap();
 		reader.netrc_file = Some(file.clone());
 		assert_eq!(reader.password(), None);
-		let hint = reader.missing_password_hint(StatusCode::UNAUTHORIZED).unwrap();
+		let hint = reader.missing_password(StatusCode::UNAUTHORIZED).unwrap().to_string();
 		assert!(
 			hint.contains("sent only over https") && hint.contains("https://plainhttp-alice@plain-http.invalid/"),
 			"got: {hint}"
@@ -1173,9 +1179,10 @@ mod credential_tests {
 			let (url, _) = serve_once(UNAUTHORIZED).await;
 			let url = userinfo.map_or(url.clone(), |userinfo| with_user(&url, userinfo));
 			let reader = DataReaderHttp::try_from(&url).unwrap();
-			let message = format!("{:#}", reader.read_all().await.unwrap_err());
+			let error = reader.read_all().await.unwrap_err();
+			let message = format!("{error:#}");
 			assert!(message.contains("401"), "got: {message}");
-			assert!(!message.contains("NETRC"), "got: {message}");
+			assert!(error.downcast_ref::<MissingHttpPassword>().is_none(), "got: {message}");
 			assert!(!message.contains("wrong"), "password leaked: {message}");
 		}
 	}

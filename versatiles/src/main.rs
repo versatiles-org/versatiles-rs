@@ -194,10 +194,21 @@ fn build_runtime(cli: &Cli) -> TilesRuntime {
 }
 
 /// Format an error and its cause chain to `out` as the CLI would print it.
+///
+/// An error the library leaves to the program to explain gets a hint in the
+/// CLI's own terms.
 fn report_error<W: Write>(err: &anyhow::Error, out: &mut W) {
 	let _ = writeln!(out, "\nError: {err}");
 	for cause in err.chain().skip(1) {
 		let _ = writeln!(out, "  Caused by: {cause}");
+	}
+	if let Some(missing) = err.downcast_ref::<versatiles_core::io::MissingHttpPassword>()
+		&& !missing.netrc_was_read()
+	{
+		let _ = writeln!(
+			out,
+			"\nHint: to take the password from ~/.netrc, pass --netrc or set VERSATILES_HTTP_NETRC=on."
+		);
 	}
 }
 
@@ -963,6 +974,46 @@ mod tests {
 		assert!(out.starts_with("\nError: top-level failure\n"), "got: {out:?}");
 		assert!(out.contains("  Caused by: middle layer\n"), "got: {out:?}");
 		assert!(out.contains("  Caused by: root cause\n"), "got: {out:?}");
+	}
+
+	/// A `401` for a URL that names only a user ends with how to give the
+	/// password, which the library leaves to the program.
+	#[test]
+	fn report_error_suggests_netrc_for_a_missing_http_password() {
+		use std::io::{Read, Write as _};
+
+		let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+		let port = listener.local_addr().unwrap().port();
+		std::thread::spawn(move || {
+			for stream in listener.incoming().take(4) {
+				let Ok(mut stream) = stream else { break };
+				let mut request = [0u8; 4096];
+				let _ = stream.read(&mut request);
+				let _ = stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+			}
+		});
+
+		let url = format!("http://cli-hint-alice@127.0.0.1:{port}/tiles.versatiles");
+		let err = run_command(vec!["versatiles", "probe", &url]).unwrap_err();
+		let mut buf = Vec::<u8>::new();
+		report_error(&err, &mut buf);
+		let out = String::from_utf8(buf).unwrap();
+
+		assert!(
+			out.contains("names the user 'cli-hint-alice' but gives no password"),
+			"got: {out}"
+		);
+		assert!(
+			out.ends_with("pass --netrc or set VERSATILES_HTTP_NETRC=on.\n"),
+			"got: {out}"
+		);
+	}
+
+	#[test]
+	fn report_error_gives_no_hint_for_other_errors() {
+		let mut buf = Vec::<u8>::new();
+		report_error(&anyhow::anyhow!("HTTP 401"), &mut buf);
+		assert!(!String::from_utf8(buf).unwrap().contains("Hint"));
 	}
 
 	/// Exercises the `Commands::Mosaic` dispatch branch in `run()`. Clap

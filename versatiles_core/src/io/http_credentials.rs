@@ -140,6 +140,93 @@ pub(crate) fn stored_password(url: &Url, user: &str) -> Option<String> {
 		.map(|entry| entry.value().clone())
 }
 
+/// Why a server refused a URL that names a user: no password was found for it.
+///
+/// Carried as the cause of the error a `401` gives, so that a program can
+/// recognise it with `downcast_ref` and say what helps in its own terms. The
+/// message itself only says what happened, since what to do differs: the CLI
+/// can point at `--netrc`, an application at its own sign-in.
+#[derive(Debug)]
+pub struct MissingHttpPassword {
+	user: String,
+	netrc: NetrcOutcome,
+}
+
+/// What `.netrc` had to do with a missing password.
+#[derive(Debug)]
+enum NetrcOutcome {
+	/// Reading it is not enabled.
+	NotRead,
+	/// It has no entry for the user on the host.
+	NoEntry { file: PathBuf, host: String },
+	/// It has one, but the URL is plain `http` to another machine.
+	NotOverPlainHttp { file: PathBuf, host: String },
+}
+
+impl MissingHttpPassword {
+	pub(crate) fn netrc_not_read(user: &str) -> Self {
+		Self {
+			user: user.to_string(),
+			netrc: NetrcOutcome::NotRead,
+		}
+	}
+
+	pub(crate) fn no_netrc_entry(user: &str, file: &Path, host: &str) -> Self {
+		Self {
+			user: user.to_string(),
+			netrc: NetrcOutcome::NoEntry {
+				file: file.to_path_buf(),
+				host: host.to_string(),
+			},
+		}
+	}
+
+	pub(crate) fn netrc_not_over_plain_http(user: &str, file: &Path, host: &str) -> Self {
+		Self {
+			user: user.to_string(),
+			netrc: NetrcOutcome::NotOverPlainHttp {
+				file: file.to_path_buf(),
+				host: host.to_string(),
+			},
+		}
+	}
+
+	/// Whether `.netrc` was looked in, so that enabling it is worth suggesting
+	/// only when this is `false`.
+	#[must_use]
+	pub fn netrc_was_read(&self) -> bool {
+		!matches!(self.netrc, NetrcOutcome::NotRead)
+	}
+}
+
+impl std::fmt::Display for MissingHttpPassword {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let user = &self.user;
+		match &self.netrc {
+			NetrcOutcome::NotRead => {
+				write!(
+					f,
+					"the URL names the user '{user}' but gives no password, and none is known for it"
+				)
+			}
+			NetrcOutcome::NoEntry { file, host } => write!(
+				f,
+				"the URL names the user '{user}' but gives no password, and {} has no entry \
+				 'machine {host} login {user}'",
+				file.display()
+			),
+			NetrcOutcome::NotOverPlainHttp { file, host } => write!(
+				f,
+				"the URL names the user '{user}' but gives no password. {} has one for it, but a password \
+				 from .netrc is sent only over https, or over http to this machine: use https://{user}@{host}/…",
+				file.display()
+			),
+		}
+	}
+}
+
+impl std::error::Error for MissingHttpPassword {}
+
 /// Whether a password from `.netrc` may be sent to `url`: over `https`, or
 /// over `http` to this machine, where it crosses no network.
 pub(crate) fn may_carry_a_netrc_password(url: &Url) -> bool {
