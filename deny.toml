@@ -91,6 +91,11 @@ ignore = [
 	# file, which the operator writes, and the shortbread schema embedded in
 	# the binary. Neither is input from a client.
 	{ id = "RUSTSEC-2024-0449", reason = "parses only the operator's config file and an embedded schema, via serde_yaml_ng" },
+	# `chrono` comes in through `russh-sftp` and `gdal`, and parses no text for
+	# either. `russh-sftp` converts a `SystemTime` to seconds and formats an
+	# integer mtime into a directory listing's long name. `gdal` uses it only
+	# for date fields in its vector API, which nothing here calls.
+	{ id = "RUSTSEC-2026-0543", reason = "converts and formats timestamps only, via russh-sftp and gdal" },
 ]
 
 [licenses]
