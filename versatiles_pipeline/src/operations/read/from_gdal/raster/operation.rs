@@ -32,6 +32,21 @@ use crate::{
 /// it the VRT carries no alpha channel and nothing outside the data becomes
 /// transparent.
 ///
+/// ### Zoom levels
+///
+/// Unless `level_min` is set, this emits a single zoom level: the dataset's
+/// native one. Follow it with [`raster_overview`](#raster_overview) to build
+/// the levels below:
+///
+/// ```vpl
+/// from_gdal_raster filename="orthophoto.tif" | raster_overview
+/// ```
+///
+/// That is far cheaper than lowering `level_min`. GDAL reads the source at full
+/// resolution for every tile it renders, so a low-zoom tile costs as much as
+/// all the data it covers, while `raster_overview` builds each tile from the
+/// four above it.
+///
 /// ### Placing an unreferenced raster
 ///
 /// A scanned map or a plain image export carries no georeferencing, and GDAL

@@ -178,6 +178,16 @@ Generates tiles that draw their own coordinates, for inspecting a pipeline.
 
 Reads a GDAL elevation dataset and encodes it as terrain RGB tiles.
 
+### Zoom levels
+
+Unless `level_min` is set, this emits a single zoom level: the dataset's native one. Follow it with [`dem_overview`](#dem_overview) to build the levels below:
+
+```vpl
+from_gdal_dem filename="elevation.tif" | dem_overview
+```
+
+That is far cheaper than lowering `level_min`. GDAL reads the source at full resolution for every tile it renders, so a low-zoom tile costs as much as all the data it covers, while `dem_overview` builds each tile from the four above it. Use `dem_overview` rather than `raster_overview`, which averages the encoded channels separately and corrupts the elevations.
+
 ### Placing an unreferenced raster
 
 A scanned map or a plain image export carries no georeferencing, and GDAL cannot place it at all. `crs` supplies the coordinate system and one of `bounds` or `geo_transform` supplies the position; `crs` on its own is not enough, because a coordinate system says nothing about where the pixels sit.
@@ -215,6 +225,16 @@ The two are mutually exclusive, and neither writes anything to the file on disk.
 Reads a GDAL raster dataset and reprojects it into tiles.
 
 When building a virtual raster with `gdalbuildvrt`, pass `-addalpha` — without it the VRT carries no alpha channel and nothing outside the data becomes transparent.
+
+### Zoom levels
+
+Unless `level_min` is set, this emits a single zoom level: the dataset's native one. Follow it with [`raster_overview`](#raster_overview) to build the levels below:
+
+```vpl
+from_gdal_raster filename="orthophoto.tif" | raster_overview
+```
+
+That is far cheaper than lowering `level_min`. GDAL reads the source at full resolution for every tile it renders, so a low-zoom tile costs as much as all the data it covers, while `raster_overview` builds each tile from the four above it.
 
 ### Placing an unreferenced raster
 

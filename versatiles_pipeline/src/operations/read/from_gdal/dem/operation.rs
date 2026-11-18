@@ -19,6 +19,22 @@ use crate::{
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a GDAL elevation dataset and encodes it as terrain RGB tiles.
 ///
+/// ### Zoom levels
+///
+/// Unless `level_min` is set, this emits a single zoom level: the dataset's
+/// native one. Follow it with [`dem_overview`](#dem_overview) to build the
+/// levels below:
+///
+/// ```vpl
+/// from_gdal_dem filename="elevation.tif" | dem_overview
+/// ```
+///
+/// That is far cheaper than lowering `level_min`. GDAL reads the source at full
+/// resolution for every tile it renders, so a low-zoom tile costs as much as
+/// all the data it covers, while `dem_overview` builds each tile from the four
+/// above it. Use `dem_overview` rather than `raster_overview`, which averages
+/// the encoded channels separately and corrupts the elevations.
+///
 /// ### Placing an unreferenced raster
 ///
 /// A scanned map or a plain image export carries no georeferencing, and GDAL
