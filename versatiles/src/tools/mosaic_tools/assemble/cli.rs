@@ -21,6 +21,8 @@ Each output tile is made from the tiles the inputs have at its coordinate:
   * Otherwise the translucent tiles are composited, the one listed first
     on top, and encoded in the format of the inputs (see --quality and
     --lossless).
+  * A translucent tile only one input has is copied as it is too, unless
+    it is lossless WebP that --quality makes lossy and smaller.
   * Empty tiles are skipped.
 
 All inputs must have the same tile format and compression, and the output
@@ -99,11 +101,14 @@ is always treated as the output path."
 	/// Encode tiles that stay translucent without loss.
 	///
 	/// By default every tile made from translucent ones is encoded at
-	/// --quality. With this flag, a tile that is still translucent after
-	/// compositing, such as one at the outer edge of the mosaic, is encoded
-	/// losslessly, so that soft edges stay sharp. A tile that the compositing
-	/// made opaque, such as two halves along a seam, still uses --quality.
-	/// Needs WebP or PNG inputs, as AVIF cannot be encoded without loss.
+	/// --quality, and a lossless WebP tile only one input has, such as one at
+	/// the outer edge of the mosaic, is made lossy at --quality where that makes
+	/// it smaller. With this
+	/// flag, such a tile is copied as it is, and a tile that is still
+	/// translucent after compositing is encoded losslessly, so that soft edges
+	/// stay sharp. A tile that the compositing made opaque, such as two halves
+	/// along a seam, still uses --quality. Needs WebP or PNG inputs, as AVIF
+	/// cannot be encoded without loss.
 	#[arg(long)]
 	pub(super) lossless: bool,
 

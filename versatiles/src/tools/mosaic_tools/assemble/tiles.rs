@@ -6,8 +6,11 @@
 //!   to the sink byte-for-byte (only recompressed if the container compression
 //!   differs, which `into_blob` handles as a no-op when it already matches).
 //!
-//! - **Translucent tiles** are re-encoded exactly once, in the format of the
-//!   inputs, so that the container holds the format it declares. The single
+//! - **A translucent tile only one input has** is written as it was read too,
+//!   unless re-encoding is what makes it lossy (`keeps_its_encoding`).
+//!
+//! - **Composited translucent tiles** are encoded exactly once, in the format
+//!   of the inputs, so that the container holds the format it declares. The single
 //!   encoding happens during the flush step in `encode_tiles_parallel`, which
 //!   calls `change_format` to set format + quality, followed by `into_blob` →
 //!   `materialize_blob` to produce the blob. Compositing in
@@ -18,7 +21,9 @@
 use anyhow::{Context, Result, ensure};
 use futures::StreamExt;
 use versatiles_container::{Tile, TilesRuntime};
-use versatiles_core::{Blob, ConcurrencyLimits, TileCoord, TileFormat, TileJSON, TileSchema};
+use versatiles_core::{
+	Blob, ConcurrencyLimits, TileCompression, TileCoord, TileFormat, TileJSON, TileSchema, compression::compress,
+};
 use versatiles_image::traits::DynamicImageTraitOperation;
 
 use super::AssembleConfig;
@@ -123,8 +128,8 @@ pub(super) fn write_opaque_blob(tile: Tile, config: &AssembleConfig) -> Result<B
 /// quality, since it is always lossless.
 /// Tiles coming from `composite_two_tiles` carry raw image content (no blob),
 /// so `change_format` + `into_blob` produces the one-and-only encoded blob.
-/// Single-source tiles still hold their original source blob, which is decoded
-/// and re-encoded here as well.
+/// Single-source tiles still hold their original source blob, and keep it
+/// unless re-encoding is what makes them lossy: see [`keeps_its_encoding`].
 pub(super) fn encode_tiles_parallel(
 	tiles: Vec<(TileCoord, Tile)>,
 	config: &AssembleConfig,
@@ -141,6 +146,15 @@ pub(super) fn encode_tiles_parallel(
 				.map(|(coord, mut tile)| {
 					let cfg = &config;
 					s.spawn(move || {
+						// A tile only one input has: copied, or made lossy to save space.
+						let source = if tile.has_blob() {
+							if keeps_its_encoding(&mut tile, &coord, cfg)? {
+								return Ok((coord, tile.into_blob(&cfg.tile_compression)?));
+							}
+							Some(tile.as_blob(&TileCompression::Uncompressed)?.clone())
+						} else {
+							None
+						};
 						// `--lossless` is for tiles that are still translucent. Along a
 						// seam, two half tiles usually composite into an opaque one,
 						// which is as lossy as its neighbours (#319).
@@ -151,7 +165,16 @@ pub(super) fn encode_tiles_parallel(
 							cfg.quality.at(&coord)
 						};
 						tile.change_format(cfg.tile_format, quality, None)?;
-						Ok((coord, tile.into_blob(&cfg.tile_compression)?))
+						let encoded = tile.into_blob(&TileCompression::Uncompressed)?;
+						// Lossy WebP stores alpha apart from the colours, and on a
+						// smooth or mostly empty tile that can take more bytes than
+						// the lossless original. Then the original is both better
+						// and smaller.
+						let blob = match source {
+							Some(source) if source.len() <= encoded.len() => source,
+							_ => encoded,
+						};
+						Ok((coord, compress(blob, &cfg.tile_compression)?))
 					})
 				})
 				.collect();
@@ -163,6 +186,46 @@ pub(super) fn encode_tiles_parallel(
 		results.extend(chunk_results);
 	}
 	results
+}
+
+/// Whether a tile only one input has is written as it was read.
+///
+/// Re-encoding it cannot bring back detail a lossy encoder took, and a
+/// lossless encoder gives back the same pixels at a cost: decoding and
+/// encoding once more, and for a lossy source a second generation of loss.
+/// What re-encoding can do is make a lossless tile lossy, which is what
+/// `--quality` does by default to the lossless edge tiles `mosaic tile`
+/// writes, to save space; where it would not, `encode_tiles_parallel` keeps
+/// the original after all. So a tile keeps its encoding unless it is lossless
+/// WebP that is to become lossy: not with `--lossless`, not for heights, and
+/// not where `--quality` asks for 100. PNG is lossless either way, and AVIF
+/// lossy either way.
+fn keeps_its_encoding(tile: &mut Tile, coord: &TileCoord, config: &AssembleConfig) -> Result<bool> {
+	if config.tile_format != TileFormat::WEBP
+		|| config.elevation
+		|| config.lossless
+		|| config.quality.at(coord) == Some(100)
+	{
+		return Ok(true);
+	}
+	Ok(!is_lossless_webp(tile.as_blob(&TileCompression::Uncompressed)?))
+}
+
+/// Whether a WebP blob is encoded without loss: its image is a `VP8L` chunk,
+/// not a lossy `VP8 ` one. An extended file (`VP8X`) lists further chunks,
+/// such as `ALPH` for the alpha of a lossy image, before the image itself.
+fn is_lossless_webp(blob: &Blob) -> bool {
+	let bytes = blob.as_slice();
+	let mut offset = 12; // after "RIFF", the file size and "WEBP"
+	while let Some(header) = bytes.get(offset..offset + 8) {
+		let size = u32::from_le_bytes([header[4], header[5], header[6], header[7]]) as usize;
+		match &header[0..4] {
+			b"VP8L" => return true,
+			b"VP8 " => return false,
+			_ => offset += 8 + size + size % 2, // chunks are padded to an even size
+		}
+	}
+	false
 }
 
 /// Read the tiles at `coords` from the container at `path`.
@@ -779,6 +842,160 @@ mod tests {
 			let (c, blob) = result?;
 			assert_eq!(webp_chunk(&blob), *b"VP8L", "the tile at {c:?}");
 		}
+		Ok(())
+	}
+
+	/// A 16×16 tile as an input container holds it: an encoded blob, half
+	/// opaque and half transparent, in `format` at `quality`.
+	fn read_tile(format: TileFormat, quality: u8) -> Result<(Tile, Blob)> {
+		let data = (0..16 * 16)
+			.flat_map(|i: u32| {
+				let [_, _, _, shade] = (i * 7).to_be_bytes();
+				[shade, 255 - shade, 128, if i % 16 < 8 { 255 } else { 0 }]
+			})
+			.collect();
+		encoded_tile(ImageBuffer::from_vec(16, 16, data).unwrap(), format, quality)
+	}
+
+	/// A 256×256 lossless WebP edge tile of photo-like noise, which a lossy
+	/// encoder makes much smaller.
+	fn read_noisy_tile() -> Result<(Tile, Blob)> {
+		let mut state = 1u32;
+		let data = (0..256 * 256)
+			.flat_map(|i: u32| {
+				state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+				let [red, green, blue, _] = state.to_be_bytes();
+				[red, green, blue, if i % 256 < 128 { 255 } else { 0 }]
+			})
+			.collect();
+		encoded_tile(ImageBuffer::from_vec(256, 256, data).unwrap(), TileFormat::WEBP, 100)
+	}
+
+	fn encoded_tile(
+		image: ImageBuffer<versatiles_image::Rgba<u8>, Vec<u8>>,
+		format: TileFormat,
+		quality: u8,
+	) -> Result<(Tile, Blob)> {
+		let mut tile = Tile::from_image(DynamicImage::ImageRgba8(image), format)?;
+		tile.change_format(format, Some(quality), None)?;
+		let blob = tile.into_blob(&TileCompression::Uncompressed)?;
+		Ok((
+			Tile::from_blob(blob.clone(), TileCompression::Uncompressed, format),
+			blob,
+		))
+	}
+
+	fn encode_one(tile: Tile, config: &AssembleConfig) -> Result<Blob> {
+		Ok(encode_tiles_parallel(vec![(coord(3, 1, 2), tile)], config).remove(0)?.1)
+	}
+
+	#[test]
+	fn is_lossless_webp_reads_the_image_chunk() -> Result<()> {
+		assert!(is_lossless_webp(&read_tile(TileFormat::WEBP, 100)?.1));
+		let lossy = read_tile(TileFormat::WEBP, 70)?.1;
+		assert_eq!(webp_chunk(&lossy), *b"VP8X", "lossy with alpha is an extended file");
+		assert!(!is_lossless_webp(&lossy));
+		assert!(!is_lossless_webp(&Blob::from(b"RIFF\0\0\0\0WEBP".to_vec())));
+		assert!(!is_lossless_webp(&Blob::from(b"not a webp".to_vec())));
+		Ok(())
+	}
+
+	/// A translucent tile only one input has is written as it was read,
+	/// unless re-encoding is what makes it lossy.
+	#[test]
+	fn a_tile_only_one_input_has_keeps_its_encoding() -> Result<()> {
+		let webp = test_config();
+		let cases = [
+			(
+				"PNG",
+				TileFormat::PNG,
+				100,
+				AssembleConfig {
+					tile_format: TileFormat::PNG,
+					..test_config()
+				},
+			),
+			("lossy WebP", TileFormat::WEBP, 70, webp.clone()),
+			(
+				"lossless WebP with --lossless",
+				TileFormat::WEBP,
+				100,
+				AssembleConfig {
+					lossless: true,
+					..webp.clone()
+				},
+			),
+			(
+				"lossless WebP of heights",
+				TileFormat::WEBP,
+				100,
+				AssembleConfig {
+					elevation: true,
+					..webp.clone()
+				},
+			),
+			(
+				"lossless WebP at --quality 100",
+				TileFormat::WEBP,
+				100,
+				AssembleConfig {
+					quality: quality("100"),
+					..webp.clone()
+				},
+			),
+		];
+		for (name, format, source_quality, config) in cases {
+			let (tile, blob) = read_tile(format, source_quality)?;
+			assert_eq!(encode_one(tile, &config)?, blob, "{name} is copied");
+		}
+
+		// What --quality is for by default: the lossless edge tiles `mosaic
+		// tile` writes become lossy, and smaller.
+		let (tile, blob) = read_noisy_tile()?;
+		let encoded = encode_one(tile, &webp)?;
+		assert!(!is_lossless_webp(&encoded), "lossless WebP is made lossy");
+		assert!(
+			encoded.len() < blob.len() / 2,
+			"{} bytes from {}",
+			encoded.len(),
+			blob.len()
+		);
+		Ok(())
+	}
+
+	/// Where lossy WebP comes out larger than the lossless original, as on
+	/// smooth tiles, the original is kept: better and smaller.
+	#[test]
+	fn a_lossless_tile_is_kept_where_lossy_would_be_larger() -> Result<()> {
+		let (tile, blob) = read_tile(TileFormat::WEBP, 100)?;
+		let mut lossy = Tile::from_blob(blob.clone(), TileCompression::Uncompressed, TileFormat::WEBP);
+		lossy.change_format(TileFormat::WEBP, Some(75), None)?;
+		let lossy = lossy.into_blob(&TileCompression::Uncompressed)?;
+		assert!(
+			lossy.len() > blob.len(),
+			"the case needs lossy to be larger: {} vs {}",
+			lossy.len(),
+			blob.len()
+		);
+
+		assert_eq!(encode_one(tile, &test_config())?, blob);
+		Ok(())
+	}
+
+	/// The output compression applies to a copied tile too.
+	#[test]
+	fn a_copied_tile_is_compressed_for_the_output() -> Result<()> {
+		let config = AssembleConfig {
+			tile_format: TileFormat::PNG,
+			tile_compression: TileCompression::Gzip,
+			..test_config()
+		};
+		let (tile, blob) = read_tile(TileFormat::PNG, 100)?;
+		let written = encode_one(tile, &config)?;
+		assert_eq!(
+			versatiles_core::compression::decompress(written, &TileCompression::Gzip)?,
+			blob
+		);
 		Ok(())
 	}
 
