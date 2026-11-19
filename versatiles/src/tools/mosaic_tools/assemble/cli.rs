@@ -72,7 +72,8 @@ is always treated as the output path."
 
 	/// Quality (0-100) for the tiles made from translucent ones.
 	///
-	/// Applies to WebP and AVIF inputs; PNG is always lossless and ignores it.
+	/// Applies to WebP and AVIF inputs; PNG is always lossless and ignores it,
+	/// and so do elevation tiles, which are always encoded without loss.
 	/// Opaque tiles are copied as they are and keep the quality they have.
 	/// Single value (e.g. "75") applies to every zoom. Comma-separated list
 	/// ramps from z=0 upwards ("90,80,70" → z=0 → 90, z=1 → 80, z≥2 → 70).

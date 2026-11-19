@@ -43,16 +43,27 @@ pub(super) fn validate_source_format(
 	Ok(())
 }
 
-/// Refuse `--lossless` for inputs whose format cannot be encoded without loss.
+/// Refuse an encoding that the format of the inputs cannot do.
 ///
 /// Composited tiles are encoded in the format of the inputs. WebP and PNG can
-/// keep a translucent tile exact; AVIF and JPEG cannot, and this is checked
-/// before the first tile is written rather than when the first edge tile is.
-pub(super) fn validate_lossless(format: TileFormat, lossless: bool) -> Result<()> {
+/// keep a translucent tile exact; AVIF and JPEG cannot. This is checked before
+/// the first tile is written rather than when the first edge tile is.
+///
+/// `--lossless` asks for that exactness. Elevation tiles need it without
+/// being asked, as `convert` gives it to them: a lossy encoder changes the
+/// low byte of a height. JPEG has no alpha, so its tiles are only ever copied,
+/// and elevation tiles in JPEG lose nothing here that they had not lost.
+pub(super) fn validate_encoding(format: TileFormat, lossless: bool, elevation: bool) -> Result<()> {
 	ensure!(
-		!lossless || matches!(format, TileFormat::WEBP | TileFormat::PNG),
+		!lossless || format.can_be_lossless(),
 		"--lossless needs inputs in a format that can be encoded without loss, WebP or PNG, \
 		 but they hold {format} tiles. Leave out --lossless, or tile the scenes as WebP or PNG"
+	);
+	ensure!(
+		!elevation || format.can_be_lossless() || format == TileFormat::JPG,
+		"the inputs hold elevation tiles in {format}, which has no lossless encoding, so the \
+		 tiles composited where two inputs meet would change their heights. \
+		 Tile the elevation data as WebP or PNG"
 	);
 	Ok(())
 }
@@ -133,7 +144,8 @@ pub(super) fn encode_tiles_parallel(
 						// `--lossless` is for tiles that are still translucent. Along a
 						// seam, two half tiles usually composite into an opaque one,
 						// which is as lossy as its neighbours (#319).
-						let quality = if cfg.lossless && !tile.is_opaque()? {
+						// Heights are never encoded lossily, opaque or not.
+						let quality = if cfg.elevation || (cfg.lossless && !tile.is_opaque()?) {
 							Some(100)
 						} else {
 							cfg.quality.at(&coord)
@@ -727,16 +739,47 @@ mod tests {
 	#[test]
 	fn lossless_is_refused_for_formats_that_cannot_keep_it() {
 		for format in [TileFormat::WEBP, TileFormat::PNG, TileFormat::AVIF, TileFormat::JPG] {
-			assert!(validate_lossless(format, false).is_ok());
+			assert!(validate_encoding(format, false, false).is_ok());
 		}
-		assert!(validate_lossless(TileFormat::WEBP, true).is_ok());
-		assert!(validate_lossless(TileFormat::PNG, true).is_ok());
+		assert!(validate_encoding(TileFormat::WEBP, true, false).is_ok());
+		assert!(validate_encoding(TileFormat::PNG, true, false).is_ok());
 		for format in [TileFormat::AVIF, TileFormat::JPG] {
-			let message = validate_lossless(format, true).unwrap_err().to_string();
+			let message = validate_encoding(format, true, false).unwrap_err().to_string();
 			assert!(message.contains("--lossless"), "{message}");
 			assert!(message.contains("WebP or PNG"), "{message}");
 			assert!(message.contains(&format.to_string()), "{message}");
 		}
+	}
+
+	/// AVIF can be translucent but not lossless, so a seam would change the
+	/// heights. JPEG is never composited, so it loses nothing here.
+	#[test]
+	fn elevation_is_refused_only_where_a_seam_would_change_heights() {
+		for format in [TileFormat::WEBP, TileFormat::PNG, TileFormat::JPG] {
+			assert!(validate_encoding(format, false, true).is_ok(), "{format}");
+		}
+		let message = validate_encoding(TileFormat::AVIF, false, true)
+			.unwrap_err()
+			.to_string();
+		assert!(message.contains("elevation") && message.contains("avif"), "{message}");
+		assert!(message.contains("WebP or PNG"), "{message}");
+	}
+
+	/// The seam of two DEMs composites into an opaque tile, which images
+	/// encode at --quality (#319). Heights are encoded without loss instead.
+	#[test]
+	fn elevation_tiles_are_encoded_without_loss() -> Result<()> {
+		let config = AssembleConfig {
+			elevation: true,
+			..test_config()
+		};
+		let seam = composite_two_tiles(half_tile(true), half_tile(false), TileFormat::WEBP, true)?;
+		let tiles = vec![(coord(0, 0, 0), seam), (coord(1, 0, 0), half_tile(true))];
+		for result in encode_tiles_parallel(tiles, &config) {
+			let (c, blob) = result?;
+			assert_eq!(webp_chunk(&blob), *b"VP8L", "the tile at {c:?}");
+		}
+		Ok(())
 	}
 
 	#[test]

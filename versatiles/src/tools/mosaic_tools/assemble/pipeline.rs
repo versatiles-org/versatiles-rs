@@ -15,7 +15,7 @@ use versatiles_pipeline::TileQuality;
 use super::{
 	AssembleConfig,
 	tiles::{
-		composite_two_tiles, encode_tiles_parallel, fetch_source_tiles, holds_elevation, validate_lossless,
+		composite_two_tiles, encode_tiles_parallel, fetch_source_tiles, holds_elevation, validate_encoding,
 		validate_source_elevation, validate_source_format, write_opaque_blob,
 	},
 	translucent_buffer::TranslucentBuffer,
@@ -213,7 +213,7 @@ pub(super) async fn scan_sources(
 				tile_compression: *metadata.tile_compression(),
 				elevation,
 			};
-			validate_lossless(cfg.tile_format, cfg.lossless)?;
+			validate_encoding(cfg.tile_format, cfg.lossless, cfg.elevation)?;
 			// Sources written before their producers declared `tile_size` carry
 			// none, and copying that gap forward means the assembled container is
 			// missing it too — which is how
