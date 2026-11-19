@@ -7,6 +7,7 @@ use versatiles_core::{
 	EpsgCode, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileSize, TileStream, ZoomLevel,
 };
 use versatiles_derive::context;
+use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
 use super::{CrsExtent, DemSource, GeoreferenceOverride, RasterTransform, dem_source::DemEncoding};
 use crate::{
@@ -34,6 +35,14 @@ use crate::{
 /// all the data it covers, while `dem_overview` builds each tile from the four
 /// above it. Use `dem_overview` rather than `raster_overview`, which averages
 /// the encoded channels separately and corrupts the elevations.
+///
+/// ### Where there is no data
+///
+/// Outside the dataset, outside the cutline and wherever the dataset has its
+/// `nodata` value, there is no height, and those pixels are transparent. Their
+/// colour is that of 0 m, for readers that ignore alpha. A tile without any
+/// data is left out, and a tile the data covers completely has no alpha
+/// channel at all.
 ///
 /// ### Placing an unreferenced raster
 ///
@@ -242,18 +251,27 @@ impl TileSource for Operation {
 					let spawn_result = versatiles_core::stage::spawn_blocking(move || {
 						bbox
 							.iter_coords_zorder()
-							.map(|coord| {
-								let tile_img = image.crop_imm(
-									(coord.x - bbox.x_min().expect("bbox is non-empty")) * size,
-									(coord.y - bbox.y_min().expect("bbox is non-empty")) * size,
-									size,
-									size,
-								);
+							.filter_map(|coord| {
+								let tile_img = image
+									.crop_imm(
+										(coord.x - bbox.x_min().expect("bbox is non-empty")) * size,
+										(coord.y - bbox.y_min().expect("bbox is non-empty")) * size,
+										size,
+										size,
+									)
+									.into_optional()?;
+								// A tile the data covers completely needs no alpha, and comes
+								// out exactly as it did before there was any.
+								let tile_img = if tile_img.is_opaque() {
+									tile_img.to_no_alpha().expect("an RGBA image converts to RGB")
+								} else {
+									tile_img
+								};
 								// Marked lossless, so that a `raster_format format=webp`
 								// behind this operation keeps the heights intact.
 								let mut tile = Tile::from_image(tile_img, tile_format).expect("tile_format is raster");
 								tile.set_format_quality(Some(100));
-								(coord, tile)
+								Some((coord, tile))
 							})
 							.collect::<Vec<_>>()
 					})
@@ -357,6 +375,27 @@ mod tests {
 			.unwrap()
 			.write((0, 0), (size, size), &mut buffer)
 			.unwrap();
+	}
+
+	/// Like `create_temp_dem`, but the eastern half of the data is voids,
+	/// marked as `nodata`.
+	fn create_temp_dem_with_voids() -> (TempDir, String) {
+		let (tmp, path) = create_temp_dem();
+		let size = 256;
+		let ds = gdal::Dataset::open_ex(
+			&path,
+			gdal::DatasetOptions {
+				open_flags: gdal::GdalOpenFlags::GDAL_OF_UPDATE,
+				..Default::default()
+			},
+		)
+		.unwrap();
+		let mut band = ds.rasterband(1).unwrap();
+		band.set_no_data_value(Some(-32768.0)).unwrap();
+		let voids = vec![-32768.0f32; size / 2 * size];
+		let mut buffer = gdal::raster::Buffer::new((size / 2, size), voids);
+		band.write((128, 0), (size / 2, size), &mut buffer).unwrap();
+		(tmp, path)
 	}
 
 	fn create_temp_dem() -> (TempDir, String) {
@@ -497,6 +536,42 @@ mod tests {
 			assert_eq!(image.width(), 256);
 			assert_eq!(image.height(), 256);
 		}
+		Ok(())
+	}
+
+	/// Tiles the data covers come out as plain RGB, as before. Tiles at its
+	/// edge carry alpha where there is no height, and tiles without any data
+	/// are left out rather than filled with 0 m.
+	#[tokio::test(flavor = "multi_thread")]
+	async fn only_tiles_at_the_edge_of_the_data_carry_alpha() -> Result<()> {
+		use imageproc::image::ColorType;
+
+		// Data from 14° to 19° east, voids from 19° to 24°.
+		let (_tmp, dem_path) = create_temp_dem_with_voids();
+		let op = Operation::new(
+			VPLNode::try_from_str(&format!(
+				"from_gdal_dem filename=\"{dem_path}\" tile_size=\"256\" level_min=\"7\" level_max=\"7\""
+			))?,
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+		let bbox = TileBBox::from_geo_bbox(7, &GeoBBox::new(14.0, 49.0, 24.0, 55.0)?)?;
+		let tiles = op.tile_stream(bbox).await?.to_vec().await;
+
+		let (mut opaque, mut edge) = (0u64, 0u64);
+		for (coord, tile) in tiles {
+			let image = tile.into_image()?;
+			match image.color() {
+				ColorType::Rgb8 => opaque += 1,
+				ColorType::Rgba8 => {
+					assert!(!image.is_opaque() && !image.is_empty(), "{coord:?}");
+					edge += 1;
+				}
+				other => panic!("{coord:?} is {other:?}"),
+			}
+		}
+		assert!(opaque > 0 && edge > 0, "{opaque} opaque and {edge} edge tiles");
+		assert!(opaque + edge < bbox.count_tiles(), "the voids hold no tiles");
 		Ok(())
 	}
 

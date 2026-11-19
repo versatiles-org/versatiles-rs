@@ -188,6 +188,10 @@ from_gdal_dem filename="elevation.tif" | dem_overview
 
 That is far cheaper than lowering `level_min`. GDAL reads the source at full resolution for every tile it renders, so a low-zoom tile costs as much as all the data it covers, while `dem_overview` builds each tile from the four above it. Use `dem_overview` rather than `raster_overview`, which averages the encoded channels separately and corrupts the elevations.
 
+### Where there is no data
+
+Outside the dataset, outside the cutline and wherever the dataset has its `nodata` value, there is no height, and those pixels are transparent. Their colour is that of 0 m, for readers that ignore alpha. A tile without any data is left out, and a tile the data covers completely has no alpha channel at all.
+
 ### Placing an unreferenced raster
 
 A scanned map or a plain image export carries no georeferencing, and GDAL cannot place it at all. `crs` supplies the coordinate system and one of `bounds` or `geo_transform` supplies the position; `crs` on its own is not enough, because a coordinate system says nothing about where the pixels sit.

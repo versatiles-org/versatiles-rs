@@ -2,7 +2,7 @@ use std::{path::Path, sync::Arc};
 
 use anyhow::{Context, Result, bail, ensure};
 use gdal::{Dataset, DriverManager, GeoTransform};
-use imageproc::image::{DynamicImage, RgbImage};
+use imageproc::image::{DynamicImage, RgbaImage};
 use versatiles_core::{CancelToken, GeoBBox};
 use versatiles_derive::context;
 
@@ -41,8 +41,13 @@ pub fn encode_elevation(elevation: f32, encoding: DemEncoding) -> [u8; 3] {
 	]
 }
 
-/// Reproject the source dataset into a 1-band Float32 in-memory dataset
+/// Reproject the source dataset into a 2-band Float32 in-memory dataset
 /// covering the given bbox in Web Mercator (EPSG:3857).
+///
+/// Band 1 holds the elevation and band 2 how much of each pixel the source
+/// covers, from `0` to `255`. A pixel outside the source, outside the cutline
+/// or on the source's `nodata` value has no elevation at all, and band 2 is
+/// what says so: band 1 is `0` there, which is a height like any other.
 #[expect(
 	unsafe_code,
 	reason = "GDAL warp through its C API; the handles are owned by this function and destroyed on every path"
@@ -53,6 +58,7 @@ fn reproject_to_float_dataset(
 	height: usize,
 	bbox: &GeoBBox,
 	cutline: Option<&Cutline>,
+	nodata: Option<f64>,
 ) -> Result<Dataset> {
 	log::trace!("reproject_to_float_dataset started for size={width}x{height}");
 	// Kept until the warp is done: GDAL holds a pointer to it.
@@ -61,10 +67,10 @@ fn reproject_to_float_dataset(
 
 	let bbox_mer = bbox.to_mercator();
 
-	// Create 1-band Float32 MEM dataset
+	// Create 2-band Float32 MEM dataset: elevation and coverage
 	let driver = DriverManager::get_driver_by_name("MEM").context("Failed to get GDAL MEM driver")?;
 	let mut dst_ds = driver
-		.create_with_band_type::<f32, _>("mem", width, height, 1)
+		.create_with_band_type::<f32, _>("mem", width, height, 2)
 		.context("Failed to create Float32 in-memory dataset")?;
 	dst_ds.set_spatial_ref(&get_spatial_ref(3857)?)?;
 
@@ -110,6 +116,25 @@ fn reproject_to_float_dataset(
 		(*options_ptr).panSrcBands.write(1);
 		(*options_ptr).panDstBands.write(1);
 
+		// Coverage goes to band 2, on the same 0..255 scale as an image's
+		// alpha. GDAL's default maximum for a Float32 band is 255 already;
+		// stating it keeps that from depending on the GDAL version.
+		(*options_ptr).nDstAlphaBand = 2;
+		(*options_ptr).papszWarpOptions = CSLSetNameValue(
+			(*options_ptr).papszWarpOptions,
+			c"DST_ALPHA_MAX".as_ptr(),
+			c"255".as_ptr(),
+		);
+
+		// The low-level warp, unlike `gdalwarp`, does not read the source's
+		// nodata value itself. Without it a void (often -32768) was warped as
+		// a height and came out as the lowest the encoding can store.
+		if let Some(value) = nodata {
+			let nodata_arr = CPLMalloc(std::mem::size_of::<f64>()).cast::<f64>();
+			nodata_arr.write(value);
+			(*options_ptr).padfSrcNoDataReal = nodata_arr;
+		}
+
 		// Use Bilinear for DEM — preserves elevation values better than averaging
 		(*options_ptr).eResampleAlg = ResampleAlg::Bilinear.as_gdal();
 		(*options_ptr).dfWarpMemoryLimit = 512.0 * 1024.0 * 1024.0;
@@ -148,10 +173,44 @@ fn reproject_to_float_dataset(
 	Ok(dst_ds)
 }
 
+/// Encode elevations as terrain RGB, with the coverage as alpha.
+///
+/// A pixel without coverage gets the colour of `0` m, as it had before it was
+/// marked transparent, so that a reader that ignores alpha sees no change at
+/// the edge of the data, and in a void `0` m rather than the lowest height
+/// the encoding can store.
+fn elevation_image(
+	width: u32,
+	height: u32,
+	elevation: &[f32],
+	coverage: &[f32],
+	encoding: DemEncoding,
+) -> Result<RgbaImage> {
+	let none = encode_elevation(0.0, encoding);
+	let mut buf = Vec::with_capacity(elevation.len() * 4);
+	for (&elev, &cover) in elevation.iter().zip(coverage) {
+		#[expect(
+			clippy::cast_possible_truncation,
+			clippy::cast_sign_loss,
+			reason = "clamped to 0..=255 before the cast"
+		)]
+		let alpha = cover.round().clamp(0.0, 255.0) as u8;
+		let [r, g, b] = if alpha == 0 {
+			none
+		} else {
+			encode_elevation(elev, encoding)
+		};
+		buf.extend_from_slice(&[r, g, b, alpha]);
+	}
+	RgbaImage::from_raw(width, height, buf).context("Failed to create RgbaImage from elevation data")
+}
+
 #[derive(Clone)]
 pub struct DemSource {
 	pool: GdalPool,
 	cutline: Option<Cutline>,
+	/// The `nodata` value of the source's first band, if it declares one.
+	nodata: Option<f64>,
 }
 
 impl DemSource {
@@ -187,7 +246,9 @@ impl DemSource {
 			None
 		};
 
-		Ok(DemSource { pool, cutline })
+		let nodata = probe.rasterband(1)?.no_data_value();
+
+		Ok(DemSource { pool, cutline, nodata })
 	}
 
 	#[context("Failed to get elevation tile ({width}x{height}) for bbox ({bbox:?}) from GDAL DEM dataset")]
@@ -206,6 +267,7 @@ impl DemSource {
 
 		let instance = self.pool.instance().await?;
 		let cutline = self.cutline.clone();
+		let nodata = self.nodata;
 		let bbox = *bbox;
 
 		// The warp, too, runs on the blocking pool, as in `RasterSource::image`.
@@ -213,27 +275,25 @@ impl DemSource {
 		// thread for as long as the warp took.
 		let image = versatiles_core::stage::spawn_blocking(move || {
 			cancel.sync_scope(|| -> Result<Option<DynamicImage>> {
-				let dst = reproject_to_float_dataset(&instance, width, height, &bbox, cutline.as_ref())?;
-				let band = dst.rasterband(1)?.read_band_as::<f32>()?;
-				let data = band.data();
+				let dst = reproject_to_float_dataset(&instance, width, height, &bbox, cutline.as_ref(), nodata)?;
+				let elevation = dst.rasterband(1)?.read_band_as::<f32>()?;
+				let coverage = dst.rasterband(2)?.read_band_as::<f32>()?;
+				let (elevation, coverage) = (elevation.data(), coverage.data());
 				ensure!(
-					data.len() == width * height,
-					"Band data length mismatch: expected {} but got {}",
+					elevation.len() == width * height && coverage.len() == width * height,
+					"Band data length mismatch: expected {} but got {} and {}",
 					width * height,
-					data.len()
+					elevation.len(),
+					coverage.len()
 				);
 
-				let mut rgb_buf = vec![0u8; width * height * 3];
-				for (i, &elev) in data.iter().enumerate() {
-					let [r, g, b] = encode_elevation(elev, encoding);
-					rgb_buf[i * 3] = r;
-					rgb_buf[i * 3 + 1] = g;
-					rgb_buf[i * 3 + 2] = b;
-				}
-
-				let img = RgbImage::from_raw(u32::try_from(width)?, u32::try_from(height)?, rgb_buf)
-					.context("Failed to create RgbImage from elevation data")?;
-				Ok(Some(DynamicImage::ImageRgb8(img)))
+				Ok(Some(DynamicImage::ImageRgba8(elevation_image(
+					u32::try_from(width)?,
+					u32::try_from(height)?,
+					elevation,
+					coverage,
+					encoding,
+				)?)))
 			})
 		})
 		.await??;
@@ -439,6 +499,82 @@ mod tests {
 				.unwrap()
 				.is_some()
 		);
+	}
+
+	/// A DEM of 100 m in its western half and voids, marked as `nodata`, in
+	/// its eastern half, as SRTM marks them.
+	fn dem_with_voids(bbox: GeoBBox) -> Result<DemSource> {
+		let factory: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> = Arc::new(move || {
+			let size = 64;
+			let driver = DriverManager::get_driver_by_name("MEM")?;
+			let mut ds = driver.create_with_band_type::<f32, _>("dem with voids", size, size, 1)?;
+			ds.set_spatial_ref(&get_spatial_ref(4326)?)?;
+			ds.set_geo_transform(&[
+				bbox.x_min,
+				(bbox.x_max - bbox.x_min) / size as f64,
+				0.0,
+				bbox.y_max,
+				0.0,
+				(bbox.y_min - bbox.y_max) / size as f64,
+			])?;
+			let data: Vec<f32> = (0..size * size)
+				.map(|i| if i % size < size / 2 { 100.0 } else { -32768.0 })
+				.collect();
+			let mut band = ds.rasterband(1)?;
+			band.set_no_data_value(Some(-32768.0))?;
+			band.write((0, 0), (size, size), &mut gdal::raster::Buffer::new((size, size), data))?;
+			Ok(ds)
+		});
+		futures::executor::block_on(DemSource::new_with_factory(factory, 1, 2, None))
+	}
+
+	/// Height and alpha of the pixel in `column` of the middle row.
+	fn mapbox_pixel(image: &DynamicImage, column: u32) -> (f64, u8) {
+		let [red, green, blue, alpha] = image
+			.as_rgba8()
+			.expect("an RGBA image")
+			.get_pixel(column, image.height() / 2)
+			.0;
+		let raw = (u32::from(red) << 16) | (u32::from(green) << 8) | u32::from(blue);
+		(-10000.0 + f64::from(raw) * 0.1, alpha)
+	}
+
+	/// Outside the data there is no height, which is what alpha says. The
+	/// colour is that of 0 m, as it was before, for readers that ignore alpha.
+	#[tokio::test(flavor = "multi_thread")]
+	async fn pixels_outside_the_data_are_transparent() {
+		let data = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
+		let ds = DemSource::from_testdata(data).unwrap();
+		// Ten degrees of nothing on either side of the data.
+		let wider = GeoBBox::new(4.0, 49.0, 34.0, 55.0).unwrap();
+		let image = ds
+			.elevation_tile(&wider, 300, 60, DemEncoding::Mapbox)
+			.await
+			.unwrap()
+			.unwrap();
+
+		for x in [0, 50, 250, 299] {
+			assert_eq!(mapbox_pixel(&image, x), (0.0, 0), "column {x} is outside the data");
+		}
+		let (height, alpha) = mapbox_pixel(&image, 150);
+		assert_eq!(alpha, 255, "column 150 is inside the data");
+		assert!((4000.0..5000.0).contains(&height), "about half of 8848 m, got {height}");
+	}
+
+	/// A void used to be warped as a height of -32768 m and stored as the
+	/// lowest the encoding has, -10000 m.
+	#[tokio::test(flavor = "multi_thread")]
+	async fn a_void_is_transparent_rather_than_the_lowest_height() {
+		let bbox = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
+		let ds = dem_with_voids(bbox).unwrap();
+		let image = ds
+			.elevation_tile(&bbox, 64, 64, DemEncoding::Mapbox)
+			.await
+			.unwrap()
+			.unwrap();
+
+		assert_eq!(mapbox_pixel(&image, 10), (100.0, 255));
+		assert_eq!(mapbox_pixel(&image, 54), (0.0, 0));
 	}
 
 	#[test]
