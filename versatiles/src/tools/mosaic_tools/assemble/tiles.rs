@@ -11,7 +11,7 @@
 //!
 //! - **Composited translucent tiles** are encoded exactly once, in the format
 //!   of the inputs, so that the container holds the format it declares. The single
-//!   encoding happens during the flush step in `encode_tiles_parallel`, which
+//!   encoding happens during the flush step in `encode_tile`, which
 //!   calls `change_format` to set format + quality, followed by `into_blob` →
 //!   `materialize_blob` to produce the blob. Compositing in
 //!   `composite_two_tiles` deliberately does NOT encode — it keeps the merged
@@ -112,7 +112,7 @@ pub(super) fn composite_two_tiles(base: Tile, top: Tile, format: TileFormat, ele
 		result.overlay_additive(&top_image)?;
 	}
 
-	// Keep as raw image — `encode_tiles_parallel` will set quality later.
+	// Keep as raw image — `encode_tile` will set quality later.
 	Tile::from_image(result, format)
 }
 
@@ -121,71 +121,47 @@ pub(super) fn write_opaque_blob(tile: Tile, config: &AssembleConfig) -> Result<B
 	tile.into_blob(&config.tile_compression)
 }
 
-/// Re-encode translucent tiles in parallel and compress for the output container.
+/// Encode a translucent tile and compress it for the output container.
 ///
-/// This is the single place where they are encoded, in the format of the
-/// inputs, at `--quality` or, with `--lossless`, without loss. PNG ignores the
-/// quality, since it is always lossless.
+/// This is the single place where translucent tiles are encoded, in the
+/// format of the inputs, at `--quality` or, with `--lossless`, without loss.
+/// PNG ignores the quality, since it is always lossless.
 /// Tiles coming from `composite_two_tiles` carry raw image content (no blob),
 /// so `change_format` + `into_blob` produces the one-and-only encoded blob.
 /// Single-source tiles still hold their original source blob, and keep it
 /// unless re-encoding is what makes them lossy: see [`keeps_its_encoding`].
-pub(super) fn encode_tiles_parallel(
-	tiles: Vec<(TileCoord, Tile)>,
-	config: &AssembleConfig,
-) -> Vec<Result<(TileCoord, Blob)>> {
-	let config = config.clone();
-	let chunk_size = ConcurrencyLimits::default().cpu_bound;
-	let mut results = Vec::with_capacity(tiles.len());
-	let mut iter = tiles.into_iter().peekable();
-	while iter.peek().is_some() {
-		let chunk: Vec<_> = iter.by_ref().take(chunk_size).collect();
-		let chunk_results: Vec<_> = std::thread::scope(|s| {
-			let handles: Vec<_> = chunk
-				.into_iter()
-				.map(|(coord, mut tile)| {
-					let cfg = &config;
-					s.spawn(move || {
-						// A tile only one input has: copied, or made lossy to save space.
-						let source = if tile.has_blob() {
-							if keeps_its_encoding(&mut tile, &coord, cfg)? {
-								return Ok((coord, tile.into_blob(&cfg.tile_compression)?));
-							}
-							Some(tile.as_blob(&TileCompression::Uncompressed)?.clone())
-						} else {
-							None
-						};
-						// `--lossless` is for tiles that are still translucent. Along a
-						// seam, two half tiles usually composite into an opaque one,
-						// which is as lossy as its neighbours (#319).
-						// Heights are never encoded lossily, opaque or not.
-						let quality = if cfg.elevation || (cfg.lossless && !tile.is_opaque()?) {
-							Some(100)
-						} else {
-							cfg.quality.at(&coord)
-						};
-						tile.change_format(cfg.tile_format, quality, None)?;
-						let encoded = tile.into_blob(&TileCompression::Uncompressed)?;
-						// Lossy WebP stores alpha apart from the colours, and on a
-						// smooth or mostly empty tile that can take more bytes than
-						// the lossless original. Then the original is both better
-						// and smaller.
-						let blob = match source {
-							Some(source) if source.len() <= encoded.len() => source,
-							_ => encoded,
-						};
-						Ok((coord, compress(blob, &cfg.tile_compression)?))
-					})
-				})
-				.collect();
-			handles
-				.into_iter()
-				.map(|h| h.join().expect("worker thread panicked"))
-				.collect()
-		});
-		results.extend(chunk_results);
-	}
-	results
+///
+/// It is CPU-bound, so the second pass calls it on the blocking pool.
+pub(super) fn encode_tile(coord: TileCoord, mut tile: Tile, cfg: &AssembleConfig) -> Result<(TileCoord, Blob)> {
+	// A tile only one input has: copied, or made lossy to save space.
+	let source = if tile.has_blob() {
+		if keeps_its_encoding(&mut tile, &coord, cfg)? {
+			return Ok((coord, tile.into_blob(&cfg.tile_compression)?));
+		}
+		Some(tile.as_blob(&TileCompression::Uncompressed)?.clone())
+	} else {
+		None
+	};
+	// `--lossless` is for tiles that are still translucent. Along a
+	// seam, two half tiles usually composite into an opaque one,
+	// which is as lossy as its neighbours (#319).
+	// Heights are never encoded lossily, opaque or not.
+	let quality = if cfg.elevation || (cfg.lossless && !tile.is_opaque()?) {
+		Some(100)
+	} else {
+		cfg.quality.at(&coord)
+	};
+	tile.change_format(cfg.tile_format, quality, None)?;
+	let encoded = tile.into_blob(&TileCompression::Uncompressed)?;
+	// Lossy WebP stores alpha apart from the colours, and on a
+	// smooth or mostly empty tile that can take more bytes than
+	// the lossless original. Then the original is both better
+	// and smaller.
+	let blob = match source {
+		Some(source) if source.len() <= encoded.len() => source,
+		_ => encoded,
+	};
+	Ok((coord, compress(blob, &cfg.tile_compression)?))
 }
 
 /// Whether a tile only one input has is written as it was read.
@@ -195,7 +171,7 @@ pub(super) fn encode_tiles_parallel(
 /// encoding once more, and for a lossy source a second generation of loss.
 /// What re-encoding can do is make a lossless tile lossy, which is what
 /// `--quality` does by default to the lossless edge tiles `mosaic tile`
-/// writes, to save space; where it would not, `encode_tiles_parallel` keeps
+/// writes, to save space; where it would not, `encode_tile` keeps
 /// the original after all. So a tile keeps its encoding unless it is lossless
 /// WebP that is to become lossy: not with `--lossless`, not for heights, and
 /// not where `--quality` asks for 100. PNG is lossless either way, and AVIF
@@ -230,7 +206,11 @@ fn is_lossless_webp(blob: &Blob) -> bool {
 
 /// Read the tiles at `coords` from the container at `path`.
 ///
-/// Returns `(coord, tile)` pairs with empty tiles already filtered out.
+/// Returns the `(coord, tile)` pairs the container has, as read, undecoded.
+/// They need no check for emptiness: the first pass asks for no other tiles
+/// than translucent ones, and decoding them here, one after another, would
+/// hold up the second pass, and would decode the tiles only one input has,
+/// which are mostly written as they are read.
 /// Used both for direct fetching and for pre-fetching the next source.
 pub(super) async fn fetch_source_tiles(
 	path: &str,
@@ -246,27 +226,13 @@ pub(super) async fn fetch_source_tiles(
 	let tiles: Vec<Result<Option<(TileCoord, Tile)>>> = futures::stream::iter(coords)
 		.map(|coord| {
 			let reader = reader.clone();
-			async move {
-				match reader.tile(&coord).await? {
-					Some(tile) => Ok(Some((coord, tile))),
-					None => Ok(None),
-				}
-			}
+			async move { Ok(reader.tile(&coord).await?.map(|tile| (coord, tile))) }
 		})
 		.buffer_unordered(concurrency)
 		.collect()
 		.await;
 
-	// Filter empty tiles outside the async executor to avoid blocking on potential image decode
-	let mut result = Vec::with_capacity(tiles.len());
-	for tile_result in tiles {
-		if let Some((coord, mut tile)) = tile_result?
-			&& !tile.is_empty()?
-		{
-			result.push((coord, tile));
-		}
-	}
-	Ok(result)
+	tiles.into_iter().filter_map(Result::transpose).collect()
 }
 
 #[cfg(test)]
@@ -276,6 +242,13 @@ mod tests {
 	use versatiles_pipeline::{QualityByZoom, TileQuality};
 
 	use super::*;
+
+	fn encode_all(tiles: Vec<(TileCoord, Tile)>, config: &AssembleConfig) -> Vec<Result<(TileCoord, Blob)>> {
+		tiles
+			.into_iter()
+			.map(|(coord, tile)| encode_tile(coord, tile, config))
+			.collect()
+	}
 
 	fn quality(text: &str) -> TileQuality {
 		TileQuality::new(QualityByZoom::try_from(text).unwrap(), None).unwrap()
@@ -382,7 +355,7 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_tiles_parallel_produces_blobs() -> Result<()> {
+	fn encode_tile_produces_blobs() -> Result<()> {
 		let config = test_config();
 		let tiles = vec![
 			(coord(0, 0, 0), opaque_rgb_tile()),
@@ -390,7 +363,7 @@ mod tests {
 			(coord(1, 1, 0), opaque_rgb_tile()),
 		];
 
-		let results = encode_tiles_parallel(tiles, &config);
+		let results = encode_all(tiles, &config);
 		assert_eq!(results.len(), 3);
 		for result in results {
 			let (_, blob) = result?;
@@ -400,14 +373,14 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_tiles_parallel_lossless() -> Result<()> {
+	fn encode_tile_lossless() -> Result<()> {
 		let config = AssembleConfig {
 			lossless: true,
 			..test_config()
 		};
 		let tiles = vec![(coord(0, 0, 0), translucent_rgba_tile(128))];
 
-		let results = encode_tiles_parallel(tiles, &config);
+		let results = encode_all(tiles, &config);
 		assert_eq!(results.len(), 1);
 		let (c, blob) = results.into_iter().next().unwrap()?;
 		assert_eq!(c, coord(0, 0, 0));
@@ -431,12 +404,12 @@ mod tests {
 
 	/// `--lossless` is for translucent tiles, and an opaque one stays lossy (#319).
 	#[test]
-	fn encode_tiles_parallel_lossless_keeps_an_opaque_tile_lossy() -> Result<()> {
+	fn encode_tile_lossless_keeps_an_opaque_tile_lossy() -> Result<()> {
 		let config = AssembleConfig {
 			lossless: true,
 			..test_config()
 		};
-		let results = encode_tiles_parallel(vec![(coord(0, 0, 0), opaque_rgb_tile())], &config);
+		let results = encode_all(vec![(coord(0, 0, 0), opaque_rgb_tile())], &config);
 		let (_, blob) = results.into_iter().next().unwrap()?;
 		assert_eq!(webp_chunk(&blob), *b"VP8 ");
 		Ok(())
@@ -451,11 +424,11 @@ mod tests {
 			..test_config()
 		};
 		let seam = composite_two_tiles(half_tile(true), half_tile(false), TileFormat::WEBP, false)?;
-		let results = encode_tiles_parallel(vec![(coord(0, 0, 0), seam)], &config);
+		let results = encode_all(vec![(coord(0, 0, 0), seam)], &config);
 		let (_, blob) = results.into_iter().next().unwrap()?;
 		assert_eq!(webp_chunk(&blob), *b"VP8 ");
 
-		let half = encode_tiles_parallel(vec![(coord(0, 0, 0), half_tile(true))], &config);
+		let half = encode_all(vec![(coord(0, 0, 0), half_tile(true))], &config);
 		let (_, blob) = half.into_iter().next().unwrap()?;
 		assert_eq!(
 			webp_chunk(&blob),
@@ -466,14 +439,14 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_tiles_parallel_empty_input() {
+	fn encode_tile_empty_input() {
 		let config = test_config();
-		let results = encode_tiles_parallel(vec![], &config);
+		let results = encode_all(vec![], &config);
 		assert!(results.is_empty());
 	}
 
 	#[test]
-	fn encode_tiles_parallel_uses_zoom_quality() -> Result<()> {
+	fn encode_tile_uses_zoom_quality() -> Result<()> {
 		let config = AssembleConfig {
 			quality: quality("5:50"),
 			lossless: false,
@@ -483,7 +456,7 @@ mod tests {
 		};
 
 		let tiles = vec![(coord(5, 0, 0), opaque_rgb_tile())];
-		let results = encode_tiles_parallel(tiles, &config);
+		let results = encode_all(tiles, &config);
 		assert_eq!(results.len(), 1);
 		let (c, blob) = results.into_iter().next().unwrap()?;
 		assert_eq!(c.level, 5);
@@ -536,25 +509,25 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_tiles_parallel_preserves_coords() -> Result<()> {
+	fn encode_tile_preserves_coords() -> Result<()> {
 		let config = test_config();
 		let coords = [coord(3, 5, 7), coord(8, 100, 200), coord(0, 0, 0)];
 		let tiles: Vec<_> = coords.iter().map(|c| (*c, opaque_rgb_tile())).collect();
 
-		let results = encode_tiles_parallel(tiles, &config);
+		let results = encode_all(tiles, &config);
 		let result_coords: Vec<TileCoord> = results.into_iter().map(|r| r.unwrap().0).collect();
 		assert_eq!(result_coords, coords);
 		Ok(())
 	}
 
 	#[test]
-	fn encode_tiles_parallel_with_gzip() -> Result<()> {
+	fn encode_tile_with_gzip() -> Result<()> {
 		let config = AssembleConfig {
 			tile_compression: TileCompression::Gzip,
 			..test_config()
 		};
 		let tiles = vec![(coord(0, 0, 0), opaque_rgb_tile())];
-		let results = encode_tiles_parallel(tiles, &config);
+		let results = encode_all(tiles, &config);
 		assert_eq!(results.len(), 1);
 		let (_, blob) = results.into_iter().next().unwrap()?;
 		assert!(!blob.is_empty());
@@ -589,20 +562,6 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_tiles_parallel_many_tiles_chunked() -> Result<()> {
-		// More tiles than typical cpu_bound limit to exercise the chunking loop
-		let config = test_config();
-		let tiles: Vec<_> = (0..50u32).map(|i| (coord(8, i, 0), opaque_rgb_tile())).collect();
-
-		let results = encode_tiles_parallel(tiles, &config);
-		assert_eq!(results.len(), 50);
-		for r in &results {
-			assert!(r.is_ok());
-		}
-		Ok(())
-	}
-
-	#[test]
 	fn composite_two_opaque_tiles() -> Result<()> {
 		let base = opaque_rgb_tile();
 		let top = opaque_rgb_tile();
@@ -624,10 +583,10 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_tiles_parallel_single_tile() -> Result<()> {
+	fn encode_tile_single_tile() -> Result<()> {
 		let config = test_config();
 		let tiles = vec![(coord(0, 0, 0), opaque_rgb_tile())];
-		let results = encode_tiles_parallel(tiles, &config);
+		let results = encode_all(tiles, &config);
 		assert_eq!(results.len(), 1);
 		let (c, blob) = results.into_iter().next().unwrap()?;
 		assert_eq!(c, coord(0, 0, 0));
@@ -706,7 +665,7 @@ mod tests {
 				(coord(1, 0, 0), half_tile(true)),
 				(coord(1, 1, 0), translucent_rgba_tile(128)),
 			];
-			for result in encode_tiles_parallel(tiles, &config) {
+			for result in encode_all(tiles, &config) {
 				let (c, blob) = result?;
 				assert_eq!(sniff(blob.as_slice()), Some(format), "the tile at {c:?}");
 			}
@@ -721,7 +680,7 @@ mod tests {
 			lossless: true,
 			..test_config()
 		};
-		let results = encode_tiles_parallel(vec![(coord(0, 0, 0), translucent_rgba_tile(128))], &config);
+		let results = encode_all(vec![(coord(0, 0, 0), translucent_rgba_tile(128))], &config);
 		let (_, blob) = results.into_iter().next().unwrap()?;
 		assert!(blob.as_slice().starts_with(b"\x89PNG"));
 		let image = Tile::from_blob(blob, TileCompression::Uncompressed, TileFormat::PNG).into_image()?;
@@ -838,7 +797,7 @@ mod tests {
 		};
 		let seam = composite_two_tiles(half_tile(true), half_tile(false), TileFormat::WEBP, true)?;
 		let tiles = vec![(coord(0, 0, 0), seam), (coord(1, 0, 0), half_tile(true))];
-		for result in encode_tiles_parallel(tiles, &config) {
+		for result in encode_all(tiles, &config) {
 			let (c, blob) = result?;
 			assert_eq!(webp_chunk(&blob), *b"VP8L", "the tile at {c:?}");
 		}
@@ -886,7 +845,7 @@ mod tests {
 	}
 
 	fn encode_one(tile: Tile, config: &AssembleConfig) -> Result<Blob> {
-		Ok(encode_tiles_parallel(vec![(coord(3, 1, 2), tile)], config).remove(0)?.1)
+		Ok(encode_all(vec![(coord(3, 1, 2), tile)], config).remove(0)?.1)
 	}
 
 	#[test]
@@ -1013,7 +972,7 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_tiles_parallel_with_composited_tiles() -> Result<()> {
+	fn encode_tile_with_composited_tiles() -> Result<()> {
 		// Encode tiles that went through composite (the real pipeline path)
 		let base = translucent_rgba_tile(128);
 		let top = translucent_rgba_tile(64);
@@ -1021,7 +980,7 @@ mod tests {
 
 		let config = test_config();
 		let tiles = vec![(coord(3, 1, 2), composited)];
-		let results = encode_tiles_parallel(tiles, &config);
+		let results = encode_all(tiles, &config);
 		assert_eq!(results.len(), 1);
 		let (c, blob) = results.into_iter().next().unwrap()?;
 		assert_eq!(c, coord(3, 1, 2));
@@ -1030,7 +989,7 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_tiles_parallel_none_quality() -> Result<()> {
+	fn encode_tile_none_quality() -> Result<()> {
 		// Quality set to None for a zoom level — should still encode
 		let config = AssembleConfig {
 			quality: quality(""),
@@ -1041,7 +1000,7 @@ mod tests {
 		};
 
 		let tiles = vec![(coord(3, 0, 0), opaque_rgb_tile())];
-		let results = encode_tiles_parallel(tiles, &config);
+		let results = encode_all(tiles, &config);
 		assert_eq!(results.len(), 1);
 		let (c, blob) = results.into_iter().next().unwrap()?;
 		assert_eq!(c.level, 3);
@@ -1050,13 +1009,13 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_tiles_parallel_with_brotli() -> Result<()> {
+	fn encode_tile_with_brotli() -> Result<()> {
 		let config = AssembleConfig {
 			tile_compression: TileCompression::Brotli,
 			..test_config()
 		};
 		let tiles = vec![(coord(0, 0, 0), opaque_rgb_tile())];
-		let results = encode_tiles_parallel(tiles, &config);
+		let results = encode_all(tiles, &config);
 		assert_eq!(results.len(), 1);
 		let (_, blob) = results.into_iter().next().unwrap()?;
 		assert!(!blob.is_empty());
@@ -1064,7 +1023,7 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_tiles_parallel_mixed_zoom_levels() -> Result<()> {
+	fn encode_tile_mixed_zoom_levels() -> Result<()> {
 		// Different zoom levels use different quality entries
 		let config = AssembleConfig {
 			quality: quality("50,5:90,10:30"),
@@ -1079,7 +1038,7 @@ mod tests {
 			(coord(5, 3, 4), opaque_rgb_tile()),
 			(coord(10, 100, 200), opaque_rgb_tile()),
 		];
-		let results = encode_tiles_parallel(tiles, &config);
+		let results = encode_all(tiles, &config);
 		assert_eq!(results.len(), 3);
 		for r in results {
 			let (_, blob) = r?;
@@ -1089,14 +1048,14 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_tiles_parallel_translucent_tiles() -> Result<()> {
+	fn encode_tile_translucent_tiles() -> Result<()> {
 		let config = test_config();
 		let tiles = vec![
 			(coord(0, 0, 0), translucent_rgba_tile(128)),
 			(coord(1, 0, 0), translucent_rgba_tile(64)),
 			(coord(2, 0, 0), translucent_rgba_tile(255)),
 		];
-		let results = encode_tiles_parallel(tiles, &config);
+		let results = encode_all(tiles, &config);
 		assert_eq!(results.len(), 3);
 		for r in results {
 			let (_, blob) = r?;

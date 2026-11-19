@@ -15,7 +15,7 @@ use versatiles_pipeline::TileQuality;
 use super::{
 	AssembleConfig,
 	tiles::{
-		composite_two_tiles, encode_tiles_parallel, fetch_source_tiles, holds_elevation, validate_encoding,
+		composite_two_tiles, encode_tile, fetch_source_tiles, holds_elevation, validate_encoding,
 		validate_source_elevation, validate_source_format, write_opaque_blob,
 	},
 	translucent_buffer::TranslucentBuffer,
@@ -585,26 +585,44 @@ async fn composite_one_batch(
 			.await;
 		result?;
 
+		// Flush tiles whose last contributing source is this one, while the next
+		// source is still being read.
+		if let Some(keys) = flush_keys.remove(&source_idx) {
+			encode_and_write(buffer.remove_many(&keys), config, sink, concurrency).await?;
+		}
+
 		// Await the pre-fetched tiles for the next source
 		if let Some(handle) = prefetch_handle {
 			prefetched = Some(handle.await.map_err(|e| anyhow!("prefetch task panicked: {e}"))??);
 		}
 
-		// Flush tiles whose last contributing source is this one.
-		if let Some(keys) = flush_keys.remove(&source_idx) {
-			let flushed = buffer.remove_many(&keys);
-			if !flushed.is_empty() {
-				let prepared = encode_tiles_parallel(flushed, config);
-				for result in prepared {
-					let (coord, blob) = result?;
-					sink.write_tile(&coord, &blob).await?;
-				}
-			}
-		}
-
 		progress.inc(1);
 	}
 
+	Ok(())
+}
+
+/// Encode `tiles` on the blocking pool and write each one as soon as it is done.
+///
+/// Writing overlaps encoding, and a slow tile holds up only itself, not the
+/// others encoded alongside it.
+async fn encode_and_write(
+	tiles: Vec<(TileCoord, Tile)>,
+	config: &AssembleConfig,
+	sink: &Arc<Box<dyn TileSink>>,
+	concurrency: usize,
+) -> Result<()> {
+	let config = Arc::new(config.clone());
+	let mut encoded = futures::stream::iter(tiles)
+		.map(|(coord, tile)| {
+			let config = Arc::clone(&config);
+			tokio::task::spawn_blocking(move || encode_tile(coord, tile, &config))
+		})
+		.buffer_unordered(concurrency);
+	while let Some(task) = encoded.next().await {
+		let (coord, blob) = task.map_err(|e| anyhow!("encoding task panicked: {e}"))??;
+		sink.write_tile(&coord, &blob).await?;
+	}
 	Ok(())
 }
 
@@ -782,6 +800,19 @@ mod tests {
 
 		assert_eq!(count.load(Ordering::SeqCst), 0);
 		assert_eq!(translucent, Vec::<TileCoord>::new());
+	}
+
+	#[tokio::test]
+	async fn encode_and_write_writes_every_tile_once() {
+		// More tiles than run at once, so that tiles finish while others wait.
+		let tiles: Vec<_> = (0..50u32).map(|x| (tc(8, x, 0), translucent_rgba_tile(128))).collect();
+		let (sink, _, coords) = make_observable_sink();
+
+		encode_and_write(tiles, &assemble_config(), &sink, 4).await.unwrap();
+
+		let mut written = coords.lock().unwrap().clone();
+		written.sort_by_key(|coord| coord.x);
+		assert_eq!(written, (0..50u32).map(|x| tc(8, x, 0)).collect::<Vec<_>>());
 	}
 
 	// ─── scan_sources / composite_batches / composite_one_batch ───
