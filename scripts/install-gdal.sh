@@ -23,8 +23,8 @@ set -euo pipefail
 
 # ── GDAL versions ──
 GDAL_PREFERRED="3.12"   # try this version first
-GDAL_MIN_MAJOR=3         # minimum acceptable: 3.4
-GDAL_MIN_MINOR=4
+GDAL_MIN_MAJOR=3         # minimum acceptable: 3.8, what the gdal crate supports
+GDAL_MIN_MINOR=8
 
 USE_TESTING=0
 while [[ $# -gt 0 ]]; do

@@ -155,8 +155,9 @@ unknown-git = "deny"
 required-git-spec = "rev"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 
-# The one exception, and a temporary one: `gdal`/`gdal-sys` are pinned to a fork
-# carrying georust/gdal#714 (GDAL 3.13 compatibility), by exact revision — see
-# the comment on the dependency in versatiles_pipeline/Cargo.toml. Remove this
-# entry together with the pin, once a crates.io release includes the fix.
-allow-git = ["https://github.com/AlexanderWillner/gdal"]
+# The one exception, and a temporary one: `gdal`/`gdal-sys` are pinned to an
+# upstream commit carrying georust/gdal#714 (GDAL 3.13 compatibility), by exact
+# revision, because no release includes it yet — see the comment on the
+# dependency in versatiles_pipeline/Cargo.toml. Remove this entry together with
+# the pin, once a crates.io release includes the fix.
+allow-git = ["https://github.com/georust/gdal"]

@@ -2073,7 +2073,7 @@ dependencies = [
 [[package]]
 name = "gdal"
 version = "0.19.0"
-source = "git+https://github.com/AlexanderWillner/gdal?rev=bc255dce662300a70d64b64be7c641912f48e780#bc255dce662300a70d64b64be7c641912f48e780"
+source = "git+https://github.com/georust/gdal?rev=c0a6266b987a2c2d44aea9956c2cae1ed71445cf#c0a6266b987a2c2d44aea9956c2cae1ed71445cf"
 dependencies = [
  "bitflags",
  "chrono",
@@ -2086,7 +2086,7 @@ dependencies = [
 [[package]]
 name = "gdal-sys"
 version = "0.12.0"
-source = "git+https://github.com/AlexanderWillner/gdal?rev=bc255dce662300a70d64b64be7c641912f48e780#bc255dce662300a70d64b64be7c641912f48e780"
+source = "git+https://github.com/georust/gdal?rev=c0a6266b987a2c2d44aea9956c2cae1ed71445cf#c0a6266b987a2c2d44aea9956c2cae1ed71445cf"
 dependencies = [
  "bindgen",
  "pkg-config",
