@@ -96,6 +96,28 @@ ignore = [
 	# integer mtime into a directory listing's long name. `gdal` uses it only
 	# for date fields in its vector API, which nothing here calls.
 	{ id = "RUSTSEC-2026-0543", reason = "converts and formats timestamps only, via russh-sftp and gdal" },
+
+	# RUSTSEC-2026-0574 to -0582 — unsound code in `heapless`, fixed in 0.9.4.
+	#
+	# Our own `rstar` 0.14 gets 0.9.4. `heapless` 0.8.0 stays, through `rstar`
+	# 0.12, which `geo` 0.33 and `geo-types` 0.7 use, and 0.8 gets no fix. That
+	# `rstar` uses only `heapless::BinaryHeap`, in its nearest-neighbour search.
+	# Eight of the advisories are about types it never touches: `Deque`,
+	# `HistoryBuf`, `IndexMap`, `SortedLinkedList`, `Spsc` and the treiber-stack
+	# pool. The ninth, -0577, is a container left broken when an element's
+	# `Drop` panics, and it covers the `Vec` iterator that `rstar` drains the
+	# heap through; its elements are a reference and a distance, whose `Drop`
+	# does nothing. `geo`'s main branch already uses `rstar` 0.14, so drop these
+	# entries once a `geo` release does.
+	{ id = "RUSTSEC-2026-0574", reason = "heapless 0.8 via rstar 0.12 (geo); type not used" },
+	{ id = "RUSTSEC-2026-0575", reason = "heapless 0.8 via rstar 0.12 (geo); type not used" },
+	{ id = "RUSTSEC-2026-0576", reason = "heapless 0.8 via rstar 0.12 (geo); type not used" },
+	{ id = "RUSTSEC-2026-0577", reason = "heapless 0.8 via rstar 0.12 (geo); its elements' Drop cannot panic" },
+	{ id = "RUSTSEC-2026-0578", reason = "heapless 0.8 via rstar 0.12 (geo); type not used" },
+	{ id = "RUSTSEC-2026-0579", reason = "heapless 0.8 via rstar 0.12 (geo); type not used" },
+	{ id = "RUSTSEC-2026-0580", reason = "heapless 0.8 via rstar 0.12 (geo); type not used" },
+	{ id = "RUSTSEC-2026-0581", reason = "heapless 0.8 via rstar 0.12 (geo); type not used" },
+	{ id = "RUSTSEC-2026-0582", reason = "heapless 0.8 via rstar 0.12 (geo); type not used" },
 ]
 
 [licenses]
