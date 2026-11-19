@@ -14,7 +14,10 @@ use versatiles_pipeline::TileQuality;
 
 use super::{
 	AssembleConfig,
-	tiles::{composite_two_tiles, encode_tiles_parallel, fetch_source_tiles, validate_source_format, write_opaque_blob},
+	tiles::{
+		composite_two_tiles, encode_tiles_parallel, fetch_source_tiles, validate_lossless, validate_source_format,
+		write_opaque_blob,
+	},
 	translucent_buffer::TranslucentBuffer,
 };
 
@@ -207,6 +210,7 @@ pub(super) async fn scan_sources(
 				tile_format: *metadata.tile_format(),
 				tile_compression: *metadata.tile_compression(),
 			};
+			validate_lossless(cfg.tile_format, cfg.lossless)?;
 			// Sources written before their producers declared `tile_size` carry
 			// none, and copying that gap forward means the assembled container is
 			// missing it too — which is how
@@ -542,11 +546,12 @@ async fn composite_one_batch(
 
 		// Composite fetched tiles into the buffer in parallel
 		let buffer_ref = Arc::clone(&buffer);
+		let format = config.tile_format;
 		let callback = Arc::new(move |coord: TileCoord, tile: Tile| -> Result<()> {
 			let key = coord.get_hilbert_index()?;
 			let existing = buffer_ref.remove(key);
 			if let Some((_, existing_tile)) = existing {
-				let merged = composite_two_tiles(tile, existing_tile)?;
+				let merged = composite_two_tiles(tile, existing_tile, format)?;
 				buffer_ref.insert(coord, merged)?;
 			} else {
 				buffer_ref.insert(coord, tile)?;

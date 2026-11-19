@@ -19,8 +19,12 @@ Each output tile is made from the tiles the inputs have at its coordinate:
     Every other tile at that coordinate is dropped, whatever the order of
     the inputs. Of several opaque tiles, the one listed first is used.
   * Otherwise the translucent tiles are composited, the one listed first
-    on top, and encoded as WebP (see --quality and --lossless).
+    on top, and encoded in the format of the inputs (see --quality and
+    --lossless).
   * Empty tiles are skipped.
+
+All inputs must have the same tile format and compression, and the output
+gets them too.
 
 Overlapping inputs are not an error, but an overlap is resolved per tile as
 above, not per pixel. To blend overlapping containers pixel by pixel, use
@@ -65,8 +69,9 @@ is always treated as the output path."
 	)]
 	pub(super) paths: Vec<String>,
 
-	/// Lossy WebP quality (0-100) for the tiles made from translucent ones.
+	/// Quality (0-100) for the tiles made from translucent ones.
 	///
+	/// Applies to WebP and AVIF inputs; PNG is always lossless and ignores it.
 	/// Opaque tiles are copied as they are and keep the quality they have.
 	/// Single value (e.g. "75") applies to every zoom. Comma-separated list
 	/// ramps from z=0 upwards ("90,80,70" → z=0 → 90, z=1 → 80, z≥2 → 70).
@@ -96,6 +101,7 @@ is always treated as the output path."
 	/// compositing, such as one at the outer edge of the mosaic, is encoded
 	/// losslessly, so that soft edges stay sharp. A tile that the compositing
 	/// made opaque, such as two halves along a seam, still uses --quality.
+	/// Needs WebP or PNG inputs, as AVIF cannot be encoded without loss.
 	#[arg(long)]
 	pub(super) lossless: bool,
 

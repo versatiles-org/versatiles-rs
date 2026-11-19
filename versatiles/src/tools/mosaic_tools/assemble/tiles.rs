@@ -6,13 +6,14 @@
 //!   to the sink byte-for-byte (only recompressed if the container compression
 //!   differs, which `into_blob` handles as a no-op when it already matches).
 //!
-//! - **Translucent tiles** are re-encoded exactly once as lossy WebP (or
-//!   lossless when `--lossless` is set). The single encoding happens during
-//!   the flush step in `encode_tiles_parallel`, which calls `change_format`
-//!   to set format + quality, followed by `into_blob` → `materialize_blob`
-//!   to produce the blob. Compositing in `composite_two_tiles` deliberately
-//!   does NOT encode — it keeps the merged image as raw content so that the
-//!   flush step is the only place where lossy compression is applied.
+//! - **Translucent tiles** are re-encoded exactly once, in the format of the
+//!   inputs, so that the container holds the format it declares. The single
+//!   encoding happens during the flush step in `encode_tiles_parallel`, which
+//!   calls `change_format` to set format + quality, followed by `into_blob` →
+//!   `materialize_blob` to produce the blob. Compositing in
+//!   `composite_two_tiles` deliberately does NOT encode — it keeps the merged
+//!   image as raw content so that the flush step is the only place where
+//!   lossy compression is applied.
 
 use anyhow::{Context, Result, ensure};
 use futures::StreamExt;
@@ -42,20 +43,34 @@ pub(super) fn validate_source_format(
 	Ok(())
 }
 
+/// Refuse `--lossless` for inputs whose format cannot be encoded without loss.
+///
+/// Composited tiles are encoded in the format of the inputs. WebP and PNG can
+/// keep a translucent tile exact; AVIF and JPEG cannot, and this is checked
+/// before the first tile is written rather than when the first edge tile is.
+pub(super) fn validate_lossless(format: TileFormat, lossless: bool) -> Result<()> {
+	ensure!(
+		!lossless || matches!(format, TileFormat::WEBP | TileFormat::PNG),
+		"--lossless needs inputs in a format that can be encoded without loss, WebP or PNG, \
+		 but they hold {format} tiles. Leave out --lossless, or tile the scenes as WebP or PNG"
+	);
+	Ok(())
+}
+
 /// Composite two tiles using additive alpha blending (`base` on bottom, `top` on top).
 ///
-/// Returns the merged tile with raw image content (no blob, no encoding).
-/// Encoding is deferred to `encode_tiles_parallel` so that lossy compression
-/// is applied exactly once.
-pub(super) fn composite_two_tiles(base: Tile, top: Tile) -> Result<Tile> {
+/// Returns the merged tile with raw image content (no blob, no encoding),
+/// marked as `format`, the format of the inputs. Encoding is deferred to
+/// `encode_tiles_parallel` so that lossy compression is applied exactly once.
+pub(super) fn composite_two_tiles(base: Tile, top: Tile, format: TileFormat) -> Result<Tile> {
 	let base_image = base.into_image()?;
 	let top_image = top.into_image()?;
 
 	let mut result = base_image;
 	result.overlay_additive(&top_image)?;
 
-	// Keep as raw image — `encode_tiles_parallel` will set format + quality later.
-	Tile::from_image(result, TileFormat::WEBP)
+	// Keep as raw image — `encode_tiles_parallel` will set quality later.
+	Tile::from_image(result, format)
 }
 
 /// Write an opaque tile's original blob to the sink without re-encoding.
@@ -63,9 +78,11 @@ pub(super) fn write_opaque_blob(tile: Tile, config: &AssembleConfig) -> Result<B
 	tile.into_blob(&config.tile_compression)
 }
 
-/// Re-encode translucent tiles as WebP in parallel and compress for the output container.
+/// Re-encode translucent tiles in parallel and compress for the output container.
 ///
-/// This is the single place where lossy (or lossless) WebP compression is applied.
+/// This is the single place where they are encoded, in the format of the
+/// inputs, at `--quality` or, with `--lossless`, without loss. PNG ignores the
+/// quality, since it is always lossless.
 /// Tiles coming from `composite_two_tiles` carry raw image content (no blob),
 /// so `change_format` + `into_blob` produces the one-and-only encoded blob.
 /// Single-source tiles still hold their original source blob, which is decoded
@@ -94,7 +111,7 @@ pub(super) fn encode_tiles_parallel(
 						} else {
 							cfg.quality.at(&coord)
 						};
-						tile.change_format(TileFormat::WEBP, quality, None)?;
+						tile.change_format(cfg.tile_format, quality, None)?;
 						Ok((coord, tile.into_blob(&cfg.tile_compression)?))
 					})
 				})
@@ -242,7 +259,7 @@ mod tests {
 	fn composite_two_tiles_produces_result() -> Result<()> {
 		let base = translucent_rgba_tile(128);
 		let top = translucent_rgba_tile(128);
-		let result = composite_two_tiles(base, top)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
 		// Result should be a tile with image content
 		let img = result.into_image()?;
 		assert_eq!(img.width(), 2);
@@ -254,7 +271,7 @@ mod tests {
 	fn composite_preserves_dimensions() -> Result<()> {
 		let base = translucent_rgba_tile(64);
 		let top = translucent_rgba_tile(200);
-		let result = composite_two_tiles(base, top)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
 		let img = result.into_image()?;
 		assert_eq!(img.width(), 2);
 		assert_eq!(img.height(), 2);
@@ -330,7 +347,7 @@ mod tests {
 			lossless: true,
 			..test_config()
 		};
-		let seam = composite_two_tiles(half_tile(true), half_tile(false))?;
+		let seam = composite_two_tiles(half_tile(true), half_tile(false), TileFormat::WEBP)?;
 		let results = encode_tiles_parallel(vec![(coord(0, 0, 0), seam)], &config);
 		let (_, blob) = results.into_iter().next().unwrap()?;
 		assert_eq!(webp_chunk(&blob), *b"VP8 ");
@@ -386,7 +403,7 @@ mod tests {
 	fn composite_opaque_over_translucent() -> Result<()> {
 		let base = translucent_rgba_tile(128);
 		let top = opaque_rgb_tile();
-		let result = composite_two_tiles(base, top)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
 		let img = result.into_image()?;
 		assert_eq!(img.width(), 2);
 		assert_eq!(img.height(), 2);
@@ -397,7 +414,7 @@ mod tests {
 	fn composite_translucent_over_opaque() -> Result<()> {
 		let base = opaque_rgb_tile();
 		let top = translucent_rgba_tile(128);
-		let result = composite_two_tiles(base, top)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
 		let img = result.into_image()?;
 		assert_eq!(img.width(), 2);
 		assert_eq!(img.height(), 2);
@@ -408,7 +425,7 @@ mod tests {
 	fn composite_fully_transparent_over_opaque() -> Result<()> {
 		let base = opaque_rgb_tile();
 		let top = translucent_rgba_tile(0); // fully transparent
-		let result = composite_two_tiles(base, top)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
 		let img = result.into_image()?;
 		assert_eq!((img.width(), img.height()), (2, 2));
 		Ok(())
@@ -485,7 +502,7 @@ mod tests {
 	fn composite_two_opaque_tiles() -> Result<()> {
 		let base = opaque_rgb_tile();
 		let top = opaque_rgb_tile();
-		let result = composite_two_tiles(base, top)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
 		let img = result.into_image()?;
 		assert_eq!((img.width(), img.height()), (2, 2));
 		Ok(())
@@ -495,7 +512,7 @@ mod tests {
 	fn composite_result_produces_blob() -> Result<()> {
 		let base = translucent_rgba_tile(100);
 		let top = translucent_rgba_tile(100);
-		let result = composite_two_tiles(base, top)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
 		// The result should be producible as a blob
 		let blob = result.into_blob(&TileCompression::Uncompressed)?;
 		assert!(!blob.is_empty());
@@ -539,7 +556,7 @@ mod tests {
 		let base = Tile::from_image(base_img, TileFormat::PNG)?;
 		let top = Tile::from_image(top_img, TileFormat::PNG)?;
 
-		let result = composite_two_tiles(base, top)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
 		let img = result.into_image()?;
 		use versatiles_image::traits::DynamicImageTraitConvert;
 		let px = img.raw_pixel(0, 0);
@@ -550,19 +567,84 @@ mod tests {
 	}
 
 	#[test]
-	fn composite_result_format_is_webp() -> Result<()> {
-		let base = translucent_rgba_tile(128);
-		let top = translucent_rgba_tile(64);
-		let result = composite_two_tiles(base, top)?;
-		assert_eq!(result.format(), TileFormat::WEBP);
+	fn composite_result_has_the_format_it_is_given() -> Result<()> {
+		for format in [TileFormat::WEBP, TileFormat::PNG, TileFormat::AVIF] {
+			let result = composite_two_tiles(translucent_rgba_tile(128), translucent_rgba_tile(64), format)?;
+			assert_eq!(result.format(), format);
+		}
 		Ok(())
+	}
+
+	/// A container declared PNG used to get WebP tiles wherever two inputs
+	/// met, since composited tiles were always encoded as WebP.
+	#[test]
+	fn composited_tiles_are_encoded_in_the_format_of_the_inputs() -> Result<()> {
+		/// The format a blob is in, by its first bytes.
+		fn sniff(blob: &[u8]) -> Option<TileFormat> {
+			if blob.starts_with(b"\x89PNG\r\n\x1a\n") {
+				Some(TileFormat::PNG)
+			} else if blob.starts_with(b"RIFF") && blob.get(8..12) == Some(b"WEBP") {
+				Some(TileFormat::WEBP)
+			} else if blob.get(4..12) == Some(b"ftypavif") {
+				Some(TileFormat::AVIF)
+			} else {
+				None
+			}
+		}
+		for format in [TileFormat::PNG, TileFormat::WEBP, TileFormat::AVIF] {
+			let config = AssembleConfig {
+				tile_format: format,
+				..test_config()
+			};
+			let seam = composite_two_tiles(half_tile(true), half_tile(false), format)?;
+			let tiles = vec![
+				(coord(0, 0, 0), seam),
+				(coord(1, 0, 0), half_tile(true)),
+				(coord(1, 1, 0), translucent_rgba_tile(128)),
+			];
+			for result in encode_tiles_parallel(tiles, &config) {
+				let (c, blob) = result?;
+				assert_eq!(sniff(blob.as_slice()), Some(format), "the tile at {c:?}");
+			}
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn png_with_lossless_stays_png() -> Result<()> {
+		let config = AssembleConfig {
+			tile_format: TileFormat::PNG,
+			lossless: true,
+			..test_config()
+		};
+		let results = encode_tiles_parallel(vec![(coord(0, 0, 0), translucent_rgba_tile(128))], &config);
+		let (_, blob) = results.into_iter().next().unwrap()?;
+		assert!(blob.as_slice().starts_with(b"\x89PNG"));
+		let image = Tile::from_blob(blob, TileCompression::Uncompressed, TileFormat::PNG).into_image()?;
+		assert_eq!(image.as_bytes(), translucent_rgba_tile(128).into_image()?.as_bytes());
+		Ok(())
+	}
+
+	#[test]
+	fn lossless_is_refused_for_formats_that_cannot_keep_it() {
+		for format in [TileFormat::WEBP, TileFormat::PNG, TileFormat::AVIF, TileFormat::JPG] {
+			assert!(validate_lossless(format, false).is_ok());
+		}
+		assert!(validate_lossless(TileFormat::WEBP, true).is_ok());
+		assert!(validate_lossless(TileFormat::PNG, true).is_ok());
+		for format in [TileFormat::AVIF, TileFormat::JPG] {
+			let message = validate_lossless(format, true).unwrap_err().to_string();
+			assert!(message.contains("--lossless"), "{message}");
+			assert!(message.contains("WebP or PNG"), "{message}");
+			assert!(message.contains(&format.to_string()), "{message}");
+		}
 	}
 
 	#[test]
 	fn composite_transparent_over_transparent() -> Result<()> {
 		let base = translucent_rgba_tile(0);
 		let top = translucent_rgba_tile(0);
-		let result = composite_two_tiles(base, top)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
 		let img = result.into_image()?;
 		use versatiles_image::traits::DynamicImageTraitConvert;
 		// Both fully transparent → result should be transparent
@@ -576,7 +658,7 @@ mod tests {
 		// Encode tiles that went through composite (the real pipeline path)
 		let base = translucent_rgba_tile(128);
 		let top = translucent_rgba_tile(64);
-		let composited = composite_two_tiles(base, top)?;
+		let composited = composite_two_tiles(base, top, TileFormat::WEBP)?;
 
 		let config = test_config();
 		let tiles = vec![(coord(3, 1, 2), composited)];
