@@ -15,8 +15,8 @@ use versatiles_pipeline::TileQuality;
 use super::{
 	AssembleConfig,
 	tiles::{
-		composite_two_tiles, encode_tiles_parallel, fetch_source_tiles, validate_lossless, validate_source_format,
-		write_opaque_blob,
+		composite_two_tiles, encode_tiles_parallel, fetch_source_tiles, holds_elevation, validate_lossless,
+		validate_source_elevation, validate_source_format, write_opaque_blob,
 	},
 	translucent_buffer::TranslucentBuffer,
 };
@@ -200,8 +200,10 @@ pub(super) async fn scan_sources(
 		let reader_tilejson = reader.tilejson();
 
 		// First source: discover format and open sink
+		let elevation = holds_elevation(reader_tilejson);
 		let cfg = if let Some(ref cfg) = config {
 			validate_source_format(path, metadata, cfg)?;
+			validate_source_elevation(path, elevation, cfg)?;
 			cfg.clone()
 		} else {
 			let cfg = AssembleConfig {
@@ -209,6 +211,7 @@ pub(super) async fn scan_sources(
 				lossless,
 				tile_format: *metadata.tile_format(),
 				tile_compression: *metadata.tile_compression(),
+				elevation,
 			};
 			validate_lossless(cfg.tile_format, cfg.lossless)?;
 			// Sources written before their producers declared `tile_size` carry
@@ -546,12 +549,12 @@ async fn composite_one_batch(
 
 		// Composite fetched tiles into the buffer in parallel
 		let buffer_ref = Arc::clone(&buffer);
-		let format = config.tile_format;
+		let (format, elevation) = (config.tile_format, config.elevation);
 		let callback = Arc::new(move |coord: TileCoord, tile: Tile| -> Result<()> {
 			let key = coord.get_hilbert_index()?;
 			let existing = buffer_ref.remove(key);
 			if let Some((_, existing_tile)) = existing {
-				let merged = composite_two_tiles(tile, existing_tile, format)?;
+				let merged = composite_two_tiles(tile, existing_tile, format, elevation)?;
 				buffer_ref.insert(coord, merged)?;
 			} else {
 				buffer_ref.insert(coord, tile)?;
@@ -642,6 +645,7 @@ mod tests {
 			lossless: false,
 			tile_format: TileFormat::PNG,
 			tile_compression: versatiles_core::TileCompression::Uncompressed,
+			elevation: false,
 		}
 	}
 
@@ -895,6 +899,7 @@ mod tests {
 			lossless: false,
 			tile_format: TileFormat::PNG,
 			tile_compression: TileCompression::Uncompressed,
+			elevation: false,
 		};
 
 		composite_batches(&[], &[src_path], &config, &sink, &runtime)
@@ -916,6 +921,7 @@ mod tests {
 			lossless: false,
 			tile_format: TileFormat::PNG,
 			tile_compression: TileCompression::Uncompressed,
+			elevation: false,
 		};
 
 		// Use a tile coord that exists in both sources (level 4 is "full" in MockReader)
@@ -951,6 +957,7 @@ mod tests {
 			lossless: false,
 			tile_format: TileFormat::PNG,
 			tile_compression: TileCompression::Uncompressed,
+			elevation: false,
 		};
 
 		// Two tiles with different last-sources: tile_a ends at source 1, tile_b at source 2.

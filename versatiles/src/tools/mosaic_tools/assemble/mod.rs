@@ -45,6 +45,8 @@ struct AssembleConfig {
 	lossless: bool,
 	tile_format: TileFormat,
 	tile_compression: TileCompression,
+	/// Whether the tiles hold heights, as their `tile_schema` says.
+	elevation: bool,
 }
 
 pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {

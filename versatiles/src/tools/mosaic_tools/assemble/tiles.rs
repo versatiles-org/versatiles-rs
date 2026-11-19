@@ -18,7 +18,7 @@
 use anyhow::{Context, Result, ensure};
 use futures::StreamExt;
 use versatiles_container::{Tile, TilesRuntime};
-use versatiles_core::{Blob, ConcurrencyLimits, TileCoord, TileFormat};
+use versatiles_core::{Blob, ConcurrencyLimits, TileCoord, TileFormat, TileJSON, TileSchema};
 use versatiles_image::traits::DynamicImageTraitOperation;
 
 use super::AssembleConfig;
@@ -57,17 +57,44 @@ pub(super) fn validate_lossless(format: TileFormat, lossless: bool) -> Result<()
 	Ok(())
 }
 
+/// Whether a source's tiles hold heights, as its `tile_schema` says.
+pub(super) fn holds_elevation(tilejson: &TileJSON) -> bool {
+	tilejson.tile_schema.as_ref().is_some_and(TileSchema::is_elevation)
+}
+
+/// Refuse a source that holds heights where the first did not, or the other
+/// way round: the two are composited differently, and colours blended as
+/// heights are as wrong as heights blended as colours.
+pub(super) fn validate_source_elevation(path: &str, elevation: bool, config: &AssembleConfig) -> Result<()> {
+	let what = |elevation: bool| if elevation { "elevation" } else { "image" };
+	ensure!(
+		elevation == config.elevation,
+		"Source {path} holds {} tiles, but the first source holds {} tiles. \
+		 Check the tile_schema of both",
+		what(elevation),
+		what(config.elevation)
+	);
+	Ok(())
+}
+
 /// Composite two tiles using additive alpha blending (`base` on bottom, `top` on top).
+///
+/// Elevation tiles are blended as heights, not as colours: see
+/// [`overlay_additive_elevation`](DynamicImageTraitOperation::overlay_additive_elevation).
 ///
 /// Returns the merged tile with raw image content (no blob, no encoding),
 /// marked as `format`, the format of the inputs. Encoding is deferred to
 /// `encode_tiles_parallel` so that lossy compression is applied exactly once.
-pub(super) fn composite_two_tiles(base: Tile, top: Tile, format: TileFormat) -> Result<Tile> {
+pub(super) fn composite_two_tiles(base: Tile, top: Tile, format: TileFormat, elevation: bool) -> Result<Tile> {
 	let base_image = base.into_image()?;
 	let top_image = top.into_image()?;
 
 	let mut result = base_image;
-	result.overlay_additive(&top_image)?;
+	if elevation {
+		result.overlay_additive_elevation(&top_image)?;
+	} else {
+		result.overlay_additive(&top_image)?;
+	}
 
 	// Keep as raw image — `encode_tiles_parallel` will set quality later.
 	Tile::from_image(result, format)
@@ -185,6 +212,7 @@ mod tests {
 			lossless: false,
 			tile_format: TileFormat::WEBP,
 			tile_compression: TileCompression::Uncompressed,
+			elevation: false,
 		}
 	}
 
@@ -259,7 +287,7 @@ mod tests {
 	fn composite_two_tiles_produces_result() -> Result<()> {
 		let base = translucent_rgba_tile(128);
 		let top = translucent_rgba_tile(128);
-		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP, false)?;
 		// Result should be a tile with image content
 		let img = result.into_image()?;
 		assert_eq!(img.width(), 2);
@@ -271,7 +299,7 @@ mod tests {
 	fn composite_preserves_dimensions() -> Result<()> {
 		let base = translucent_rgba_tile(64);
 		let top = translucent_rgba_tile(200);
-		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP, false)?;
 		let img = result.into_image()?;
 		assert_eq!(img.width(), 2);
 		assert_eq!(img.height(), 2);
@@ -347,7 +375,7 @@ mod tests {
 			lossless: true,
 			..test_config()
 		};
-		let seam = composite_two_tiles(half_tile(true), half_tile(false), TileFormat::WEBP)?;
+		let seam = composite_two_tiles(half_tile(true), half_tile(false), TileFormat::WEBP, false)?;
 		let results = encode_tiles_parallel(vec![(coord(0, 0, 0), seam)], &config);
 		let (_, blob) = results.into_iter().next().unwrap()?;
 		assert_eq!(webp_chunk(&blob), *b"VP8 ");
@@ -376,6 +404,7 @@ mod tests {
 			lossless: false,
 			tile_format: TileFormat::WEBP,
 			tile_compression: TileCompression::Uncompressed,
+			elevation: false,
 		};
 
 		let tiles = vec![(coord(5, 0, 0), opaque_rgb_tile())];
@@ -403,7 +432,7 @@ mod tests {
 	fn composite_opaque_over_translucent() -> Result<()> {
 		let base = translucent_rgba_tile(128);
 		let top = opaque_rgb_tile();
-		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP, false)?;
 		let img = result.into_image()?;
 		assert_eq!(img.width(), 2);
 		assert_eq!(img.height(), 2);
@@ -414,7 +443,7 @@ mod tests {
 	fn composite_translucent_over_opaque() -> Result<()> {
 		let base = opaque_rgb_tile();
 		let top = translucent_rgba_tile(128);
-		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP, false)?;
 		let img = result.into_image()?;
 		assert_eq!(img.width(), 2);
 		assert_eq!(img.height(), 2);
@@ -425,7 +454,7 @@ mod tests {
 	fn composite_fully_transparent_over_opaque() -> Result<()> {
 		let base = opaque_rgb_tile();
 		let top = translucent_rgba_tile(0); // fully transparent
-		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP, false)?;
 		let img = result.into_image()?;
 		assert_eq!((img.width(), img.height()), (2, 2));
 		Ok(())
@@ -502,7 +531,7 @@ mod tests {
 	fn composite_two_opaque_tiles() -> Result<()> {
 		let base = opaque_rgb_tile();
 		let top = opaque_rgb_tile();
-		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP, false)?;
 		let img = result.into_image()?;
 		assert_eq!((img.width(), img.height()), (2, 2));
 		Ok(())
@@ -512,7 +541,7 @@ mod tests {
 	fn composite_result_produces_blob() -> Result<()> {
 		let base = translucent_rgba_tile(100);
 		let top = translucent_rgba_tile(100);
-		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP, false)?;
 		// The result should be producible as a blob
 		let blob = result.into_blob(&TileCompression::Uncompressed)?;
 		assert!(!blob.is_empty());
@@ -556,7 +585,7 @@ mod tests {
 		let base = Tile::from_image(base_img, TileFormat::PNG)?;
 		let top = Tile::from_image(top_img, TileFormat::PNG)?;
 
-		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP, false)?;
 		let img = result.into_image()?;
 		use versatiles_image::traits::DynamicImageTraitConvert;
 		let px = img.raw_pixel(0, 0);
@@ -569,7 +598,7 @@ mod tests {
 	#[test]
 	fn composite_result_has_the_format_it_is_given() -> Result<()> {
 		for format in [TileFormat::WEBP, TileFormat::PNG, TileFormat::AVIF] {
-			let result = composite_two_tiles(translucent_rgba_tile(128), translucent_rgba_tile(64), format)?;
+			let result = composite_two_tiles(translucent_rgba_tile(128), translucent_rgba_tile(64), format, false)?;
 			assert_eq!(result.format(), format);
 		}
 		Ok(())
@@ -596,7 +625,7 @@ mod tests {
 				tile_format: format,
 				..test_config()
 			};
-			let seam = composite_two_tiles(half_tile(true), half_tile(false), format)?;
+			let seam = composite_two_tiles(half_tile(true), half_tile(false), format, false)?;
 			let tiles = vec![
 				(coord(0, 0, 0), seam),
 				(coord(1, 0, 0), half_tile(true)),
@@ -625,6 +654,76 @@ mod tests {
 		Ok(())
 	}
 
+	/// A 1×1 terrain RGB tile with the given raw height and coverage.
+	fn elevation_tile(raw: u32, alpha: u8) -> Tile {
+		let [_, red, green, blue] = raw.to_be_bytes();
+		let data = vec![red, green, blue, alpha];
+		let img = DynamicImage::ImageRgba8(ImageBuffer::from_vec(1, 1, data).unwrap());
+		Tile::from_image(img, TileFormat::PNG).unwrap()
+	}
+
+	/// At a seam between two DEMs, a pixel each covers in part is the mean of
+	/// the two heights, not a mix of their bytes.
+	#[test]
+	fn elevation_tiles_are_composited_as_heights() -> Result<()> {
+		let (low, high) = (0x01_00_FF, 0x01_01_00);
+		let raw = |tile: Tile| -> Result<u32> {
+			let px = tile.into_image()?.to_rgba8().get_pixel(0, 0).0;
+			Ok((u32::from(px[0]) << 16) | (u32::from(px[1]) << 8) | u32::from(px[2]))
+		};
+
+		let as_heights = composite_two_tiles(
+			elevation_tile(low, 127),
+			elevation_tile(high, 128),
+			TileFormat::PNG,
+			true,
+		)?;
+		assert!((low..=high).contains(&raw(as_heights)?));
+
+		let as_colours = composite_two_tiles(
+			elevation_tile(low, 127),
+			elevation_tile(high, 128),
+			TileFormat::PNG,
+			false,
+		)?;
+		assert!(
+			!(low..=high).contains(&raw(as_colours)?),
+			"blending the bytes is what goes wrong"
+		);
+		Ok(())
+	}
+
+	#[test]
+	fn holds_elevation_follows_the_tile_schema() {
+		let with = |schema: Option<TileSchema>| {
+			holds_elevation(&TileJSON {
+				tile_schema: schema,
+				..TileJSON::default()
+			})
+		};
+		assert!(with(Some(TileSchema::RasterDEMMapbox)));
+		assert!(with(Some(TileSchema::RasterDEMTerrarium)));
+		assert!(!with(Some(TileSchema::RasterRGBA)));
+		assert!(!with(None));
+	}
+
+	#[test]
+	fn sources_must_agree_on_holding_heights() {
+		let config = AssembleConfig {
+			elevation: true,
+			..test_config()
+		};
+		assert!(validate_source_elevation("dem.versatiles", true, &config).is_ok());
+		let message = validate_source_elevation("photo.versatiles", false, &config)
+			.unwrap_err()
+			.to_string();
+		assert!(message.contains("photo.versatiles"), "{message}");
+		assert!(
+			message.contains("image tiles") && message.contains("elevation tiles"),
+			"{message}"
+		);
+	}
+
 	#[test]
 	fn lossless_is_refused_for_formats_that_cannot_keep_it() {
 		for format in [TileFormat::WEBP, TileFormat::PNG, TileFormat::AVIF, TileFormat::JPG] {
@@ -644,7 +743,7 @@ mod tests {
 	fn composite_transparent_over_transparent() -> Result<()> {
 		let base = translucent_rgba_tile(0);
 		let top = translucent_rgba_tile(0);
-		let result = composite_two_tiles(base, top, TileFormat::WEBP)?;
+		let result = composite_two_tiles(base, top, TileFormat::WEBP, false)?;
 		let img = result.into_image()?;
 		use versatiles_image::traits::DynamicImageTraitConvert;
 		// Both fully transparent → result should be transparent
@@ -658,7 +757,7 @@ mod tests {
 		// Encode tiles that went through composite (the real pipeline path)
 		let base = translucent_rgba_tile(128);
 		let top = translucent_rgba_tile(64);
-		let composited = composite_two_tiles(base, top, TileFormat::WEBP)?;
+		let composited = composite_two_tiles(base, top, TileFormat::WEBP, false)?;
 
 		let config = test_config();
 		let tiles = vec![(coord(3, 1, 2), composited)];
@@ -678,6 +777,7 @@ mod tests {
 			lossless: false,
 			tile_format: TileFormat::WEBP,
 			tile_compression: TileCompression::Uncompressed,
+			elevation: false,
 		};
 
 		let tiles = vec![(coord(3, 0, 0), opaque_rgb_tile())];
@@ -711,6 +811,7 @@ mod tests {
 			lossless: false,
 			tile_format: TileFormat::WEBP,
 			tile_compression: TileCompression::Uncompressed,
+			elevation: false,
 		};
 
 		let tiles = vec![

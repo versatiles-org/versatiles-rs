@@ -24,7 +24,8 @@ Each output tile is made from the tiles the inputs have at its coordinate:
   * Empty tiles are skipped.
 
 All inputs must have the same tile format and compression, and the output
-gets them too.
+gets them too. Elevation tiles, whose tile_schema is dem/*, are composited
+as heights rather than as colours, and all inputs must agree on that.
 
 Overlapping inputs are not an error, but an overlap is resolved per tile as
 above, not per pixel. To blend overlapping containers pixel by pixel, use

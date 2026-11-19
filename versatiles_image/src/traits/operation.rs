@@ -99,6 +99,112 @@ pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 	/// ```
 	/// Ensures the images have identical dimensions. Returns an error if sizes differ.
 	fn overlay_additive(&mut self, top: &DynamicImage) -> Result<()>;
+
+	/// Composite `top` onto `self` like [`overlay_additive`](Self::overlay_additive),
+	/// for terrain RGB tiles.
+	///
+	/// The red, green and blue bytes of a pixel are one 24-bit number, so they
+	/// are blended as that number rather than one by one: blending the bytes
+	/// separately mixes the high byte of one height with the low byte of
+	/// another. Mapbox and Terrarium are both linear in that number, so the
+	/// result is the alpha-weighted mean of the two heights.
+	fn overlay_additive_elevation(&mut self, top: &DynamicImage) -> Result<()>;
+}
+
+/// Alpha and weights of an additive blend: `alpha_out` and the base's weight,
+/// or `None` where neither pixel has any coverage.
+///
+/// Near-opaque sums snap to fully opaque, to make up for rounding at a seam.
+fn additive_weights(alpha_base: u8, alpha_top: u8) -> Option<(u32, u32)> {
+	let alpha_top = u32::from(alpha_top);
+	let alpha_sum = u32::from(alpha_base) + alpha_top;
+	if alpha_sum == 0 {
+		return None;
+	}
+	let alpha_out = if alpha_sum >= 250 { 255 } else { alpha_sum };
+	// The base gets what the top leaves, so that the weights sum to `alpha_out`.
+	Some((alpha_out, alpha_out - alpha_top))
+}
+
+#[expect(
+	clippy::cast_possible_truncation,
+	reason = "a weighted mean of bytes with weights summing to `alpha_out` is a byte, and `alpha_out` is at most 255"
+)]
+fn blend_channels(base: [u8; 4], top: [u8; 4]) -> [u8; 4] {
+	let Some((alpha_out, weight_base)) = additive_weights(base[3], top[3]) else {
+		return [0, 0, 0, 0];
+	};
+	let weight_top = u32::from(top[3]);
+	let mix =
+		|b: u8, t: u8| ((u32::from(b) * weight_base + u32::from(t) * weight_top + alpha_out / 2) / alpha_out) as u8;
+	[
+		mix(base[0], top[0]),
+		mix(base[1], top[1]),
+		mix(base[2], top[2]),
+		alpha_out as u8,
+	]
+}
+
+#[expect(
+	clippy::cast_possible_truncation,
+	reason = "a weighted mean of 24-bit values with weights summing to `alpha_out` is a 24-bit value, \
+	          split into bytes by masking, and `alpha_out` is at most 255"
+)]
+fn blend_elevation(base: [u8; 4], top: [u8; 4]) -> [u8; 4] {
+	let Some((alpha_out, weight_base)) = additive_weights(base[3], top[3]) else {
+		return [0, 0, 0, 0];
+	};
+	let weight_top = u32::from(top[3]);
+	let raw = |p: [u8; 4]| (u32::from(p[0]) << 16) | (u32::from(p[1]) << 8) | u32::from(p[2]);
+	// 24 bits times a weight of at most 255, twice, fits in 33 bits.
+	let mixed = (u64::from(raw(base)) * u64::from(weight_base)
+		+ u64::from(raw(top)) * u64::from(weight_top)
+		+ u64::from(alpha_out / 2))
+		/ u64::from(alpha_out);
+	[(mixed >> 16) as u8, (mixed >> 8) as u8, mixed as u8, alpha_out as u8]
+}
+
+/// Shared body of the additive overlays, with the blend of one pixel.
+fn overlay_additive_with(
+	base: &mut DynamicImage,
+	top: &DynamicImage,
+	blend: fn([u8; 4], [u8; 4]) -> [u8; 4],
+) -> Result<()> {
+	base.ensure_same_size(top)?;
+
+	// RGB top is fully opaque and replaces base entirely
+	if let DynamicImage::ImageRgb8(top_img) = top {
+		*base = DynamicImage::ImageRgb8(top_img.clone());
+		return Ok(());
+	}
+
+	let DynamicImage::ImageRgba8(top_img) = top else {
+		bail!(
+			"overlay_additive: unsupported top image type {:?}, expected RGB8 or RGBA8",
+			top.color()
+		);
+	};
+
+	match base {
+		DynamicImage::ImageRgba8(base_img) => {
+			for (base_px, top_px) in base_img.pixels_mut().zip(top_img.pixels()) {
+				*base_px = image::Rgba(blend(base_px.0, top_px.0));
+			}
+		}
+		DynamicImage::ImageRgb8(base_img) => {
+			for (base_px, top_px) in base_img.pixels_mut().zip(top_img.pixels()) {
+				let p = blend([base_px.0[0], base_px.0[1], base_px.0[2], 255], top_px.0);
+				*base_px = image::Rgb([p[0], p[1], p[2]]);
+			}
+		}
+		_ => {
+			bail!(
+				"overlay_additive: unsupported base image type {:?}, expected RGB8 or RGBA8",
+				base.color()
+			);
+		}
+	}
+	Ok(())
 }
 
 impl DynamicImageTraitOperation for DynamicImage
@@ -273,66 +379,12 @@ where
 		Ok(())
 	}
 
-	#[expect(
-		clippy::cast_possible_truncation,
-		reason = "`.min(255)` bounds each channel, and `a_out` is snapped to at most 255"
-	)]
 	fn overlay_additive(&mut self, top: &DynamicImage) -> Result<()> {
-		self.ensure_same_size(top)?;
+		overlay_additive_with(self, top, blend_channels)
+	}
 
-		// Helper: blend a single pixel given base (r,g,b,a) and top (r,g,b,a)
-		fn blend(base_px: &[u8; 4], top_px: &[u8; 4]) -> [u8; 4] {
-			let a_b = u16::from(base_px[3]);
-			let a_t = u16::from(top_px[3]);
-			let a_sum = a_b + a_t;
-			if a_sum == 0 {
-				return [0, 0, 0, 0];
-			}
-
-			// Snap near-opaque alpha to fully opaque to compensate for rounding
-			let a_out = if a_sum >= 250 { 255 } else { a_sum };
-			let a_b = a_out - a_t; // adjust base alpha to match snapped output
-			[
-				((u16::from(base_px[0]) * a_b + u16::from(top_px[0]) * a_t + a_out / 2) / a_out).min(255) as u8,
-				((u16::from(base_px[1]) * a_b + u16::from(top_px[1]) * a_t + a_out / 2) / a_out).min(255) as u8,
-				((u16::from(base_px[2]) * a_b + u16::from(top_px[2]) * a_t + a_out / 2) / a_out).min(255) as u8,
-				a_out as u8,
-			]
-		}
-
-		// RGB top is fully opaque and replaces base entirely
-		if let DynamicImage::ImageRgb8(top_img) = top {
-			*self = DynamicImage::ImageRgb8(top_img.clone());
-			return Ok(());
-		}
-
-		let DynamicImage::ImageRgba8(top_img) = top else {
-			bail!(
-				"overlay_additive: unsupported top image type {:?}, expected RGB8 or RGBA8",
-				top.color()
-			);
-		};
-
-		match self {
-			DynamicImage::ImageRgba8(base_img) => {
-				for (base_px, top_px) in base_img.pixels_mut().zip(top_img.pixels()) {
-					*base_px = image::Rgba(blend(&base_px.0, &top_px.0));
-				}
-			}
-			DynamicImage::ImageRgb8(base_img) => {
-				for (base_px, top_px) in base_img.pixels_mut().zip(top_img.pixels()) {
-					let p = blend(&[base_px.0[0], base_px.0[1], base_px.0[2], 255], &top_px.0);
-					*base_px = image::Rgb([p[0], p[1], p[2]]);
-				}
-			}
-			_ => {
-				bail!(
-					"overlay_additive: unsupported base image type {:?}, expected RGB8 or RGBA8",
-					self.color()
-				);
-			}
-		}
-		Ok(())
+	fn overlay_additive_elevation(&mut self, top: &DynamicImage) -> Result<()> {
+		overlay_additive_with(self, top, blend_elevation)
 	}
 }
 
@@ -646,6 +698,65 @@ mod tests {
 		base.overlay_additive(&top).unwrap();
 		let px = base.get_pixel(0, 0).0;
 		assert_eq!(px[3], 255);
+	}
+
+	fn raw(px: [u8; 4]) -> u32 {
+		(u32::from(px[0]) << 16) | (u32::from(px[1]) << 8) | u32::from(px[2])
+	}
+
+	fn rgba(raw: u32, alpha: u8) -> Vec<u8> {
+		let [_, red, green, blue] = raw.to_be_bytes();
+		vec![red, green, blue, alpha]
+	}
+
+	/// Two heights a step apart, at either side of a byte boundary: blended byte
+	/// by byte, the low byte of one meets the high byte of the other.
+	#[test]
+	fn overlay_additive_elevation_blends_the_height_not_the_bytes() {
+		let (low, high) = (0x01_00_FF, 0x01_01_00);
+		let mut base = DynamicImage::from_raw(1, 1, rgba(low, 127)).unwrap();
+		let top = DynamicImage::from_raw(1, 1, rgba(high, 128)).unwrap();
+
+		let mut by_bytes = base.clone();
+		by_bytes.overlay_additive(&top).unwrap();
+		let wrong = raw(by_bytes.get_pixel(0, 0).0);
+		assert!(
+			!(low..=high).contains(&wrong),
+			"byte by byte gives {wrong:#x}, not between the two"
+		);
+
+		base.overlay_additive_elevation(&top).unwrap();
+		let px = base.get_pixel(0, 0).0;
+		assert_eq!(px[3], 255);
+		assert!((low..=high).contains(&raw(px)), "{:#x}", raw(px));
+	}
+
+	/// Where only one side covers a pixel, its height is kept exactly.
+	#[test]
+	fn overlay_additive_elevation_keeps_a_height_without_a_partner() {
+		let height = 0x01_8A_88; // 100 m in Mapbox terrain RGB
+		for (base_px, top_px) in [(rgba(height, 255), rgba(0, 0)), (rgba(0, 0), rgba(height, 255))] {
+			let mut base = DynamicImage::from_raw(1, 1, base_px).unwrap();
+			let top = DynamicImage::from_raw(1, 1, top_px).unwrap();
+			base.overlay_additive_elevation(&top).unwrap();
+			assert_eq!(base.get_pixel(0, 0).0.to_vec(), rgba(height, 255));
+		}
+
+		let mut base = DynamicImage::from_raw(1, 1, rgba(height, 0)).unwrap();
+		base
+			.overlay_additive_elevation(&DynamicImage::from_raw(1, 1, rgba(height, 0)).unwrap())
+			.unwrap();
+		assert_eq!(base.get_pixel(0, 0).0[3], 0, "no coverage on either side");
+	}
+
+	#[test]
+	fn overlay_additive_elevation_weights_by_coverage() {
+		// A quarter of 1000 and three quarters of 2000 is 1750, with a coverage
+		// of 200 that stays below the snap to opaque.
+		let mut base = DynamicImage::from_raw(1, 1, rgba(1000, 50)).unwrap();
+		let top = DynamicImage::from_raw(1, 1, rgba(2000, 150)).unwrap();
+		base.overlay_additive_elevation(&top).unwrap();
+		assert_eq!(base.get_pixel(0, 0).0.to_vec(), rgba(1750, 200));
 	}
 
 	#[test]
