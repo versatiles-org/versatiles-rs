@@ -152,6 +152,7 @@ fn effective_config(arguments: &Subcommand) -> Result<Config> {
 				src: DataLocation::parse(filename)?,
 				prefix,
 				cache_control: None,
+				immutable: Vec::new(),
 			})
 		})
 		.collect::<Result<Vec<StaticSourceConfig>>>()?;

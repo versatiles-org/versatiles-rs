@@ -11,6 +11,7 @@ use super::{
 	super::utils::Url, SourceResponse, static_source_folder::Folder, static_source_remote_folder::RemoteFolder,
 	static_source_tar::TarFile,
 };
+use crate::config::{IMMUTABLE_CACHE_CONTROL, PathPattern, StaticSourceConfig};
 
 #[async_trait]
 pub trait StaticSourceTrait: Send + Sync + Debug {
@@ -25,13 +26,18 @@ pub trait StaticSourceTrait: Send + Sync + Debug {
 pub struct StaticSource {
 	source: Arc<dyn StaticSourceTrait>,
 	prefix: Url,
-	/// `Cache-Control` sent with every file of this source.
+	/// `Cache-Control` sent with the files of this source that no `immutable`
+	/// pattern matches.
 	cache_control: Arc<str>,
+	/// Patterns of versioned paths inside the source, sent with
+	/// [`IMMUTABLE_CACHE_CONTROL`].
+	immutable: Arc<[PathPattern]>,
 }
 
 impl StaticSource {
 	/// Open the files at `location`, to be served under `prefix` with
-	/// `cache_control`.
+	/// `cache_control`, or with [`IMMUTABLE_CACHE_CONTROL`] where one of the
+	/// `immutable` patterns matches.
 	///
 	/// A `cache_control` that is no valid header value is refused here, so that
 	/// it fails when the source is mounted, not on its first request.
@@ -41,6 +47,7 @@ impl StaticSource {
 		prefix: &str,
 		follow_symlinks: bool,
 		cache_control: &str,
+		immutable: Vec<PathPattern>,
 	) -> Result<StaticSource> {
 		HeaderValue::from_str(cache_control)
 			.map_err(|e| anyhow!("invalid cache_control value {cache_control:?}: {e}"))?;
@@ -66,7 +73,21 @@ impl StaticSource {
 			},
 			prefix,
 			cache_control: Arc::from(cache_control),
+			immutable: Arc::from(immutable),
 		})
+	}
+
+	/// Open the files a `static` entry of the config names, with its `prefix`
+	/// (default `/`), `cache_control` and `immutable` patterns.
+	pub async fn from_config(config: &StaticSourceConfig, follow_symlinks: bool) -> Result<StaticSource> {
+		StaticSource::from_location(
+			&config.src,
+			config.prefix.as_deref().unwrap_or("/"),
+			follow_symlinks,
+			config.cache_control(),
+			config.immutable_patterns()?,
+		)
+		.await
 	}
 
 	#[cfg(test)]
@@ -78,8 +99,27 @@ impl StaticSource {
 		&self.prefix
 	}
 
-	/// The `Cache-Control` header sent with this source's files.
+	/// The `Cache-Control` header sent with this source's files that no
+	/// `immutable` pattern matches.
+	#[cfg(test)]
 	pub fn cache_control(&self) -> &str {
+		&self.cache_control
+	}
+
+	/// The `Cache-Control` header for the file at `url`, a request path under
+	/// this source's prefix.
+	///
+	/// The patterns are matched against the path without the prefix, decoded
+	/// segment by segment, so a pattern from a bundle's documentation works
+	/// wherever the bundle is mounted.
+	pub fn cache_control_for(&self, url: &Url) -> &str {
+		if !self.immutable.is_empty()
+			&& let Ok(path) = url.strip_prefix(&self.prefix)
+			&& let Some(segments) = path.decoded_segments()
+			&& self.immutable.iter().any(|pattern| pattern.matches(&segments))
+		{
+			return IMMUTABLE_CACHE_CONTROL;
+		}
 		&self.cache_control
 	}
 
@@ -139,13 +179,15 @@ mod tests {
 
 		let check_type = |path: PathBuf, type_name: &'static str| async move {
 			let loc = DataLocation::from(path);
-			let source = StaticSource::from_location(&loc, "", false, "no-cache").await.unwrap();
+			let source = StaticSource::from_location(&loc, "", false, "no-cache", Vec::new())
+				.await
+				.unwrap();
 			assert_eq!(source.type_name(), type_name);
 		};
 
 		let check_error = |path: PathBuf, error_should: &'static str| async move {
 			let loc = DataLocation::from(path);
-			let result = StaticSource::from_location(&loc, "", false, "no-cache").await;
+			let result = StaticSource::from_location(&loc, "", false, "no-cache", Vec::new()).await;
 			let error = result
 				.err()
 				.iter()
@@ -210,6 +252,7 @@ mod tests {
 			source: Arc::new(MockStaticSource),
 			prefix: Url::from(""),
 			cache_control: Arc::from("no-cache"),
+			immutable: Arc::from(Vec::new()),
 		};
 		let result = static_source
 			.get_data(&Url::from("exists"), &TargetCompression::from_none())
@@ -223,6 +266,7 @@ mod tests {
 			source: Arc::new(MockStaticSource),
 			prefix: Url::from(""),
 			cache_control: Arc::from("no-cache"),
+			immutable: Arc::from(Vec::new()),
 		};
 		let result = static_source
 			.get_data(&Url::from("does_not_exist"), &TargetCompression::from_none())
@@ -236,6 +280,7 @@ mod tests {
 			source: Arc::new(MockStaticSource),
 			prefix: Url::from("path/to"),
 			cache_control: Arc::from("no-cache"),
+			immutable: Arc::from(Vec::new()),
 		};
 		let result = static_source
 			.get_data(&Url::from("path/to/exists"), &TargetCompression::from_none())
@@ -252,7 +297,7 @@ mod tests {
 	async fn from_location_refuses_an_invalid_cache_control() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let loc = DataLocation::from(temp_dir.path().to_path_buf());
-		let error = StaticSource::from_location(&loc, "", false, "no-cache\n")
+		let error = StaticSource::from_location(&loc, "", false, "no-cache\n", Vec::new())
 			.await
 			.err()
 			.expect("a header value with a newline is refused");
@@ -261,8 +306,31 @@ mod tests {
 			"{error:#}"
 		);
 
-		let source = StaticSource::from_location(&loc, "", false, "public, max-age=60").await?;
+		let source = StaticSource::from_location(&loc, "", false, "public, max-age=60", Vec::new()).await?;
 		assert_eq!(source.cache_control(), "public, max-age=60");
 		Ok(())
+	}
+
+	#[test]
+	fn immutable_patterns_are_matched_without_the_prefix() {
+		let static_source = StaticSource {
+			source: Arc::new(MockStaticSource),
+			prefix: Url::from("/map/").to_dir(),
+			cache_control: Arc::from("no-cache"),
+			immutable: Arc::from(vec![PathPattern::parse("assets/lib/*@*/**").unwrap()]),
+		};
+		let header = |path: &str| static_source.cache_control_for(&Url::from(path)).to_string();
+
+		assert_eq!(
+			header("/map/assets/lib/maplibre-gl@5.6.0/maplibre-gl.js"),
+			IMMUTABLE_CACHE_CONTROL
+		);
+		// Requests arrive percent-encoded; the patterns see the decoded names.
+		assert_eq!(
+			header("/map/assets/lib/maplibre-gl%405.6.0/maplibre-gl.js"),
+			IMMUTABLE_CACHE_CONTROL
+		);
+		assert_eq!(header("/map/assets/lib/maplibre-gl/maplibre-gl.js"), "no-cache");
+		assert_eq!(header("/map/index.html"), "no-cache");
 	}
 }

@@ -560,7 +560,8 @@ Static files are sent with `Cache-Control: no-cache`, whatever
 browser that kept them for weeks would mix a new `index.html` with old scripts
 after an update. With `no-cache` it asks every time, and an unchanged file
 costs an empty `304`. Set another value per static source with
-`cache_control` in the configuration file.
+`cache_control` in the configuration file, and mark versioned paths with
+`immutable` to have them cached for a year (see "Static Content" below).
 
 **Tiles without data:**
 
@@ -916,6 +917,7 @@ static:
   - src: "./static.tar.br"
     prefix: "/"
     cache_control: "no-cache" # the default
+    immutable: ["assets/lib/*@*/**"] # versioned folders: cached for a year
 
   # Directory at custom path
   - src: "./public"
@@ -923,6 +925,17 @@ static:
 ```
 
 Supported formats: directories, `.tar`, `.tar.gz`, `.tar.br`, `.tar.zst`
+
+`immutable` lists the paths whose URL contains a version, so that their
+content never changes under that URL. Those files are sent with
+`Cache-Control: public, max-age=31536000, immutable`: a browser keeps them for
+a year and does not ask again, not even on a reload. A pattern is a path inside
+the source, without its `prefix`, so a pattern from a bundle's documentation
+works wherever the bundle is mounted. `*` matches within one path segment, and
+`**` as a whole segment matches any number of segments. Let a pattern match only
+versioned folders, `assets/lib/*@*/**` rather than `assets/lib/**`: if the
+bundle changes its layout, an outdated pattern then matches nothing, and the
+files fall back to `cache_control` instead of staying in browsers for a year.
 
 ### Complete Example
 

@@ -303,12 +303,19 @@ impl TileServer {
 	///
 	/// The files are sent with `Cache-Control: no-cache` unless `cacheControl`
 	/// says otherwise. The server's `cacheControl` option does not apply to them.
+	///
+	/// Files matching one of the `immutable` patterns, such as
+	/// `"assets/lib/*@*/**"`, are sent with
+	/// `public, max-age=31536000, immutable` instead. A pattern is a path inside
+	/// the source, without `urlPrefix`: `*` matches within one segment, `**`
+	/// across segments.
 	#[napi]
 	pub async fn add_static_source(
 		&self,
 		path: String,
 		url_prefix: Option<String>,
 		cache_control: Option<String>,
+		immutable: Option<Vec<String>>,
 	) -> Result<()> {
 		// Validate that the path exists
 		let data_location = DataLocation::try_from(path.clone()).to_napi()?;
@@ -328,7 +335,11 @@ impl TileServer {
 			src: data_location,
 			prefix: url_prefix,
 			cache_control,
+			immutable: immutable.unwrap_or_default(),
 		};
+		config
+			.immutable_patterns()
+			.map_err(|e| Error::from_reason(format!("Invalid immutable pattern: {e}")))?;
 
 		// Store the source in our list (source of truth)
 		let mut sources = self.static_sources.lock().await;
@@ -838,7 +849,7 @@ mod tests {
 
 		// Try to add a non-existent static source
 		let result = server
-			.add_static_source("/nonexistent/path".to_string(), Some("/".to_string()), None)
+			.add_static_source("/nonexistent/path".to_string(), Some("/".to_string()), None, None)
 			.await;
 
 		// Should fail because path doesn't exist
@@ -856,6 +867,7 @@ mod tests {
 			.add_static_source(
 				"../testdata/static.tar.gz".to_string(),
 				Some("/static".to_string()),
+				None,
 				None,
 			)
 			.await;
@@ -882,6 +894,7 @@ mod tests {
 				"../testdata/static.tar.gz".to_string(),
 				None,
 				Some("no-cache\n".to_string()),
+				None,
 			)
 			.await;
 		assert!(result.is_err());
@@ -894,7 +907,7 @@ mod tests {
 
 		// Add static source without specifying prefix
 		server
-			.add_static_source("../testdata/static.tar.gz".to_string(), None, None)
+			.add_static_source("../testdata/static.tar.gz".to_string(), None, None, None)
 			.await
 			.unwrap();
 
@@ -924,6 +937,7 @@ mod tests {
 			.add_static_source(
 				"../testdata/static.tar.gz".to_string(),
 				Some("/static".to_string()),
+				None,
 				None,
 			)
 			.await

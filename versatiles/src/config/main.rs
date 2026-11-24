@@ -311,6 +311,7 @@ mod tests {
 					.collect::<HashMap<String, String>>(),
 				static_sources: vec![StaticSourceConfig {
 					cache_control: Some("no-cache".to_string()),
+					immutable: vec!["assets/lib/*@*/**".to_string()],
 					..StaticSourceConfig::from(("/", "./frontend.tar"))
 				}],
 				tile_sources: vec![TileSourceConfig {

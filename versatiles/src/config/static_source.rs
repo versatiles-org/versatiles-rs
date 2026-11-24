@@ -20,6 +20,8 @@ use serde::Deserialize;
 use versatiles_container::DataLocation;
 use versatiles_derive::{ConfigDoc, context};
 
+use super::PathPattern;
+
 /// Default `Cache-Control` for static files: check with the server every time.
 ///
 /// Static files are served under fixed URLs, so any lifetime is how long a
@@ -28,6 +30,13 @@ use versatiles_derive::{ConfigDoc, context};
 /// later (versatiles-org/versatiles-frontend#96). With `no-cache` a browser
 /// asks every time, and the `ETag` turns an unchanged file into an empty `304`.
 pub const DEFAULT_STATIC_CACHE_CONTROL: &str = "no-cache";
+
+/// `Cache-Control` for the files an `immutable` pattern matches: one year.
+///
+/// Such a file's URL contains a version, so its content never changes under
+/// that URL. A browser keeps it for a year without asking, and `immutable`
+/// tells it not to ask on a reload either (#337).
+pub const IMMUTABLE_CACHE_CONTROL: &str = "public, max-age=31536000, immutable";
 
 /// Configuration entry for serving static assets.
 ///
@@ -41,6 +50,8 @@ pub const DEFAULT_STATIC_CACHE_CONTROL: &str = "no-cache";
 /// - `prefix` — Optional base URL prefix (defaults to `/` if `None`).
 /// - `cache_control` — Optional `Cache-Control` header (defaults to
 ///   [`DEFAULT_STATIC_CACHE_CONTROL`] if `None`).
+/// - `immutable` — Patterns of versioned paths, sent with
+///   [`IMMUTABLE_CACHE_CONTROL`] instead.
 ///
 /// Relative paths are resolved against the base path of the configuration file
 /// by [`StaticSourceConfig::resolve_paths`].
@@ -62,6 +73,17 @@ pub struct StaticSourceConfig {
 	/// change, so a longer value keeps old files in browsers after an update.
 	/// `server.cache_control` does not apply to static files.
 	pub cache_control: Option<String>,
+
+	#[config_demo("[\"assets/lib/*@*/**\"]")]
+	/// Optional list of path patterns for files whose path contains a version
+	/// Matching files are sent with "public, max-age=31536000, immutable"
+	/// instead of `cache_control`: their content never changes under that URL.
+	/// A pattern is a path inside this source, without `prefix`: `*` matches
+	/// within one segment, `**` across segments. Let a pattern match only
+	/// versioned folders (`assets/lib/*@*/**`, never `assets/lib/**`): an
+	/// outdated pattern then matches nothing, and files fall back to
+	/// `cache_control` instead of staying in browsers for a year.
+	pub immutable: Vec<String>,
 }
 
 impl StaticSourceConfig {
@@ -69,6 +91,14 @@ impl StaticSourceConfig {
 	#[must_use]
 	pub fn cache_control(&self) -> &str {
 		self.cache_control.as_deref().unwrap_or(DEFAULT_STATIC_CACHE_CONTROL)
+	}
+
+	/// The `immutable` patterns, parsed.
+	///
+	/// # Errors
+	/// Returns an error naming the first pattern that cannot be parsed.
+	pub fn immutable_patterns(&self) -> Result<Vec<PathPattern>> {
+		self.immutable.iter().map(|text| PathPattern::parse(text)).collect()
 	}
 
 	/// Resolve the `path` relative to a provided base directory or URL.
@@ -104,6 +134,8 @@ impl<'de> Deserialize<'de> for StaticSourceConfig {
 			pub src: String,
 			pub prefix: Option<String>,
 			pub cache_control: Option<String>,
+			#[serde(default)]
+			pub immutable: Vec<String>,
 		}
 
 		let helper = super::pair::pair_or_mapping(
@@ -112,14 +144,20 @@ impl<'de> Deserialize<'de> for StaticSourceConfig {
 				src,
 				prefix: Some(prefix),
 				cache_control: None,
+				immutable: Vec::new(),
 			},
-			"a [prefix, src] pair, or a mapping with `src` and optional `prefix` and `cache_control`",
+			"a [prefix, src] pair, or a mapping with `src` and optional `prefix`, `cache_control` and `immutable`",
 		)?;
-		Ok(StaticSourceConfig {
+		let config = StaticSourceConfig {
 			src: DataLocation::try_from(helper.src).map_err(serde::de::Error::custom)?,
 			prefix: helper.prefix,
 			cache_control: helper.cache_control,
-		})
+			immutable: helper.immutable,
+		};
+		// A bad pattern fails when the config is loaded, not when the source is
+		// mounted.
+		config.immutable_patterns().map_err(serde::de::Error::custom)?;
+		Ok(config)
 	}
 }
 
@@ -130,6 +168,7 @@ impl From<(&str, &str)> for StaticSourceConfig {
 			src: DataLocation::try_from(src).unwrap(),
 			prefix: Some(prefix.to_string()),
 			cache_control: None,
+			immutable: Vec::new(),
 		}
 	}
 }
@@ -152,5 +191,26 @@ mod tests {
 	fn cache_control_can_be_set_per_source() {
 		let config = parse("src: ./public\ncache_control: public, max-age=60");
 		assert_eq!(config.cache_control(), "public, max-age=60");
+	}
+
+	#[test]
+	fn immutable_defaults_to_none() {
+		assert_eq!(parse("src: ./public").immutable, Vec::<String>::new());
+		assert_eq!(parse(r#"["/", "./public"]"#).immutable, Vec::<String>::new());
+	}
+
+	#[test]
+	fn immutable_patterns_are_read() {
+		let config = parse("src: ./public\nimmutable: ['assets/lib/*@*/**', 'fonts/*@*/**']");
+		assert_eq!(config.immutable, ["assets/lib/*@*/**", "fonts/*@*/**"]);
+		assert_eq!(config.immutable_patterns().unwrap().len(), 2);
+	}
+
+	#[test]
+	fn a_bad_immutable_pattern_fails_when_the_config_is_loaded() {
+		let error = serde_yaml_ng::from_str::<StaticSourceConfig>("src: ./public\nimmutable: ['/assets/**']")
+			.unwrap_err()
+			.to_string();
+		assert!(error.contains("starts with '/'"), "{error}");
 	}
 }

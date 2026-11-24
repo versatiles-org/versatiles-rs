@@ -14,12 +14,14 @@
 mod cors;
 mod main;
 mod pair;
+mod path_pattern;
 mod server;
 mod static_source;
 mod tile_source;
 
 pub use cors::{CorsConfig, DEFAULT_CORS_MAX_AGE_SECONDS};
 pub use main::Config;
+pub use path_pattern::PathPattern;
 pub use server::ServerConfig;
-pub use static_source::{DEFAULT_STATIC_CACHE_CONTROL, StaticSourceConfig};
+pub use static_source::{DEFAULT_STATIC_CACHE_CONTROL, IMMUTABLE_CACHE_CONTROL, StaticSourceConfig};
 pub use tile_source::TileSourceConfig;

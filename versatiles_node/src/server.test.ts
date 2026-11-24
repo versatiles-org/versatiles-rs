@@ -333,6 +333,7 @@ describe('TileServer', () => {
 			await server.start();
 			// Added while running, to cover the hot-reload path as well.
 			await server.addStaticSource(TESTDATA_DIR, '/long', 'public, max-age=60');
+			await server.addStaticSource(TESTDATA_DIR, '/versioned', undefined, ['*.csv']);
 			baseUrl = `http://127.0.0.1:${server.port}`;
 		});
 
@@ -348,6 +349,19 @@ describe('TileServer', () => {
 		it('sends the cacheControl given to addStaticSource()', async () => {
 			const { headers } = await httpGet(`${baseUrl}/long/cities.csv`);
 			expect(headers['cache-control']).toBe('public, max-age=60');
+		});
+
+		it('sends files matching an immutable pattern for a year', async () => {
+			const csv = await httpGet(`${baseUrl}/versioned/cities.csv`);
+			expect(csv.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+			const other = await httpGet(`${baseUrl}/versioned/config1.yml`);
+			expect(other.headers['cache-control']).toBe('no-cache');
+		});
+
+		it('refuses an invalid immutable pattern', async () => {
+			await expect(server.addStaticSource(TESTDATA_DIR, '/bad', undefined, ['/cities.csv'])).rejects.toThrow(
+				/Invalid immutable pattern/,
+			);
 		});
 
 		it('refuses an invalid cacheControl', async () => {

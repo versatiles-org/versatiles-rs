@@ -132,7 +132,7 @@ pub async fn serve_static(uri: Uri, headers: HeaderMap, State(state): State<Stat
 			return ok_data(
 				result,
 				target,
-				source.cache_control(),
+				source.cache_control_for(&url),
 				headers.get(header::IF_NONE_MATCH),
 			)
 			.await;

@@ -356,6 +356,7 @@ impl TileServer {
 				src: location.clone(),
 				prefix: Some(url_prefix.to_string()),
 				cache_control: None,
+				immutable: Vec::new(),
 			})
 			.await
 	}
@@ -364,7 +365,9 @@ impl TileServer {
 	///
 	/// Mounted at the entry's `prefix` (default `/`) and sent with its
 	/// `cache_control` (default
-	/// [`DEFAULT_STATIC_CACHE_CONTROL`](crate::config::DEFAULT_STATIC_CACHE_CONTROL)).
+	/// [`DEFAULT_STATIC_CACHE_CONTROL`](crate::config::DEFAULT_STATIC_CACHE_CONTROL)),
+	/// or with [`IMMUTABLE_CACHE_CONTROL`](crate::config::IMMUTABLE_CACHE_CONTROL)
+	/// where one of its `immutable` patterns matches.
 	/// Uses read-copy-update (RCU) for lock-free hot-reload.
 	/// Can be called before or after `start()` - changes take effect immediately.
 	#[context("adding static source: {config:?}")]
@@ -372,9 +375,7 @@ impl TileServer {
 		let location = &config.src;
 		let url_prefix = config.prefix.as_deref().unwrap_or("/");
 		log::debug!("add static: {location:?}");
-		let source =
-			sources::StaticSource::from_location(location, url_prefix, self.follow_symlinks, config.cache_control())
-				.await?;
+		let source = sources::StaticSource::from_config(config, self.follow_symlinks).await?;
 		self.static_sources.rcu(|old| {
 			let mut new = (**old).clone();
 			new.push(source.clone());
@@ -1420,6 +1421,46 @@ static:
 		Ok(())
 	}
 
+	/// Files an `immutable` pattern matches get a year, on a 200 and on a 304;
+	/// the others keep the source's `cache_control` (#337).
+	#[tokio::test]
+	async fn immutable_static_files_are_cached_for_a_year() -> Result<()> {
+		use crate::config::IMMUTABLE_CACHE_CONTROL;
+		let mut config = Config::from_string(
+			r#"
+static:
+  - src: ../testdata/static.tar.gz
+    prefix: /map/
+    immutable: ["*.css"]
+"#,
+		)?;
+		config.server.ip = Some(IP.to_string());
+		config.server.port = Some(0);
+		let mut server = TileServer::from_config(config, crate::runtime::create_test_runtime()).await?;
+		server.start().await?;
+		let client = Client::new();
+		let url = |path: &str| format!("http://{IP}:{}{path}", server.port);
+
+		let css = client.get(url("/map/style.css")).send().await?;
+		assert_eq!(css.status(), 200);
+		assert_eq!(css.headers()[header::CACHE_CONTROL], IMMUTABLE_CACHE_CONTROL);
+		let etag = css.headers()[header::ETAG].clone();
+
+		let revalidated = client
+			.get(url("/map/style.css"))
+			.header(header::IF_NONE_MATCH, etag)
+			.send()
+			.await?;
+		assert_eq!(revalidated.status(), 304);
+		assert_eq!(revalidated.headers()[header::CACHE_CONTROL], IMMUTABLE_CACHE_CONTROL);
+
+		let html = client.get(url("/map/index.html")).send().await?;
+		assert_eq!(html.headers()[header::CACHE_CONTROL], "no-cache");
+
+		server.stop().await;
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn an_invalid_static_cache_control_is_refused_at_startup() -> Result<()> {
 		let mut config = Config::default();
@@ -1427,6 +1468,7 @@ static:
 			src: DataLocation::from(Path::new("../testdata/static.tar.gz")),
 			prefix: None,
 			cache_control: Some("no-cache\r\n".to_string()),
+			immutable: Vec::new(),
 		});
 		let error = TileServer::from_config(config, crate::runtime::create_test_runtime())
 			.await

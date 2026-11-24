@@ -270,7 +270,7 @@ impl ReloadHandle {
 
 			changed = true;
 			let prefix = prefix_of(cfg);
-			match StaticSource::from_location(&cfg.src, prefix, follow_symlinks, cfg.cache_control()).await {
+			match StaticSource::from_config(cfg, follow_symlinks).await {
 				Ok(source) => {
 					log::info!("reload: mounted static source at '{prefix}'");
 					mounted.push(MountedStatic {
@@ -703,6 +703,7 @@ mod tests {
 					src: DataLocation::from(Path::new("../testdata/static.tar.gz")),
 					prefix: Some("/assets/".to_string()),
 					cache_control: None,
+					immutable: Vec::new(),
 				}],
 				false,
 			)
@@ -720,6 +721,7 @@ mod tests {
 			src: DataLocation::from(Path::new("../testdata/static.tar.gz")),
 			prefix: None,
 			cache_control: None,
+			immutable: Vec::new(),
 		}];
 
 		handle.apply_static_source_diff(&config, false).await;
@@ -743,11 +745,13 @@ mod tests {
 						src: DataLocation::from(Path::new("../testdata/does_not_exist.tar")),
 						prefix: None,
 						cache_control: None,
+						immutable: Vec::new(),
 					},
 					StaticSourceConfig {
 						src: DataLocation::from(Path::new("../testdata/static.tar.gz")),
 						prefix: Some("/ok/".to_string()),
 						cache_control: None,
+						immutable: Vec::new(),
 					},
 				],
 				false,
@@ -762,6 +766,7 @@ mod tests {
 			src: DataLocation::from(src),
 			prefix: Some(prefix.to_string()),
 			cache_control: None,
+			immutable: Vec::new(),
 		}
 	}
 
@@ -781,6 +786,28 @@ mod tests {
 			.apply_static_source_diff(std::slice::from_ref(&config), false)
 			.await;
 		assert_eq!(header(&handle), "public, max-age=60");
+	}
+
+	#[tokio::test]
+	async fn changed_immutable_patterns_are_applied_on_reload() {
+		let handle = handle(PathBuf::from("unused"));
+		let mut config = static_config(Path::new("../testdata/static.tar.gz"), "/");
+		let header = |handle: &ReloadHandle| {
+			handle.static_sources.load()[0]
+				.cache_control_for(&Url::from("/style.css"))
+				.to_string()
+		};
+
+		handle
+			.apply_static_source_diff(std::slice::from_ref(&config), false)
+			.await;
+		assert_eq!(header(&handle), "no-cache");
+
+		config.immutable = vec!["*.css".to_string()];
+		handle
+			.apply_static_source_diff(std::slice::from_ref(&config), false)
+			.await;
+		assert_eq!(header(&handle), crate::config::IMMUTABLE_CACHE_CONTROL);
 	}
 
 	fn mounted_configs(handle: &ReloadHandle) -> Vec<StaticSourceConfig> {

@@ -111,6 +111,16 @@ static:
     # `server.cache_control` does not apply to static files.
     cache_control: no-cache
 
+    # Optional list of path patterns for files whose path contains a version
+    # Matching files are sent with "public, max-age=31536000, immutable"
+    # instead of `cache_control`: their content never changes under that URL.
+    # A pattern is a path inside this source, without `prefix`: `*` matches
+    # within one segment, `**` across segments. Let a pattern match only
+    # versioned folders (`assets/lib/*@*/**`, never `assets/lib/**`): an
+    # outdated pattern then matches nothing, and files fall back to
+    # `cache_control` instead of staying in browsers for a year.
+    immutable: ["assets/lib/*@*/**"]
+
 # Optional list of tile sources
 tiles:
   - # Optional name identifier for this tile source

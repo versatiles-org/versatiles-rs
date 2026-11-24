@@ -400,7 +400,7 @@ Remove a tile source.
 
 **Returns:** `Promise<boolean>` — `true` if a source with that name was removed
 
-#### `server.addStaticSource(path, urlPrefix?, cacheControl?)`
+#### `server.addStaticSource(path, urlPrefix?, cacheControl?, immutable?)`
 
 Add static file source.
 
@@ -409,6 +409,7 @@ Add static file source.
 - `path` (string): Directory or .tar file
 - `urlPrefix` (string, optional): URL prefix (default: `"/"`)
 - `cacheControl` (string, optional): `Cache-Control` header sent with these files (default: `"no-cache"`). Static URLs stay the same when the files change, so with `no-cache` a browser checks every time, and an unchanged file costs an empty `304`.
+- `immutable` (string[], optional): patterns of versioned paths, e.g. `["assets/lib/*@*/**"]`. Matching files are sent with `"public, max-age=31536000, immutable"` instead. A pattern is a path inside the source, without `urlPrefix`: `*` matches within one segment, `**` across segments. Pass `undefined` as `cacheControl` to keep its default.
 
 **Returns:** `Promise<void>`
 
