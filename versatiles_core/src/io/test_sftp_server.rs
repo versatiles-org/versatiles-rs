@@ -56,7 +56,9 @@ use std::{
 	time::Duration,
 };
 
-use russh_sftp::protocol::{Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, Status, StatusCode, Version};
+use russh_sftp::protocol::{
+	Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, SftpHandle, Status, StatusCode, Version,
+};
 use tokio::{
 	net::TcpListener,
 	sync::{Mutex, oneshot},
@@ -232,18 +234,18 @@ struct Reads {
 struct SftpHandler {
 	fs: Fs,
 	/// Open files, by handle.
-	handles: HashMap<String, String>,
+	handles: HashMap<SftpHandle, String>,
 	/// Open folders, by handle: the entries not sent yet.
-	dir_handles: HashMap<String, VecDeque<File>>,
+	dir_handles: HashMap<SftpHandle, VecDeque<File>>,
 	next_id: u64,
 	drop_flag: Arc<AtomicBool>,
 	reads: Arc<Reads>,
 }
 
 impl SftpHandler {
-	fn new_handle(&mut self) -> String {
+	fn new_handle(&mut self) -> SftpHandle {
 		self.next_id += 1;
-		format!("h{}", self.next_id)
+		SftpHandle::from(format!("h{}", self.next_id))
 	}
 }
 
@@ -316,13 +318,13 @@ impl russh_sftp::server::Handler for SftpHandler {
 		Ok(Handle { id, handle })
 	}
 
-	async fn close(&mut self, id: u32, handle: String) -> Result<Status, Self::Error> {
+	async fn close(&mut self, id: u32, handle: SftpHandle) -> Result<Status, Self::Error> {
 		self.handles.remove(&handle);
 		self.dir_handles.remove(&handle);
 		Ok(ok_status(id))
 	}
 
-	async fn read(&mut self, id: u32, handle: String, offset: u64, len: u32) -> Result<Data, Self::Error> {
+	async fn read(&mut self, id: u32, handle: SftpHandle, offset: u64, len: u32) -> Result<Data, Self::Error> {
 		if self.drop_flag.swap(false, Ordering::SeqCst) {
 			return Err(StatusCode::BadMessage);
 		}
@@ -349,7 +351,7 @@ impl russh_sftp::server::Handler for SftpHandler {
 		})
 	}
 
-	async fn write(&mut self, id: u32, handle: String, offset: u64, data: Vec<u8>) -> Result<Status, Self::Error> {
+	async fn write(&mut self, id: u32, handle: SftpHandle, offset: u64, data: Vec<u8>) -> Result<Status, Self::Error> {
 		if self.drop_flag.swap(false, Ordering::SeqCst) {
 			return Err(StatusCode::BadMessage);
 		}
@@ -390,7 +392,7 @@ impl russh_sftp::server::Handler for SftpHandler {
 		})
 	}
 
-	async fn fstat(&mut self, id: u32, handle: String) -> Result<Attrs, Self::Error> {
+	async fn fstat(&mut self, id: u32, handle: SftpHandle) -> Result<Attrs, Self::Error> {
 		let path = self.handles.get(&handle).ok_or(StatusCode::BadMessage)?.clone();
 		self.stat(id, path).await
 	}
@@ -454,7 +456,7 @@ impl russh_sftp::server::Handler for SftpHandler {
 	}
 
 	/// Up to [`READDIR_BATCH`] entries at a time, then `EOF`.
-	async fn readdir(&mut self, id: u32, handle: String) -> Result<Name, Self::Error> {
+	async fn readdir(&mut self, id: u32, handle: SftpHandle) -> Result<Name, Self::Error> {
 		let entries = self.dir_handles.get_mut(&handle).ok_or(StatusCode::BadMessage)?;
 		if entries.is_empty() {
 			return Err(StatusCode::Eof);

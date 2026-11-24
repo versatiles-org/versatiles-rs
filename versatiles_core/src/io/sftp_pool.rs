@@ -36,7 +36,7 @@ const MAX_READS_IN_FLIGHT: usize = 16;
 /// A file opened on a connection.
 struct OpenFile {
 	/// The server's handle for it.
-	handle: String,
+	handle: russh_sftp::protocol::SftpHandle,
 	/// Its size when it was opened: a reply that ends short of it was cut by
 	/// the server, not by the end of the file.
 	size: u64,
@@ -182,7 +182,7 @@ async fn read_exact(
 	while position < end {
 		while in_flight.len() < MAX_READS_IN_FLIGHT && next < end {
 			let (start, len) = (next, u32::try_from(end.saturating_sub(next).min(u64::from(*read_len)))?);
-			let handle = file.handle.as_str();
+			let handle = &file.handle;
 			in_flight.push_back(async move { (start, len, sftp.read(handle, start, len).await) });
 			// At most `end`, since `len` is at most what is left of the range.
 			next = next.saturating_add(u64::from(len));

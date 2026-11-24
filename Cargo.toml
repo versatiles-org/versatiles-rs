@@ -181,7 +181,7 @@ overflow-checks = true
 
 [workspace.dependencies]
 # Core dependencies
-anyhow = { version = "1.0.104", default-features = false, features = ["std"] }
+anyhow = { version = "1.0.105", default-features = false, features = ["std"] }
 async-trait = { version = "0.1.92", default-features = false }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
 enumset = { version = "1.1.15", default-features = false }
@@ -191,7 +191,7 @@ libc = "0.2.191"
 log = { version = "0.4.35", default-features = false }
 num_cpus = { version = "1.17.0", default-features = false }
 percent-encoding = { version = "2.3.2", default-features = false }
-regex = { version = "1.13.1", default-features = false, features = [
+regex = { version = "1.13.2", default-features = false, features = [
 	"std",
 	"unicode-case",
 	"unicode-perl",
@@ -201,10 +201,10 @@ serde_json = { version = "1.0.154", default-features = false, features = ["std"]
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
-clap = { version = "4.6.7", features = ["default", "derive", "wrap_help"] }
+clap = { version = "4.6.9", features = ["default", "derive", "wrap_help"] }
 # No `humantime`: both loggers install a custom `format` that never prints a
 # timestamp, so the feature only pulled in `jiff` (~5 s of every clean build).
-env_logger = { version = "0.11.11", default-features = false, features = [
+env_logger = { version = "0.11.12", default-features = false, features = [
 	"auto-color",
 	"regex",
 ] }
@@ -233,7 +233,7 @@ imageproc = { version = "0.27.0", default-features = false }
 # Geometry dependencies
 geo = { version = "0.33.1", default-features = false }
 geo-types = { version = "0.7.20" }
-mlt-core = { version = "0.22.2", default-features = false }
+mlt-core = { version = "0.23.0", default-features = false }
 rstar = { version = "0.14.0", default-features = false }
 
 # Utility dependencies
@@ -250,7 +250,7 @@ approx = { version = "0.5.1", default-features = false, features = ["std"] }
 assert_fs = "1.1.4"
 criterion = "0.8.2"
 pretty_assertions = "1.4.1"
-rstest = { version = "0.28.0", default-features = false }
+rstest = { version = "0.29.0", default-features = false }
 tempfile = "3.27.0"
 
 versatiles = { version = "5.13.0", path = "versatiles", default-features = false }

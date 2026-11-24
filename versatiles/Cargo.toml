@@ -41,7 +41,7 @@ reqwest = { workspace = true, optional = true }
 env_logger = { workspace = true, optional = true }
 futures.workspace = true
 glob = { version = "0.3", default-features = false, optional = true }
-hyper = { version = "1.12.0", default-features = false, optional = true }
+hyper = { version = "1.13.0", default-features = false, optional = true }
 hyper-util = { version = "0.1.21", default-features = false, optional = true, features = [
 	"server-auto",
 	"server-graceful",
