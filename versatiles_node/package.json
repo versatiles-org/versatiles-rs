@@ -97,9 +97,9 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@napi-rs/cli": "^3.10.12",
+    "@napi-rs/cli": "^3.11.1",
     "@types/node": "^26.6.6",
-    "@vitest/ui": "^5.1.0",
+    "@vitest/ui": "^5.1.1",
     "chalk": "^6.0.1",
     "eslint": "^10.15.0",
     "eslint-config-prettier": "^10.1.8",
@@ -108,8 +108,8 @@
     "tsx": "^4.23.15",
     "typedoc": "^0.28.20",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.72.2",
-    "vitest": "^5.1.0"
+    "typescript-eslint": "^8.74.0",
+    "vitest": "^5.1.1"
   },
   "optionalDependencies": {
     "@versatiles/versatiles-rs-darwin-arm64": "5.13.0",
