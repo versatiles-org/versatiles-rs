@@ -45,7 +45,7 @@ use super::{
 	reload::{MountedStatic, ReloadHandle},
 	routes, sources,
 };
-use crate::config::{Config, TileSourceConfig};
+use crate::config::{Config, StaticSourceConfig, TileSourceConfig};
 
 /// How long [`TileServer::stop`] waits for requests in flight to finish.
 ///
@@ -99,8 +99,9 @@ pub struct TileServer {
 	connection_limits: ConnectionLimits,
 	/// If true, prefer faster (lower ratio) recompression when negotiating encodings.
 	minimal_recompression: bool,
-	/// `Cache-Control` sent with every served tile and static file. Validated
-	/// when the server is built, so a malformed value fails at startup.
+	/// `Cache-Control` sent with every served tile and `tiles.json`. Validated
+	/// when the server is built, so a malformed value fails at startup. Static
+	/// sources carry their own.
 	cache_control: Arc<str>,
 	/// Whether `/tiles/index.json`, the list of tile sources, is left out.
 	/// `/status` is served either way.
@@ -202,9 +203,7 @@ impl TileServer {
 		}
 
 		for static_config in &config.static_sources {
-			server
-				.add_static_source_from_location(&static_config.src, static_config.prefix.as_deref().unwrap_or("/"))
-				.await?;
+			server.add_static_source_config(static_config).await?;
 		}
 
 		// Nothing else has been mounted yet, so configs and sources line up.
@@ -347,10 +346,35 @@ impl TileServer {
 	/// Accepts a local path (directory or tar archive) or a remote URL pointing
 	/// to a tar archive. Uses read-copy-update (RCU) for lock-free hot-reload.
 	/// Can be called before or after `start()` - changes take effect immediately.
-	#[context("adding static source from location: location={location:?}, url_prefix='{url_prefix}'")]
+	///
+	/// The files are sent with
+	/// [`DEFAULT_STATIC_CACHE_CONTROL`](crate::config::DEFAULT_STATIC_CACHE_CONTROL);
+	/// [`add_static_source_config`](Self::add_static_source_config) takes another.
 	pub async fn add_static_source_from_location(&mut self, location: &DataLocation, url_prefix: &str) -> Result<()> {
+		self
+			.add_static_source_config(&StaticSourceConfig {
+				src: location.clone(),
+				prefix: Some(url_prefix.to_string()),
+				cache_control: None,
+			})
+			.await
+	}
+
+	/// Register a static file source given as a `static` entry of the config.
+	///
+	/// Mounted at the entry's `prefix` (default `/`) and sent with its
+	/// `cache_control` (default
+	/// [`DEFAULT_STATIC_CACHE_CONTROL`](crate::config::DEFAULT_STATIC_CACHE_CONTROL)).
+	/// Uses read-copy-update (RCU) for lock-free hot-reload.
+	/// Can be called before or after `start()` - changes take effect immediately.
+	#[context("adding static source: {config:?}")]
+	pub async fn add_static_source_config(&mut self, config: &StaticSourceConfig) -> Result<()> {
+		let location = &config.src;
+		let url_prefix = config.prefix.as_deref().unwrap_or("/");
 		log::debug!("add static: {location:?}");
-		let source = sources::StaticSource::from_location(location, url_prefix, self.follow_symlinks).await?;
+		let source =
+			sources::StaticSource::from_location(location, url_prefix, self.follow_symlinks, config.cache_control())
+				.await?;
 		self.static_sources.rcu(|old| {
 			let mut new = (**old).clone();
 			new.push(source.clone());
@@ -550,12 +574,7 @@ impl TileServer {
 
 	/// Helper: delegate to `routes::add_static_sources_to_app` to attach static endpoints.
 	fn add_static_sources_to_app(&self, app: Router) -> Router {
-		routes::add_static_sources_to_app(
-			app,
-			Arc::clone(&self.static_sources),
-			self.minimal_recompression,
-			Arc::clone(&self.cache_control),
-		)
+		routes::add_static_sources_to_app(app, Arc::clone(&self.static_sources), self.minimal_recompression)
 	}
 
 	/// Helper: delegate to `routes::add_api_to_app` to attach small JSON API endpoints.
@@ -1362,6 +1381,61 @@ mod tests {
 		test_request("/missing.txt", 404, "text/plain", "Not Found").await;
 
 		server.stop().await;
+		Ok(())
+	}
+
+	/// Static files keep their own `Cache-Control`: `no-cache` unless their
+	/// `static` entry says otherwise, whatever `server.cache_control` says
+	/// (versatiles-org/versatiles-frontend#96).
+	#[tokio::test]
+	async fn static_sources_send_their_own_cache_control() -> Result<()> {
+		let mut config = Config::from_string(
+			r#"
+server:
+  cache_control: "public, max-age=3600"
+static:
+  - src: ../testdata/static.tar.gz
+  - src: ../testdata/static.tar.gz
+    prefix: /long/
+    cache_control: "public, max-age=60"
+"#,
+		)?;
+		config.server.ip = Some(IP.to_string());
+		config.server.port = Some(0);
+		let mut server = TileServer::from_config(config, crate::runtime::create_test_runtime()).await?;
+		server.start().await?;
+
+		let header = |path: &str| {
+			let url = format!("http://{IP}:{}{path}", server.port);
+			async move {
+				let response = reqwest::get(&url).await.unwrap();
+				assert_eq!(response.status(), 200, "{url}");
+				response.headers()[header::CACHE_CONTROL].to_str().unwrap().to_string()
+			}
+		};
+		assert_eq!(header("/index.html").await, "no-cache");
+		assert_eq!(header("/long/index.html").await, "public, max-age=60");
+
+		server.stop().await;
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn an_invalid_static_cache_control_is_refused_at_startup() -> Result<()> {
+		let mut config = Config::default();
+		config.static_sources.push(StaticSourceConfig {
+			src: DataLocation::from(Path::new("../testdata/static.tar.gz")),
+			prefix: None,
+			cache_control: Some("no-cache\r\n".to_string()),
+		});
+		let error = TileServer::from_config(config, crate::runtime::create_test_runtime())
+			.await
+			.err()
+			.expect("a header value with a line break is refused");
+		assert!(
+			format!("{error:#}").contains("invalid cache_control value"),
+			"{error:#}"
+		);
 		Ok(())
 	}
 

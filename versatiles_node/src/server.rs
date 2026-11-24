@@ -26,9 +26,10 @@ use std::{
 use anyhow::Context;
 use napi::{bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
+use reqwest::header::HeaderValue;
 use tokio::sync::Mutex;
 use versatiles::{
-	config::Config,
+	config::{Config, StaticSourceConfig},
 	server::{TileServer as RustTileServer, Url},
 };
 use versatiles_container::{DataLocation, TileSource as RustTileSource, TilesRuntime};
@@ -39,7 +40,7 @@ use crate::{
 
 // Type aliases for complex types
 type TileSourceList = Mutex<HashMap<String, Arc<dyn RustTileSource>>>; // Map of name -> TileSource
-type StaticSourceList = Mutex<Vec<(String, Option<String>)>>; // Vec of (path, url_prefix)
+type StaticSourceList = Mutex<Vec<StaticSourceConfig>>; // in the order they were added
 
 /// A threadsafe function that is never called. Holding one keeps Node's event
 /// loop alive, and dropping it lets the loop end; dropping is allowed on any
@@ -158,7 +159,7 @@ pub struct TileServer {
 	cache_control: Option<String>,
 	// Track accumulated sources to rebuild config on start
 	tile_sources: TileSourceList,     // Map of name -> TileSource
-	static_sources: StaticSourceList, // Vec of (path, url_prefix)
+	static_sources: StaticSourceList, // Vec of static source configs
 	event_loop: SharedHold,
 }
 
@@ -299,10 +300,16 @@ impl TileServer {
 	///
 	/// Serves static files from a path (can be a .tar or directory)
 	/// Changes take effect immediately without requiring a restart (hot reload).
+	///
+	/// The files are sent with `Cache-Control: no-cache` unless `cacheControl`
+	/// says otherwise. The server's `cacheControl` option does not apply to them.
 	#[napi]
-	pub async fn add_static_source(&self, path: String, url_prefix: Option<String>) -> Result<()> {
-		let prefix = url_prefix.clone().unwrap_or_else(|| "/".to_string());
-
+	pub async fn add_static_source(
+		&self,
+		path: String,
+		url_prefix: Option<String>,
+		cache_control: Option<String>,
+	) -> Result<()> {
 		// Validate that the path exists
 		let data_location = DataLocation::try_from(path.clone()).to_napi()?;
 		let path_buf = napi_result!(data_location.as_path())?;
@@ -310,15 +317,28 @@ impl TileServer {
 			return Err(Error::from_reason(format!("Static source path does not exist: {path}")));
 		}
 
+		// Refused here rather than at `start()`, where it would fail the whole
+		// server and stay in the list.
+		if let Some(value) = &cache_control {
+			HeaderValue::from_str(value)
+				.map_err(|e| Error::from_reason(format!("Invalid cacheControl value {value:?}: {e}")))?;
+		}
+
+		let config = StaticSourceConfig {
+			src: data_location,
+			prefix: url_prefix,
+			cache_control,
+		};
+
 		// Store the source in our list (source of truth)
 		let mut sources = self.static_sources.lock().await;
-		sources.push((path.clone(), url_prefix.clone()));
+		sources.push(config.clone());
 		drop(sources);
 
 		// If server is running, add the source directly for hot reload
 		let mut server_lock = self.inner.lock().await;
 		if let Some(server) = server_lock.as_mut() {
-			napi_result!(server.add_static_source(path_buf, &prefix).await)?;
+			napi_result!(server.add_static_source_config(&config).await)?;
 		}
 
 		Ok(())
@@ -336,7 +356,7 @@ impl TileServer {
 		let target = Url::from(url_prefix.as_str()).to_dir();
 		let mut sources = self.static_sources.lock().await;
 		let initial_len = sources.len();
-		sources.retain(|(_, p)| Url::from(p.as_deref().unwrap_or("/")).to_dir() != target);
+		sources.retain(|s| Url::from(s.prefix.as_deref().unwrap_or("/")).to_dir() != target);
 		let was_removed = sources.len() < initial_len;
 		drop(sources);
 
@@ -397,14 +417,7 @@ impl TileServer {
 
 		// Add all static sources to config
 		let static_sources = self.static_sources.lock().await;
-		for (path, url_prefix) in static_sources.iter() {
-			use versatiles::config::StaticSourceConfig;
-			let data_location = DataLocation::try_from(path.clone()).to_napi()?;
-			config.static_sources.push(StaticSourceConfig {
-				src: data_location,
-				prefix: url_prefix.clone(),
-			});
-		}
+		config.static_sources.extend(static_sources.iter().cloned());
 
 		let mut server = napi_result!(RustTileServer::from_config(config, self.runtime.clone()).await)?;
 
@@ -825,7 +838,7 @@ mod tests {
 
 		// Try to add a non-existent static source
 		let result = server
-			.add_static_source("/nonexistent/path".to_string(), Some("/".to_string()))
+			.add_static_source("/nonexistent/path".to_string(), Some("/".to_string()), None)
 			.await;
 
 		// Should fail because path doesn't exist
@@ -840,7 +853,11 @@ mod tests {
 
 		// Use a real test file
 		let result = server
-			.add_static_source("../testdata/static.tar.gz".to_string(), Some("/static".to_string()))
+			.add_static_source(
+				"../testdata/static.tar.gz".to_string(),
+				Some("/static".to_string()),
+				None,
+			)
 			.await;
 
 		// Should succeed
@@ -849,8 +866,26 @@ mod tests {
 		// Verify it was added to the list
 		let sources = server.static_sources.lock().await;
 		assert_eq!(sources.len(), 1);
-		assert_eq!(sources[0].0, "../testdata/static.tar.gz");
-		assert_eq!(sources[0].1, Some("/static".to_string()));
+		assert_eq!(
+			sources[0].src,
+			DataLocation::try_from("../testdata/static.tar.gz").unwrap()
+		);
+		assert_eq!(sources[0].prefix, Some("/static".to_string()));
+		assert_eq!(sources[0].cache_control, None);
+	}
+
+	#[tokio::test]
+	async fn test_add_static_source_refuses_an_invalid_cache_control() {
+		let server = TileServer::new(None).unwrap();
+		let result = server
+			.add_static_source(
+				"../testdata/static.tar.gz".to_string(),
+				None,
+				Some("no-cache\n".to_string()),
+			)
+			.await;
+		assert!(result.is_err());
+		assert!(server.static_sources.lock().await.is_empty());
 	}
 
 	#[tokio::test]
@@ -859,14 +894,14 @@ mod tests {
 
 		// Add static source without specifying prefix
 		server
-			.add_static_source("../testdata/static.tar.gz".to_string(), None)
+			.add_static_source("../testdata/static.tar.gz".to_string(), None, None)
 			.await
 			.unwrap();
 
 		// Verify default prefix was used
 		let sources = server.static_sources.lock().await;
 		assert_eq!(sources.len(), 1);
-		assert_eq!(sources[0].1, None);
+		assert_eq!(sources[0].prefix, None);
 	}
 
 	#[tokio::test]
@@ -886,7 +921,11 @@ mod tests {
 
 		// Add a static source
 		server
-			.add_static_source("../testdata/static.tar.gz".to_string(), Some("/static".to_string()))
+			.add_static_source(
+				"../testdata/static.tar.gz".to_string(),
+				Some("/static".to_string()),
+				None,
+			)
 			.await
 			.unwrap();
 

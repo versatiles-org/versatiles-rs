@@ -1,7 +1,8 @@
 use std::{fmt::Debug, sync::Arc};
 
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
+use axum::http::HeaderValue;
 use versatiles_container::DataLocation;
 use versatiles_core::compression::TargetCompression;
 use versatiles_derive::context;
@@ -24,11 +25,25 @@ pub trait StaticSourceTrait: Send + Sync + Debug {
 pub struct StaticSource {
 	source: Arc<dyn StaticSourceTrait>,
 	prefix: Url,
+	/// `Cache-Control` sent with every file of this source.
+	cache_control: Arc<str>,
 }
 
 impl StaticSource {
+	/// Open the files at `location`, to be served under `prefix` with
+	/// `cache_control`.
+	///
+	/// A `cache_control` that is no valid header value is refused here, so that
+	/// it fails when the source is mounted, not on its first request.
 	#[context("creating static source from location: location={location:?}, prefix={prefix}")]
-	pub async fn from_location(location: &DataLocation, prefix: &str, follow_symlinks: bool) -> Result<StaticSource> {
+	pub async fn from_location(
+		location: &DataLocation,
+		prefix: &str,
+		follow_symlinks: bool,
+		cache_control: &str,
+	) -> Result<StaticSource> {
+		HeaderValue::from_str(cache_control)
+			.map_err(|e| anyhow!("invalid cache_control value {cache_control:?}: {e}"))?;
 		let prefix = Url::from(prefix).to_dir();
 		Ok(StaticSource {
 			source: match location {
@@ -50,6 +65,7 @@ impl StaticSource {
 				DataLocation::Blob(_) => bail!("Blob is not supported as a static source"),
 			},
 			prefix,
+			cache_control: Arc::from(cache_control),
 		})
 	}
 
@@ -60,6 +76,11 @@ impl StaticSource {
 
 	pub fn prefix(&self) -> &Url {
 		&self.prefix
+	}
+
+	/// The `Cache-Control` header sent with this source's files.
+	pub fn cache_control(&self) -> &str {
+		&self.cache_control
 	}
 
 	pub async fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
@@ -118,13 +139,13 @@ mod tests {
 
 		let check_type = |path: PathBuf, type_name: &'static str| async move {
 			let loc = DataLocation::from(path);
-			let source = StaticSource::from_location(&loc, "", false).await.unwrap();
+			let source = StaticSource::from_location(&loc, "", false, "no-cache").await.unwrap();
 			assert_eq!(source.type_name(), type_name);
 		};
 
 		let check_error = |path: PathBuf, error_should: &'static str| async move {
 			let loc = DataLocation::from(path);
-			let result = StaticSource::from_location(&loc, "", false).await;
+			let result = StaticSource::from_location(&loc, "", false, "no-cache").await;
 			let error = result
 				.err()
 				.iter()
@@ -188,6 +209,7 @@ mod tests {
 		let static_source = StaticSource {
 			source: Arc::new(MockStaticSource),
 			prefix: Url::from(""),
+			cache_control: Arc::from("no-cache"),
 		};
 		let result = static_source
 			.get_data(&Url::from("exists"), &TargetCompression::from_none())
@@ -200,6 +222,7 @@ mod tests {
 		let static_source = StaticSource {
 			source: Arc::new(MockStaticSource),
 			prefix: Url::from(""),
+			cache_control: Arc::from("no-cache"),
 		};
 		let result = static_source
 			.get_data(&Url::from("does_not_exist"), &TargetCompression::from_none())
@@ -212,6 +235,7 @@ mod tests {
 		let static_source = StaticSource {
 			source: Arc::new(MockStaticSource),
 			prefix: Url::from("path/to"),
+			cache_control: Arc::from("no-cache"),
 		};
 		let result = static_source
 			.get_data(&Url::from("path/to/exists"), &TargetCompression::from_none())
@@ -222,5 +246,23 @@ mod tests {
 			.get_data(&Url::from("path/wrong/exists"), &TargetCompression::from_none())
 			.await;
 		assert!(result.is_none());
+	}
+
+	#[tokio::test]
+	async fn from_location_refuses_an_invalid_cache_control() -> Result<()> {
+		let temp_dir = assert_fs::TempDir::new()?;
+		let loc = DataLocation::from(temp_dir.path().to_path_buf());
+		let error = StaticSource::from_location(&loc, "", false, "no-cache\n")
+			.await
+			.err()
+			.expect("a header value with a newline is refused");
+		assert!(
+			format!("{error:#}").contains("invalid cache_control value"),
+			"{error:#}"
+		);
+
+		let source = StaticSource::from_location(&loc, "", false, "public, max-age=60").await?;
+		assert_eq!(source.cache_control(), "public, max-age=60");
+		Ok(())
 	}
 }

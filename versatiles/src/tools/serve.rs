@@ -78,11 +78,13 @@ pub struct Subcommand {
 	)]
 	pub follow_symlinks: Option<bool>,
 
-	/// Cache-Control header for tiles, tiles.json and static files, e.g. "no-cache"
+	/// Cache-Control header for tiles and tiles.json, e.g. "no-cache"
 	///
 	/// Tile URLs are stable, so a client answers from its own cache when the
 	/// tiles behind a mount change. The default of four weeks suits a public,
 	/// CDN-fronted server; a preview or a test harness wants something shorter.
+	/// Static files are sent with "no-cache"; set another value for them with
+	/// `cache_control` on a `static` entry of the config file.
 	#[arg(long, value_name = "header", display_order = 2, verbatim_doc_comment)]
 	pub cache_control: Option<String>,
 }
@@ -149,6 +151,7 @@ fn effective_config(arguments: &Subcommand) -> Result<Config> {
 			Ok(StaticSourceConfig {
 				src: DataLocation::parse(filename)?,
 				prefix,
+				cache_control: None,
 			})
 		})
 		.collect::<Result<Vec<StaticSourceConfig>>>()?;

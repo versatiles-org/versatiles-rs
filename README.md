@@ -545,16 +545,22 @@ versatiles serve tiles.versatiles
 | `--minimal-recompression` | Fast serving (less compression)                        | false   |
 | `--disable-api`           | Do not serve the source list at `/tiles/index.json`    | false   |
 | `--follow-symlinks`       | Let a symlink in a static folder point outside it      | false   |
-| `--cache-control`         | `Cache-Control` header for tiles and static files      | 4 weeks |
+| `--cache-control`         | `Cache-Control` header for tiles and `tiles.json`      | 4 weeks |
 | `--auto-shutdown`         | Shut down automatically after N milliseconds           | -       |
 
 `--cache-control` defaults to `public, max-age=2419200, no-transform`: four
 weeks, right for a public tile server. Set something shorter when the tiles
-behind a URL change. The header is sent with everything the server answers
-with data: tiles, the 204 of an empty tile, `tiles.json` and static files. It
-is not sent with a 404 or an error. The list of tile sources at
-`/tiles/index.json` is the exception: it always carries the default of four
-weeks.
+behind a URL change. The header is sent with tiles, the 204 of an empty tile
+and `tiles.json`. It is not sent with a 404 or an error. The list of tile
+sources at `/tiles/index.json` is the exception: it always carries the default
+of four weeks.
+
+Static files are sent with `Cache-Control: no-cache`, whatever
+`--cache-control` says. Their URLs stay the same when the files change, so a
+browser that kept them for weeks would mix a new `index.html` with old scripts
+after an update. With `no-cache` it asks every time, and an unchanged file
+costs an empty `304`. Set another value per static source with
+`cache_control` in the configuration file.
 
 **Tiles without data:**
 
@@ -860,11 +866,11 @@ The first four forms are matched on the parts of an origin — scheme, host labe
 
 Any other use of `*` is refused at startup, and the error names a replacement. Versions before 5.0 accepted open-ended globs that matched on raw string edges: `https://example.*` also allowed `https://example.attacker.test`, `*example.org` allowed `https://notexample.org`, and a scheme-less `*.example.org` allowed `http://` as well as `https://`. Use `https://*.example.org` for subdomains and `https://example.org:*` for ports. A regex must be anchored with `^...$`; `/example\.org/` is refused.
 
-**Caching** - Set the `Cache-Control` of tiles, `tiles.json` and static files:
+**Caching** - Set the `Cache-Control` of tiles and `tiles.json`:
 
 ```yaml
 server:
-  cache_control: "public, max-age=86400, immutable"
+  cache_control: "public, max-age=86400"
 ```
 
 **Custom Response Headers** - Add headers to every response:
@@ -909,6 +915,7 @@ static:
   # Tar archive at root
   - src: "./static.tar.br"
     prefix: "/"
+    cache_control: "no-cache" # the default
 
   # Directory at custom path
   - src: "./public"

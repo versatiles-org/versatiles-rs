@@ -29,19 +29,22 @@ use super::{
 	utils::Url,
 };
 
-/// Default `Cache-Control` for served content: four weeks.
+/// Default `Cache-Control` for tiles and `tiles.json`: four weeks.
 ///
 /// Right for a public, CDN-fronted tile server. Wrong for anything serving
 /// tiles that change — tile URLs are stable, so a client answers from its own
 /// cache and shows the previous edit. Override with `server.cache_control`.
+/// Static files have their own default,
+/// [`DEFAULT_STATIC_CACHE_CONTROL`](crate::config::DEFAULT_STATIC_CACHE_CONTROL).
 pub const DEFAULT_CACHE_CONTROL: &str = "public, max-age=2419200, no-transform";
 
 /// State for static file requests across multiple `StaticSource`s.
+///
+/// Each source carries its own `Cache-Control`, so there is none here.
 #[derive(Clone)]
 pub struct StaticHandlerState {
 	pub sources: Arc<arc_swap::ArcSwap<Vec<StaticSource>>>,
 	pub minimal_recompression: bool,
-	pub cache_control: Arc<str>,
 }
 
 /// Core tile serving logic extracted for reuse in dynamic routing.
@@ -126,7 +129,13 @@ pub async fn serve_static(uri: Uri, headers: HeaderMap, State(state): State<Stat
 	for source in sources.iter() {
 		if let Some(result) = source.get_data(&url, &target).await {
 			log::debug!("send response to static request: {url}");
-			return ok_data(result, target, &state.cache_control, headers.get(header::IF_NONE_MATCH)).await;
+			return ok_data(
+				result,
+				target,
+				source.cache_control(),
+				headers.get(header::IF_NONE_MATCH),
+			)
+			.await;
 		}
 	}
 	log::debug!("send 404 to static request: {url}");
@@ -619,7 +628,6 @@ mod tests {
 	#[test]
 	fn static_handler_state_clone() {
 		let state = StaticHandlerState {
-			cache_control: std::sync::Arc::from(DEFAULT_CACHE_CONTROL),
 			sources: Arc::new(arc_swap::ArcSwap::from_pointee(vec![])),
 			minimal_recompression: true,
 		};

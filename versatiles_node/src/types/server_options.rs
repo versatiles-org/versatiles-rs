@@ -80,13 +80,16 @@ pub struct ServerOptions {
 	/// **Default:** `false` (optimal recompression)
 	pub minimal_recompression: Option<bool>,
 
-	/// `Cache-Control` header sent with tiles, `tiles.json` and static files
+	/// `Cache-Control` header sent with tiles and `tiles.json`
 	///
 	/// Tile URLs are stable — built from a mount name and a coordinate — so
 	/// when the tiles behind a mount change, the URL does not, and the browser
 	/// answers from its own cache. A dev server or an interactive preview that
 	/// re-mounts under the same name will otherwise keep showing the previous
 	/// edit.
+	///
+	/// Static files are sent with `"no-cache"` instead; pass another value as
+	/// the third argument of `addStaticSource()`.
 	///
 	/// Example: `"no-cache"`.
 	///

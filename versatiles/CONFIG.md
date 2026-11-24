@@ -53,14 +53,15 @@ server:
   # Defaults to false (a symlink may not leave the folder)
   follow_symlinks: false
 
-  # Optional `Cache-Control` header sent with tiles, `tiles.json` and static files
+  # Optional `Cache-Control` header sent with tiles and `tiles.json`
   # Defaults to "public, max-age=2419200, no-transform" (four weeks)
   #
   # Tile URLs are stable — built from a mount name and a coordinate — so a
   # client answers from its own cache when the tiles behind a mount change.
   # Four weeks suits a public, CDN-fronted server; a preview or a test
   # harness serving tiles that change wants something shorter, e.g.
-  # "no-cache".
+  # "no-cache". Static files have their own `cache_control` per `static`
+  # entry, which defaults to "no-cache".
   cache_control: public, max-age=2419200, no-transform
 
 # Optional Cross-Origin Resource Sharing (CORS) settings
@@ -102,6 +103,13 @@ static:
     # Optional URL prefix where static files will be served
     # Defaults to root ("/")
     prefix: /
+
+    # Optional `Cache-Control` header sent with these files
+    # Defaults to "no-cache": a browser checks every time, and an unchanged
+    # file costs an empty 304. Static URLs stay the same when the files
+    # change, so a longer value keeps old files in browsers after an update.
+    # `server.cache_control` does not apply to static files.
+    cache_control: no-cache
 
 # Optional list of tile sources
 tiles:

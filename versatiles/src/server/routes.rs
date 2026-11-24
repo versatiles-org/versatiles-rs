@@ -117,12 +117,10 @@ pub fn add_static_sources_to_app(
 	app: Router,
 	static_sources: Arc<arc_swap::ArcSwap<Vec<StaticSource>>>,
 	minimal_recompression: bool,
-	cache_control: Arc<str>,
 ) -> Router {
 	let state = StaticHandlerState {
 		sources: static_sources,
 		minimal_recompression,
-		cache_control,
 	};
 	let static_app = Router::new().fallback(get(serve_static)).with_state(state);
 	app.merge(static_app)
@@ -219,12 +217,7 @@ mod tests {
 	async fn no_static_sources_yields_404() {
 		let app = Router::new();
 		let static_sources = Arc::new(arc_swap::ArcSwap::from_pointee(Vec::new()));
-		let app = add_static_sources_to_app(
-			app,
-			static_sources,
-			false,
-			Arc::from(crate::server::handlers::DEFAULT_CACHE_CONTROL),
-		);
+		let app = add_static_sources_to_app(app, static_sources, false);
 
 		let (status, _body) = get_body_text(app, "/").await;
 		assert_eq!(status, StatusCode::NOT_FOUND);

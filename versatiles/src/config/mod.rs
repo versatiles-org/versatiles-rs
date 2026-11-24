@@ -21,5 +21,5 @@ mod tile_source;
 pub use cors::{CorsConfig, DEFAULT_CORS_MAX_AGE_SECONDS};
 pub use main::Config;
 pub use server::ServerConfig;
-pub use static_source::StaticSourceConfig;
+pub use static_source::{DEFAULT_STATIC_CACHE_CONTROL, StaticSourceConfig};
 pub use tile_source::TileSourceConfig;

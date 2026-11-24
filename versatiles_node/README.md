@@ -366,7 +366,7 @@ Create a new tile server.
   - `ip` (string): IP address to bind (default: `"0.0.0.0"`)
   - `port` (number): Port number (default: `8080`)
   - `minimalRecompression` (boolean): Use minimal recompression
-  - `cacheControl` (string): `Cache-Control` header sent with tiles, `tiles.json` and static files (default: `"public, max-age=2419200, no-transform"`, four weeks). Set something shorter, e.g. `"no-cache"`, when the tiles behind a name change.
+  - `cacheControl` (string): `Cache-Control` header sent with tiles and `tiles.json` (default: `"public, max-age=2419200, no-transform"`, four weeks). Set something shorter, e.g. `"no-cache"`, when the tiles behind a name change. Static files have their own, see `addStaticSource()`.
 
 #### `server.addTileSourceFromPath(name, path)`
 
@@ -400,7 +400,7 @@ Remove a tile source.
 
 **Returns:** `Promise<boolean>` — `true` if a source with that name was removed
 
-#### `server.addStaticSource(path, urlPrefix?)`
+#### `server.addStaticSource(path, urlPrefix?, cacheControl?)`
 
 Add static file source.
 
@@ -408,6 +408,7 @@ Add static file source.
 
 - `path` (string): Directory or .tar file
 - `urlPrefix` (string, optional): URL prefix (default: `"/"`)
+- `cacheControl` (string, optional): `Cache-Control` header sent with these files (default: `"no-cache"`). Static URLs stay the same when the files change, so with `no-cache` a browser checks every time, and an unchanged file costs an empty `304`.
 
 **Returns:** `Promise<void>`
 

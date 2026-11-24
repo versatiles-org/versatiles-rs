@@ -65,14 +65,15 @@ pub struct ServerConfig {
 	#[config_demo("false")]
 	pub follow_symlinks: Option<bool>,
 
-	/// Optional `Cache-Control` header sent with tiles, `tiles.json` and static files
+	/// Optional `Cache-Control` header sent with tiles and `tiles.json`
 	/// Defaults to "public, max-age=2419200, no-transform" (four weeks)
 	///
 	/// Tile URLs are stable — built from a mount name and a coordinate — so a
 	/// client answers from its own cache when the tiles behind a mount change.
 	/// Four weeks suits a public, CDN-fronted server; a preview or a test
 	/// harness serving tiles that change wants something shorter, e.g.
-	/// "no-cache".
+	/// "no-cache". Static files have their own `cache_control` per `static`
+	/// entry, which defaults to "no-cache".
 	#[serde()]
 	#[config_demo("public, max-age=2419200, no-transform")]
 	pub cache_control: Option<String>,

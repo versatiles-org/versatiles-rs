@@ -270,7 +270,7 @@ impl ReloadHandle {
 
 			changed = true;
 			let prefix = prefix_of(cfg);
-			match StaticSource::from_location(&cfg.src, prefix, follow_symlinks).await {
+			match StaticSource::from_location(&cfg.src, prefix, follow_symlinks, cfg.cache_control()).await {
 				Ok(source) => {
 					log::info!("reload: mounted static source at '{prefix}'");
 					mounted.push(MountedStatic {
@@ -702,6 +702,7 @@ mod tests {
 				&[StaticSourceConfig {
 					src: DataLocation::from(Path::new("../testdata/static.tar.gz")),
 					prefix: Some("/assets/".to_string()),
+					cache_control: None,
 				}],
 				false,
 			)
@@ -718,6 +719,7 @@ mod tests {
 		let config = [StaticSourceConfig {
 			src: DataLocation::from(Path::new("../testdata/static.tar.gz")),
 			prefix: None,
+			cache_control: None,
 		}];
 
 		handle.apply_static_source_diff(&config, false).await;
@@ -740,10 +742,12 @@ mod tests {
 					StaticSourceConfig {
 						src: DataLocation::from(Path::new("../testdata/does_not_exist.tar")),
 						prefix: None,
+						cache_control: None,
 					},
 					StaticSourceConfig {
 						src: DataLocation::from(Path::new("../testdata/static.tar.gz")),
 						prefix: Some("/ok/".to_string()),
+						cache_control: None,
 					},
 				],
 				false,
@@ -757,7 +761,26 @@ mod tests {
 		StaticSourceConfig {
 			src: DataLocation::from(src),
 			prefix: Some(prefix.to_string()),
+			cache_control: None,
 		}
+	}
+
+	#[tokio::test]
+	async fn a_changed_static_cache_control_is_applied_on_reload() {
+		let handle = handle(PathBuf::from("unused"));
+		let mut config = static_config(Path::new("../testdata/static.tar.gz"), "/");
+		let header = |handle: &ReloadHandle| handle.static_sources.load()[0].cache_control().to_string();
+
+		handle
+			.apply_static_source_diff(std::slice::from_ref(&config), false)
+			.await;
+		assert_eq!(header(&handle), "no-cache");
+
+		config.cache_control = Some("public, max-age=60".to_string());
+		handle
+			.apply_static_source_diff(std::slice::from_ref(&config), false)
+			.await;
+		assert_eq!(header(&handle), "public, max-age=60");
 	}
 
 	fn mounted_configs(handle: &ReloadHandle) -> Vec<StaticSourceConfig> {

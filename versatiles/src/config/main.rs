@@ -309,7 +309,10 @@ mod tests {
 					.iter()
 					.map(|(a, b)| (a.to_string(), b.to_string()))
 					.collect::<HashMap<String, String>>(),
-				static_sources: vec![StaticSourceConfig::from(("/", "./frontend.tar")),],
+				static_sources: vec![StaticSourceConfig {
+					cache_control: Some("no-cache".to_string()),
+					..StaticSourceConfig::from(("/", "./frontend.tar"))
+				}],
 				tile_sources: vec![TileSourceConfig {
 					aliases: vec!["openstreetmap".to_string()],
 					..TileSourceConfig::from(("osm", "osm.versatiles"))

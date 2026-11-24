@@ -322,6 +322,39 @@ describe('TileServer', () => {
 		});
 	});
 
+	describe('addStaticSource() cache control', () => {
+		let server: TileServer;
+		let baseUrl: string;
+
+		beforeAll(async () => {
+			// The server's cacheControl is for tiles; static files keep their own.
+			server = new TileServer({ port: 0, cacheControl: 'public, max-age=3600' });
+			await server.addStaticSource(TESTDATA_DIR);
+			await server.start();
+			// Added while running, to cover the hot-reload path as well.
+			await server.addStaticSource(TESTDATA_DIR, '/long', 'public, max-age=60');
+			baseUrl = `http://127.0.0.1:${server.port}`;
+		});
+
+		afterAll(async () => {
+			await server.stop();
+		});
+
+		it('sends static files with no-cache by default', async () => {
+			const { headers } = await httpGet(`${baseUrl}/cities.csv`);
+			expect(headers['cache-control']).toBe('no-cache');
+		});
+
+		it('sends the cacheControl given to addStaticSource()', async () => {
+			const { headers } = await httpGet(`${baseUrl}/long/cities.csv`);
+			expect(headers['cache-control']).toBe('public, max-age=60');
+		});
+
+		it('refuses an invalid cacheControl', async () => {
+			await expect(server.addStaticSource(TESTDATA_DIR, '/bad', 'no-cache\n')).rejects.toThrow(/Invalid cacheControl/);
+		});
+	});
+
 	describe('combined sources', () => {
 		let server: TileServer;
 		let baseUrl: string;
