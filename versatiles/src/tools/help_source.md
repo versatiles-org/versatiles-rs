@@ -178,8 +178,8 @@ tiles.mbtiles[osm]           # Same as [osm]tiles.mbtiles
 Use `[,vpl]` prefix with parentheses to define a VPL pipeline directly:
 
 ```text
-[,vpl](from_mbtiles tiles.mbtiles)
-[osm,vpl](from_mbtiles tiles.mbtiles | filter level_max=10)
+[,vpl](from_container filename="tiles.mbtiles")
+[osm,vpl](from_container filename="tiles.mbtiles" | filter level_max=10)
 ```
 
 The content in parentheses is treated as VPL (VersaTiles Pipeline Language).
@@ -227,7 +227,7 @@ versatiles probe https://example.org/world.pmtiles
 versatiles serve [osm]tiles.versatiles [satellite]imagery.mbtiles
 
 # Inline VPL pipeline
-versatiles convert "[,vpl](from_mbtiles in.mbtiles | filter level_max=12)" out.versatiles
+versatiles convert '[,vpl](from_container filename="in.mbtiles" | filter level_max=12)' out.versatiles
 
 # Override container type
 versatiles probe tiles.db[,mbtiles]

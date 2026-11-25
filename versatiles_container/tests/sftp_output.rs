@@ -110,3 +110,21 @@ async fn republishing_replaces_and_leaves_no_leftovers() -> Result<()> {
 	);
 	Ok(())
 }
+
+/// Tar is the one format besides `.versatiles` and `.pmtiles` that can be
+/// written over SFTP, though it can't be read from there. The README and
+/// `versatiles help source` both say so.
+#[tokio::test(flavor = "current_thread")]
+async fn a_tar_destination_is_written_over_sftp() -> Result<()> {
+	let server = TestSftpServer::start().await;
+	let destination = server.url("/out.tar").to_string();
+
+	convert_to(&destination, 3, false).await?;
+
+	let published = server.read_file("/out.tar").await;
+	assert!(
+		published.get(257..262) == Some(b"ustar".as_slice()),
+		"the upload should be a tar archive"
+	);
+	Ok(())
+}

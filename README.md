@@ -249,9 +249,9 @@ VersaTiles works with **tile containers** - files or directories containing map 
 | Local file   |      ✅       |     ✅     |     ✅     |   ✅   |    ✅     |
 | HTTP(S) read |      ✅       |     ✅     |     ❌     |   ❌   |    ❌     |
 | SFTP read    |      ✅       |     ✅     |     ❌     |   ❌   |    ❌     |
-| SFTP write   |      ✅       |     ✅     |     ❌     |   ❌   |    ❌     |
+| SFTP write   |      ✅       |     ✅     |     ❌     |   ✅   |    ❌     |
 
-✅ = supported, ❌ = not supported. Remote read over HTTP/HTTPS and SFTP read/write require the streamable single-file formats (`.versatiles`, `.pmtiles`); SFTP also requires the `sftp` feature. All formats store opaque tile blobs, so each works with both vector and raster tiles.
+✅ = supported, ❌ = not supported. Remote read over HTTP/HTTPS and SFTP read require the streamable single-file formats (`.versatiles`, `.pmtiles`). SFTP write also takes `.tar`. SFTP needs the `sftp` feature. All formats store opaque tile blobs, so each works with both vector and raster tiles.
 
 **Remote access:** VersaTiles can read remote `.versatiles` and `.pmtiles` files via HTTPS, and write to remote servers via SFTP (requires `sftp` feature):
 
@@ -325,7 +325,7 @@ Writing to a directory replaces its entire contents, so a re-run over a smaller 
 
 If a conversion finishes writing but could not read every tile, the output is complete and readable but missing tiles. It is kept as `<name>.incomplete.<ext>` rather than published or deleted — the destination is untouched, and nothing downstream can mistake the partial result for the conversion that was asked for.
 
-The output path can also be an SFTP URL (`sftp://[user[:pass]@]host[:port]/path`) to write directly to a remote server. This requires the `sftp` feature. Only formats that support streaming writes (`.versatiles`, `.pmtiles`) are supported over SFTP.
+The output path can also be an SFTP URL (`sftp://[user[:pass]@]host[:port]/path`) to write directly to a remote server. This requires the `sftp` feature. Only formats that support streaming writes (`.versatiles`, `.pmtiles`, `.tar`) are supported over SFTP.
 
 Remote writes follow the same rule: the upload goes to `.<name>.tmp` beside the destination and is moved into place at the end, so a failed upload never leaves a corrupt file under the name clients are fetching. Replacing an existing remote file is not a single step — SFTP's `rename` refuses an existing target — so the old one is moved to `.old` first and removed once the new one is in place. There is a brief moment where the destination does not exist; what cannot happen is losing the previous upload, which is restored if the move fails.
 
