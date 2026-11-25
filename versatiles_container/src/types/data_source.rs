@@ -21,12 +21,16 @@ pub struct DataSource {
 
 use std::sync::LazyLock;
 
-static RE_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\[([\w,]*)\](.*)").expect("valid regex literal"));
-static RE_POSTFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(.*)\[([\w,]*)\]$").expect("valid regex literal"));
+// A name may contain `-` and `.`, as the names of the hosted tilesets do (`osm-vector`) and
+// dated files (`osm-vector.20261101`). Allowing only `\w` let `[osm-vector]…` fall through to a
+// path that kept its brackets, and fail as a missing file (#335).
+static RE_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\[([\w.\-,]*)\](.*)").expect("valid regex literal"));
+static RE_POSTFIX: LazyLock<Regex> =
+	LazyLock::new(|| Regex::new(r"^(.*)\[([\w.\-,]*)\]$").expect("valid regex literal"));
 
 /// Whether a trailing `[…]` is the name/type postfix rather than something else.
 ///
-/// The notation is `location[name,type]`, and `[\w,]*` also matches a VPL array — every grid
+/// The notation is `location[name,type]`, and `[\w.\-,]*` also matches a VPL array — every grid
 /// pipeline ends in one, `bbox=[13,52,14,53]`. Read as a postfix, that swallows the parameter
 /// and leaves a location ending in `bbox=`, which is how a pipeline turned into a container
 /// type of `52`. Two things tell them apart: a postfix follows a location, never an `=`, and it
@@ -193,14 +197,17 @@ impl TryFrom<DataLocation> for DataSource {
 
 #[cfg(test)]
 mod tests {
-	/// Every grid pipeline ends in a bbox, and `[\w,]*` matches one — read as the name/type
-	/// postfix, it eats the parameter and leaves a location ending in `bbox=`.
+	/// Every grid pipeline ends in a bbox, and `[\w.\-,]*` matches one — read as the name/type
+	/// postfix, it eats the parameter and leaves a location ending in `bbox=`. Decimals and
+	/// negative numbers match too, since a name may contain `.` and `-`.
 	#[test]
 	fn a_vpl_array_is_not_a_name_and_type_postfix() {
 		for input in [
 			"from_h3 resolution=8 | filter bbox=[13,52,14,53]",
 			"from_grid epsg=3035 size=1000 bbox=[5,47,15,55]",
 			"filter layer=[places]",
+			"filter bbox=[-10.5,35.25]",
+			"filter bbox= [13.4,-52.5]",
 		] {
 			let source = DataSource::parse(input).expect("parses as a plain location");
 			assert_eq!(
@@ -282,6 +289,37 @@ mod tests {
 	#[case("file[name,type]", "name", "type", "Path(file)")]
 	#[case("http://host/file.ext", "file", "ext", "Url(http://host/file.ext)")]
 	#[case("http://host/file.ext[name]", "name", "ext", "Url(http://host/file.ext)")]
+	// The names of the hosted tilesets contain `-`, and dated files `.` (#335).
+	#[case(
+		"[osm-vector]osm-vector.20261101.versatiles",
+		"osm-vector",
+		"versatiles",
+		"Path(osm-vector.20261101.versatiles)"
+	)]
+	#[case(
+		"osm-vector.20261101.versatiles[osm-vector]",
+		"osm-vector",
+		"versatiles",
+		"Path(osm-vector.20261101.versatiles)"
+	)]
+	#[case(
+		"[chioggia.20261123,mbtiles]tiles.db",
+		"chioggia.20261123",
+		"mbtiles",
+		"Path(tiles.db)"
+	)]
+	#[case(
+		"tiles.db[satellite-raster,mbtiles]",
+		"satellite-raster",
+		"mbtiles",
+		"Path(tiles.db)"
+	)]
+	#[case(
+		"[elevation-raster]https://host/elevation.versatiles",
+		"elevation-raster",
+		"versatiles",
+		"Url(https://host/elevation.versatiles)"
+	)]
 	#[case(r#"{"location":"c"}"#, "c", "", "Path(c)")]
 	#[case(r#"{"name":"a","location":"c"}"#, "a", "", "Path(c)")]
 	#[case(r#"{"name":"a","type":"b","content":"c"}"#, "a", "b", "Blob(len=1)")]

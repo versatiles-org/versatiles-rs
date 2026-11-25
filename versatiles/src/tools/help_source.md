@@ -149,6 +149,7 @@ versatiles convert world.mbtiles sftp://user@fileserver.example.org/tiles/world.
 ## Name and Type Prefixes
 
 You can override the auto-detected name and container type using bracket notation.
+A name may contain letters, digits, `_`, `-` and `.`, such as `osm-vector`.
 
 ### Prefix Notation
 
@@ -159,6 +160,7 @@ Format: `[name,type]location`
 [,mbtiles]tiles.db           # Set only type to "mbtiles"
 [osm]tiles.mbtiles           # Set only name to "osm"
 [osm,vpl]pipeline.txt        # Treat file as VPL pipeline with name "osm"
+[osm-vector]osm-vector.20261101.versatiles   # Serve a dated file as "osm-vector"
 ```
 
 ### Postfix Notation
