@@ -31,15 +31,6 @@ These rules override the shared commit rules:
 - A request to post one thing covers only that thing, not a follow-up comment. Editing or deleting something already published also needs asking.
 - `scripts/release-package.sh` pushes `dev`, fast-forwards `main` and pushes the tag itself. Run it only when asked.
 
-## Due after the next release
-
-`serve --immutable` (#338) is on `dev`. Other repos can only use it once it is released, so do this the same day, then delete this section:
-
-- versatiles-docker: add `--immutable 'assets/lib/*@*/**'` to the three `ENTRYPOINT`s in `versatiles-frontend/Dockerfile` and to the contracts in its `build.sh`. `versatiles-nginx` already passes it once its binary has it.
-- versatiles-documentation: the sentence in `basics/caching.md` that the command line has only `--cache-control`, the frontend example in `basics/versatiles_server.md`, and `--immutable` in the deploy guides for Debian, Uberspace and Google Cloud.
-- tools: add `--immutable` next to `--static` in `src/routes/setup_server/generate_code.ts`.
-- versatiles-frontend: mention the flag in the README's "Caching" section.
-
 ## Commands
 
 Quick checks during work:
