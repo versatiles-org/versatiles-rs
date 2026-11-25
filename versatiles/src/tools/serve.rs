@@ -1,13 +1,13 @@
 use std::{mem::swap, path::PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use regex::Regex;
 use tokio::{
 	sync::mpsc::{UnboundedReceiver, unbounded_channel},
 	time::{Duration, sleep},
 };
 use versatiles::{
-	config::{Config, StaticSourceConfig, TileSourceConfig},
+	config::{Config, PathPattern, StaticSourceConfig, TileSourceConfig},
 	server::{TileServer, spawn_sighup_handler},
 };
 use versatiles_container::{DataLocation, DataSource, TilesRuntime};
@@ -84,9 +84,24 @@ pub struct Subcommand {
 	/// tiles behind a mount change. The default of four weeks suits a public,
 	/// CDN-fronted server; a preview or a test harness wants something shorter.
 	/// Static files are sent with "no-cache"; set another value for them with
-	/// `cache_control` on a `static` entry of the config file.
+	/// `cache_control` on a `static` entry of the config file, and mark their
+	/// versioned paths with `--immutable`.
 	#[arg(long, value_name = "header", display_order = 2, verbatim_doc_comment)]
 	pub cache_control: Option<String>,
+
+	/// Path pattern of versioned files in the `--static` sources, e.g. "assets/lib/*@*/**"
+	///
+	/// Matching files are sent with "public, max-age=31536000, immutable"
+	/// instead of "no-cache": their content never changes under that URL.
+	/// A pattern is a path inside a source, without its prefix: `*` matches
+	/// within one segment, `**` across segments. Can be given several times,
+	/// and applies to every `--static` source, but not to the `static` entries
+	/// of a config file, which have their own `immutable`.
+	/// Let a pattern match only versioned folders (`assets/lib/*@*/**`, never
+	/// `assets/lib/**`): an outdated pattern then matches nothing, and files
+	/// fall back to "no-cache" instead of staying in browsers for a year.
+	#[arg(long, value_name = "pattern", display_order = 2, verbatim_doc_comment)]
+	pub immutable: Vec<String>,
 }
 
 /// The config the server runs with: the config file, if one is given, with the
@@ -122,6 +137,18 @@ fn effective_config(arguments: &Subcommand) -> Result<Config> {
 		});
 	}
 
+	// `--immutable` only reaches `--static` sources. Given without one, it would
+	// silently do nothing, so that is refused, as is a pattern that a config
+	// file would refuse too.
+	if !arguments.immutable.is_empty() && arguments.static_content.is_empty() {
+		bail!(
+			"--immutable applies only to sources given with --static; for the `static` entries of a config file, set `immutable` there"
+		);
+	}
+	for pattern in &arguments.immutable {
+		PathPattern::parse(pattern).with_context(|| format!("invalid --immutable pattern '{pattern}'"))?;
+	}
+
 	let static_patterns: Vec<Regex> = [
 		r"^\[(?P<path>[^\]]+?)\](?P<filename>.*)$",
 		r"^(?P<filename>.*)\[(?P<path>[^\]]+?)\]$",
@@ -152,7 +179,7 @@ fn effective_config(arguments: &Subcommand) -> Result<Config> {
 				src: DataLocation::parse(filename)?,
 				prefix,
 				cache_control: None,
-				immutable: Vec::new(),
+				immutable: arguments.immutable.clone(),
 			})
 		})
 		.collect::<Result<Vec<StaticSourceConfig>>>()?;
@@ -340,6 +367,91 @@ mod tests {
 			.unwrap_err()
 			.to_string();
 		assert!(error.contains("invalid value 'a.versatiles'"), "{error}");
+	}
+
+	/// The config a `serve` command line runs with.
+	fn config_of(args: &[&str]) -> Result<versatiles::config::Config> {
+		use clap::Parser;
+
+		let argv = ["versatiles", "serve"].iter().chain(args).copied();
+		let crate::Commands::Serve(serve) = crate::Cli::try_parse_from(argv)?.command else {
+			unreachable!("parsed a `serve` command line");
+		};
+		super::effective_config(&serve)
+	}
+
+	fn immutable_of(config: &versatiles::config::Config) -> Vec<Vec<String>> {
+		config.static_sources.iter().map(|s| s.immutable.clone()).collect()
+	}
+
+	const LIBS: &str = "assets/lib/*@*/**";
+
+	#[test]
+	fn static_sources_have_no_immutable_patterns_by_default() -> Result<()> {
+		let config = config_of(&["-s", "public", "a.versatiles"])?;
+		assert_eq!(immutable_of(&config), [Vec::<String>::new()]);
+		Ok(())
+	}
+
+	#[test]
+	fn immutable_applies_to_every_static_source() -> Result<()> {
+		let config = config_of(&[
+			"-s",
+			"public",
+			"-s",
+			"[/x]other.tar",
+			"--immutable",
+			LIBS,
+			"--immutable",
+			"fonts/*@*/**",
+		])?;
+		let both = vec![LIBS.to_string(), "fonts/*@*/**".to_string()];
+		assert_eq!(immutable_of(&config), [both.clone(), both]);
+		Ok(())
+	}
+
+	#[test]
+	fn immutable_takes_one_value_and_leaves_the_tile_sources() -> Result<()> {
+		let config = config_of(&["-s", "public", "--immutable", LIBS, "a.versatiles"])?;
+		assert_eq!(immutable_of(&config), [vec![LIBS.to_string()]]);
+		assert_eq!(config.tile_sources.len(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn immutable_leaves_the_static_entries_of_a_config_file_alone() -> Result<()> {
+		let temp_dir = assert_fs::TempDir::new()?;
+		let config_path = temp_dir.path().join("config.yml");
+		std::fs::write(&config_path, "static:\n  - src: ./site\n")?;
+		let config = config_of(&[
+			"-c",
+			config_path.to_str().expect("temp config path is valid UTF-8"),
+			"-s",
+			"public",
+			"--immutable",
+			LIBS,
+		])?;
+		// Command-line sources come first, then the config file's.
+		assert_eq!(immutable_of(&config), [vec![LIBS.to_string()], Vec::new()]);
+		Ok(())
+	}
+
+	#[test]
+	fn immutable_without_a_static_source_is_refused() {
+		let error = format!("{:#}", config_of(&["--immutable", LIBS, "a.versatiles"]).unwrap_err());
+		assert!(
+			error.contains("--immutable applies only to sources given with --static"),
+			"{error}"
+		);
+	}
+
+	#[test]
+	fn a_bad_immutable_pattern_is_refused() {
+		let error = format!(
+			"{:#}",
+			config_of(&["-s", "public", "--immutable", "/assets/**"]).unwrap_err()
+		);
+		assert!(error.contains("invalid --immutable pattern '/assets/**'"), "{error}");
 	}
 
 	#[test]

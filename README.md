@@ -546,6 +546,7 @@ versatiles serve tiles.versatiles
 | `--disable-api`           | Do not serve the source list at `/tiles/index.json`    | false   |
 | `--follow-symlinks`       | Let a symlink in a static folder point outside it      | false   |
 | `--cache-control`         | `Cache-Control` header for tiles and `tiles.json`      | 4 weeks |
+| `--immutable`             | Versioned paths in `--static` sources (repeatable)     | -       |
 | `--auto-shutdown`         | Shut down automatically after N milliseconds           | -       |
 
 `--cache-control` defaults to `public, max-age=2419200, no-transform`: four
@@ -562,6 +563,17 @@ after an update. With `no-cache` it asks every time, and an unchanged file
 costs an empty `304`. Set another value per static source with
 `cache_control` in the configuration file, and mark versioned paths with
 `immutable` to have them cached for a year (see "Static Content" below).
+
+On the command line, `--immutable` marks versioned paths in every source given
+with `--static`, for example the frontend's library folders:
+
+```sh
+versatiles serve -s frontend.br.tar --immutable 'assets/lib/*@*/**' osm.versatiles
+```
+
+It can be given several times. It doesn't apply to the `static` entries of a
+configuration file, which have their own `immutable`, and without a `--static`
+source it is refused.
 
 **Tiles without data:**
 
