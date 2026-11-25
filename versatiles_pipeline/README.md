@@ -941,7 +941,9 @@ vector_filter_features expr="is_num($props.population) && $props.population >= 1
 
 This is an extension rather than standard CEL, added because there is no other way to write the guard — `type()` does not exist here, and `int()` and `double()` answer by failing, which costs exactly what the guard was meant to avoid.
 
-The [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md) has the full grammar, built-in functions and string methods.
+Besides comparisons, `&&`, `||`, `!`, `? :` and arithmetic, an expression can call the functions `size`, `max`, `min`, `string`, `int`, `uint`, `double`, `bytes` and `is_num`, the methods `contains`, `startsWith`, `endsWith` and `matches`, and the macros `has`, `all`, `exists`, `exists_one`, `map` and `filter`.
+
+The [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md) has the full grammar. It also lists functions this build does not have, such as `timestamp`, `duration` and `type()`.
 
 ### Parameters
 

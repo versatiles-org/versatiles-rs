@@ -5,6 +5,7 @@ mod csv;
 pub mod dummy_image_source;
 pub mod dummy_vector_source;
 pub mod expression_check;
+pub mod expression_operators;
 pub mod expression_tokens;
 pub mod feature_expr;
 pub mod feature_tile_source;

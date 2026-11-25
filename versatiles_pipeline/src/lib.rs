@@ -18,7 +18,8 @@
 //!
 //! An editor for the expressions of `vector_branch` and `vector_filter_features` asks
 //! [`check_expression`]: what is wrong and where, the tokens to highlight, and what a compiling
-//! expression reads. [`expression_names`] lists the `$` names to offer as completions.
+//! expression reads. [`expression_names`] lists the `$` names to offer as completions, and
+//! [`expression_operators`] the operators, functions and macros, each with an example.
 //!
 //! The operation factory traits — [`OperationFactoryTrait`], [`ReadOperationFactoryTrait`]
 //! and [`TransformOperationFactoryTrait`] — are public so a consumer can ask an operation
@@ -47,6 +48,7 @@ pub use factory::{OperationMeta, all_operation_metadata, compatible_branch_trans
 pub use helpers::{
 	CsvReader, PipelineReader,
 	expression_check::{ExpressionCheck, check_expression},
+	expression_operators::{ExpressionOperator, ExpressionOperatorKind, expression_operators},
 	expression_tokens::{ExpressionToken, ExpressionTokenKind},
 	feature_expr::{ExpressionProblem, ExpressionReads, ExpressionScope, expression_names},
 	quality::{QualityByZoom, QualityMap, TileQuality},
