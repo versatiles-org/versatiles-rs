@@ -277,7 +277,7 @@ hit it if you depend on `versatiles` with the `gdal` feature _and_ build GDAL st
 error: failed to select a version for `libsqlite3-sys`.
     ... required by package `proj-sys v0.27.0`
 package `libsqlite3-sys` links to the native library `sqlite3`, but it conflicts with a
-previous package which links to `sqlite3` as well: package `libsqlite3-sys v0.39.1`
+previous package which links to `sqlite3` as well: package `libsqlite3-sys v0.40.0`
 ```
 
 `libsqlite3-sys` declares `links = "sqlite3"`, so cargo permits exactly one copy per graph. Two
@@ -286,24 +286,28 @@ chains want it and their requirements do not overlap:
 | Chain                                                 | Requires        |
 | ----------------------------------------------------- | --------------- |
 | `gdal-sys` (`bundled`) → `gdal-src` → `proj-sys` 0.27 | `>=0.28, <0.36` |
-| `versatiles_container` → `rusqlite`                   | `^0.39`         |
+| `gdal-src` with `driver_sqlite`                       | `>=0.28, <0.37` |
+| `versatiles_container` → `rusqlite` 0.43              | `^0.40`         |
 
-The ceiling on the `proj-sys` side predates `libsqlite3-sys` 0.36 to 0.39; it is not a real
-incompatibility, since `proj-sys` uses the crate only for linkage and for the `DEP_SQLITE3_INCLUDE`
-and `DEP_SQLITE3_LIB_DIR` build-script keys, which are unchanged across those releases. The fix
-belongs upstream and is proposed in [georust/proj#261](https://github.com/georust/proj/pull/261).
+Neither ceiling is a real incompatibility: both crates use `libsqlite3-sys` only for linkage and
+for the `DEP_SQLITE3_INCLUDE` and `DEP_SQLITE3_LIB_DIR` build-script keys. `proj-sys` 0.28 allows
+any 0.x since [georust/proj#261](https://github.com/georust/proj/pull/261), but `gdal-src` 0.3
+still requires `proj-sys` 0.27. [georust/gdal#741](https://github.com/georust/gdal/pull/741) moves
+it to 0.28 and lifts its own ceiling as well.
 
-Until that merges, patch `proj-sys` in the **consuming application's** workspace root — `[patch]` is
-only honoured there, so adding it here would not help you:
+Until a `gdal-src` with that change is on crates.io, patch `gdal-src` in the **consuming
+application's** workspace root — `[patch]` is only honoured there, so adding it here would not help
+you:
 
 ```toml
 [patch.crates-io]
-proj-sys = { git = "https://github.com/MichaelKreil/proj", branch = "widen-libsqlite3-sys-bound" }
+gdal-src = { git = "https://github.com/MichaelKreil/gdal", rev = "3bab0f746c1c678abc667460dffea55c7ed33923" }
 ```
 
-The graph then resolves on a single `libsqlite3-sys` 0.39 shared by both chains, with no downgrade
-of `rusqlite`. Remove the stanza once #261 is released. Note that a library published to crates.io
-cannot carry a `[patch]` of its own, so this workaround is available to applications only.
+With `versatiles` 5.15 from crates.io, `gdal` and `gdal-sys/bundled`, the graph then resolves on a
+single `libsqlite3-sys` 0.40 shared by both chains, with no downgrade of `rusqlite`. Remove the
+stanza once `gdal-src` is released with #741. Note that a library published to crates.io cannot
+carry a `[patch]` of its own, so this workaround is available to applications only.
 
 ### Clippy Warnings
 
